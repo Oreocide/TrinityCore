@@ -5751,9 +5751,6 @@ class spell_gen_switch_flight_style : public SpellScript
             caster->RemoveAurasDueToSpell(SPELL_FLIGHT_STYLE_STEADY);
             caster->CastSpell(caster, SPELL_FLIGHT_STYLE_SKYRIDING, TRIGGERED_FULL_MASK);
         }
-
-        // mount capability depends on the flight style aura, reselect it if already mounted
-        caster->UpdateMountCapability();
     }
 
     void Register() override
