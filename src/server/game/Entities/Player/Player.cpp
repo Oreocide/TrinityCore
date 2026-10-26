@@ -14061,7 +14061,7 @@ void Player::OnGossipSelect(WorldObject* source, int32 gossipOptionId, uint32 me
 
     if (source->GetTypeId() == TYPEID_GAMEOBJECT)
     {
-        if (gossipOptionNpc != GossipOptionNpc::None)
+        if (gossipOptionNpc != GossipOptionNpc::None && gossipOptionNpc != GossipOptionNpc::ProfessionsOpen)
         {
             TC_LOG_ERROR("entities.player", "Player '{}' ({}) requests invalid gossip option for GameObject (Entry: {})",
                 GetName(), GetGUID().ToString(), source->GetEntry());

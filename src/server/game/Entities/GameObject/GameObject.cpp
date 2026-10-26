@@ -2861,6 +2861,25 @@ void GameObject::Use(Unit* user, bool ignoreCastInProgress /*= false*/)
             // triggering linked GO
             if (uint32 trapEntry = GetGOInfo()->spellFocus.linkedTrap)
                 TriggeringLinkedGameObject(trapEntry, user);
+
+            // crafting stations (forges, anvils, benches) carry a gossip menu with a profession option
+            if (uint32 gossipID = GetGOInfo()->spellFocus.gossipID)
+            {
+                if (Player* player = user->ToPlayer())
+                {
+                    player->PrepareGossipMenu(this, gossipID);
+                    GossipMenu const& gossipMenu = player->PlayerTalkClass->GetGossipMenu();
+                    if (!gossipMenu.Empty())
+                    {
+                        // a lone profession option is selected right away, there is nothing to choose from
+                        GossipMenuItem const* item = gossipMenu.GetMenuItemCount() == 1 ? gossipMenu.GetItemByIndex(0) : nullptr;
+                        if (item && item->OptionNpc == GossipOptionNpc::ProfessionsOpen)
+                            player->OnGossipSelect(this, item->GossipOptionID, gossipMenu.GetMenuId());
+                        else
+                            player->SendPreparedGossip(this);
+                    }
+                }
+            }
             break;
         //big gun, its a spell/aura
         case GAMEOBJECT_TYPE_GOOBER:                        //10
