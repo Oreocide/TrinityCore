@@ -1,6 +1,6 @@
 # docker-compose.yml for this TrinityCore checkout.
 #
-# This runs binaries already built on the host (see /home/brandon/trinity-server)
+# This runs binaries already built on the host (see ../trinity-server)
 # rather than compiling TrinityCore inside Docker - the runtime image just
 # supplies matching shared libraries, and everything else is bind-mounted
 # from this checkout.
@@ -51,8 +51,8 @@ services:
       TZ: America/Chicago
     entrypoint: ["/trinity/bin/worldserver", "-c", "/trinity/etc/worldserver.conf", "--config-dir", "/trinity/etc/worldserver.conf.d"]
     volumes:
-      - /home/brandon/trinity-server/bin:/trinity/bin:ro
-      - /home/brandon/trinity-server/lib:/trinity/lib:ro
+      - ../trinity-server/bin:/trinity/bin:ro
+      - ../trinity-server/lib:/trinity/lib:ro
       - ./docker/etc:/trinity/etc:ro
       - ./docker/data:/trinity/data
       - ./docker/logs:/trinity/logs
@@ -77,8 +77,8 @@ services:
       TZ: America/Chicago
     entrypoint: ["/trinity/bin/bnetserver", "-c", "/trinity/etc/bnetserver.conf"]
     volumes:
-      - /home/brandon/trinity-server/bin:/trinity/bin:ro
-      - /home/brandon/trinity-server/lib:/trinity/lib:ro
+      - ../trinity-server/bin:/trinity/bin:ro
+      - ../trinity-server/lib:/trinity/lib:ro
       - ./docker/etc:/trinity/etc:ro
       - ./docker/logs:/trinity/logs
     depends_on:

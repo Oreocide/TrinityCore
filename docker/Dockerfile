@@ -1,5 +1,5 @@
 # Runtime-only image for a TrinityCore build already compiled on the host
-# (see /home/brandon/trinity-server). This does NOT compile TrinityCore -
+# (see ../trinity-server relative to the repo root). This does NOT compile TrinityCore -
 # it just provides an environment with the exact shared libraries the
 # prebuilt binaries were linked against.
 FROM ubuntu:26.04
