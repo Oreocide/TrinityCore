@@ -139,6 +139,45 @@ namespace WorldPackets
             std::string PromotionCode;
         };
 
+
+        class ChromieTimeSelectExpansion final : public ClientPacket
+        {
+        public:
+            explicit ChromieTimeSelectExpansion(WorldPacket&& packet) : ClientPacket(CMSG_CHROMIE_TIME_SELECT_EXPANSION, std::move(packet)) { }
+
+            void Read() override;
+
+            ObjectGuid Chromie;
+            int32 ExpansionID = 0;
+        };
+
+        class ChromieTimeSelectExpansionSuccess final : public ServerPacket
+        {
+        public:
+            explicit ChromieTimeSelectExpansionSuccess() : ServerPacket(SMSG_CHROMIE_TIME_SELECT_EXPANSION_SUCCESS, 0) { }
+
+            WorldPacket const* Write() override { return &_worldPacket; }
+        };
+
+        struct CtrOptionsBlock
+        {
+            std::vector<uint32> ConditionalFlags;
+            uint8 FactionGroup = 0;
+            uint32 ChromieTimeExpansionMask = 0;
+        };
+
+        // previous options followed by the new ones (layout decoded from the 2026-10-09 Chromie sniff)
+        class SetCtrOptions final : public ServerPacket
+        {
+        public:
+            explicit SetCtrOptions() : ServerPacket(SMSG_SET_CTR_OPTIONS, 32) { }
+
+            WorldPacket const* Write() override;
+
+            CtrOptionsBlock Old;
+            CtrOptionsBlock New;
+        };
+
         class GossipOptionNPCInteraction final : public ServerPacket
         {
         public:

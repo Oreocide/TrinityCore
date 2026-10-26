@@ -34,6 +34,7 @@
 #include <boost/circular_buffer_fwd.hpp>
 #include <array>
 #include <atomic>
+#include <functional>
 #include <map>
 #include <memory>
 #include <unordered_map>
@@ -252,6 +253,7 @@ namespace WorldPackets
 
         class AlterApperance;
         class EnumCharacters;
+        class SetupWarbandGroups;
         class CreateCharacter;
         class CharDelete;
         class CharacterRenameRequest;
@@ -569,6 +571,7 @@ namespace WorldPackets
         class Hello;
         class GossipSelectOption;
         class SpiritHealerActivate;
+        class ChromieTimeSelectExpansion;
         class TabardVendorActivate;
         class TrainerBuySpell;
         class RequestStabledPets;
@@ -985,6 +988,26 @@ class TC_GAME_API WorldSession
             uint32 build, ClientBuild::VariantId clientBuildVariant, LocaleConstant locale, uint32 recruiter, bool isARecruiter);
         ~WorldSession();
 
+        /// A dormant session's player stays in the world but skips the heavy Player::Update path and the map cell visits.
+        /// For scripts that simulate players cheaply themselves (e.g. bots nobody can see); nothing in the core sets it
+        void SetDormant(bool dormant) { _dormant = dormant; }
+        bool IsDormant() const { return _dormant; }
+
+        /// Headless sessions: a session without client connection that a script drives (bots, load-test clients).
+        /// Everything the server sends to the client is handed to `packetSink` instead, which runs on whichever thread
+        /// sends the packet (usually a map thread). A headless session is never idle-kicked, does not touch the account's
+        /// online flags, does not count as a disconnected player, and ends (Update returns false) once it was kicked.
+        /// Create it with a null socket, call SetHeadless before InitializeSession. Nothing in the core creates one
+        void SetHeadless(std::function<void(WorldPacket const&)> packetSink) { _headless = true; _headlessPacketSink = std::move(packetSink); }
+        bool IsHeadless() const { return _headless; }
+        /// A headless session has no client to show the world to, so a script may stop the core from loading the grids around its player
+        /// for visibility (Map::LoadGridsInRange from the relocation notify). The grid the player stands in is always loaded, and a
+        /// client-backed player's own relocation still loads everything that player sees. Default: loads, as for every session.
+        void SetHeadlessLoadsVisibilityGrids(bool on) { _headlessLoadsVisibilityGrids = on; }
+        bool LoadsVisibilityGrids() const { return !_headless || _headlessLoadsVisibilityGrids; }
+        /// Logs a character of this session's account in without client (headless sessions only, after InitializeSession finished)
+        void LoginHeadlessPlayer(ObjectGuid characterGuid);
+
         bool PlayerLoading() const { return !m_playerLoading.IsEmpty(); }
         bool PlayerLogout() const { return m_playerLogout; }
         bool PlayerLogoutWithSave() const { return m_playerLogout && m_playerSave; }
@@ -1005,7 +1028,8 @@ class TC_GAME_API WorldSession
         void SendClientCacheVersion(uint32 version);
         void SendAvailableHotfixes();
 
-        void InitializeSession();
+        /// onInitialized runs on the thread that updates the session, once the account data is loaded
+        void InitializeSession(std::function<void()> onInitialized = nullptr);
         void InitializeSessionCallback(LoginDatabaseQueryHolder const& holder, CharacterDatabaseQueryHolder const& realmHolder);
 
         rbac::RBACData* GetRBACData() const;
@@ -1241,8 +1265,10 @@ class TC_GAME_API WorldSession
         void LogUnprocessedTail(WorldPacket const* packet);
 
         void HandleCharEnum(CharacterDatabaseQueryHolder const& holder);
-        void HandleCharEnumOpcode(WorldPackets::Character::EnumCharacters& enumCharacters);
-        void HandleCharUndeleteEnumOpcode(WorldPackets::Character::EnumCharacters& enumCharacters);
+        void HandleCharEnumOpcode(WorldPackets::Character::EnumCharacters& /*enumCharacters*/);
+        void HandleSetupWarbandGroups(WorldPackets::Character::SetupWarbandGroups& setupWarbandGroups);
+        void LoadWarbandGroups(PreparedQueryResult groups, PreparedQueryResult members);
+        void HandleCharUndeleteEnumOpcode(WorldPackets::Character::EnumCharacters& /*enumCharacters*/);
         void HandleCharDeleteOpcode(WorldPackets::Character::CharDelete& charDelete);
         void HandleCharCreateOpcode(WorldPackets::Character::CreateCharacter& charCreate);
         void HandlePlayerLoginOpcode(WorldPackets::Character::PlayerLogin& playerLogin);
@@ -1489,6 +1515,7 @@ class TC_GAME_API WorldSession
         void HandleGossipHelloOpcode(WorldPackets::NPC::Hello& packet);
         void HandleGossipSelectOptionOpcode(WorldPackets::NPC::GossipSelectOption& packet);
         void HandleSpiritHealerActivate(WorldPackets::NPC::SpiritHealerActivate& packet);
+        void HandleChromieTimeSelectExpansion(WorldPackets::NPC::ChromieTimeSelectExpansion& packet);
         void HandleNpcTextQueryOpcode(WorldPackets::Query::QueryNPCText& packet);
         void HandleBinderActivateOpcode(WorldPackets::NPC::Hello& packet);
         void HandleRequestStabledPets(WorldPackets::NPC::RequestStabledPets& packet);
@@ -1824,6 +1851,8 @@ class TC_GAME_API WorldSession
         void HandleDeleteEquipmentSet(WorldPackets::EquipmentSet::DeleteEquipmentSet& deleteEquipmentSet);
         void HandleUseEquipmentSet(WorldPackets::EquipmentSet::UseEquipmentSet& useEquipmentSet);
         void HandleServerTimeOffsetRequest(WorldPackets::Misc::ServerTimeOffsetRequest& /*request*/);
+        void HandleGetLastCatalogFetch(WorldPackets::Null& /*request*/);
+        void HandleFetchBleepProxies(WorldPackets::Null& /*request*/);
         void HandleQueryQuestCompletionNPCs(WorldPackets::Query::QueryQuestCompletionNPCs& queryQuestCompletionNPCs);
         void HandleQuestPOIQuery(WorldPackets::Query::QuestPOIQuery& questPoiQuery);
         void HandleViolenceLevel(WorldPackets::Misc::ViolenceLevel& violenceLevel);
@@ -1997,6 +2026,26 @@ class TC_GAME_API WorldSession
         // characters who failed on Player::BuildEnumData shouldn't login
         GuidSet _legitCharacters;
 
+        // warband campsite groups of this Battle.net account (character select screen)
+        struct StoredWarbandGroupMember
+        {
+            uint32 PlacementId = 0;
+            int32 Type = 0;
+            int32 ContentSetId = 0;
+            ObjectGuid Guid;
+        };
+        struct StoredWarbandGroup
+        {
+            uint64 GroupId = 0;
+            uint8 OrderIndex = 0;
+            uint32 WarbandSceneId = 0;
+            uint32 Flags = 0;
+            int32 ContentSetId = 0;
+            std::string Name;
+            std::vector<StoredWarbandGroupMember> Members;
+        };
+        std::vector<StoredWarbandGroup> _warbandGroups;
+
         ObjectGuid::LowType m_GUIDLow;                      // set logined or recently logout player (while m_playerRecentlyLogout set)
         Player* _player;
         std::array<std::shared_ptr<WorldSocket>, MAX_CONNECTION_TYPES> m_Socket;
@@ -2043,6 +2092,10 @@ class TC_GAME_API WorldSession
         rbac::RBACData* _RBACData;
         uint32 expireTime;
         bool forceExit;
+        bool _dormant;
+        bool _headless;
+        std::function<void(WorldPacket const&)> _headlessPacketSink;
+        bool _headlessLoadsVisibilityGrids = true;
 
         std::unique_ptr<boost::circular_buffer<std::pair<int64, uint32>>> _timeSyncClockDeltaQueue; // first member: clockDelta. Second member: latency of the packet exchange that was used to compute that clockDelta.
         int64 _timeSyncClockDelta;

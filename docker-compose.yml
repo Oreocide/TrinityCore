@@ -1,0 +1,92 @@
+# docker-compose.yml for this TrinityCore checkout.
+#
+# This runs binaries already built on the host (see /home/brandon/trinity-server)
+# rather than compiling TrinityCore inside Docker - the runtime image just
+# supplies matching shared libraries, and everything else is bind-mounted
+# from this checkout.
+#
+# Start with: docker compose up -d --build
+#
+# NOTE: worldserver needs game client data (maps/vmaps/mmaps/dbc/db2) in
+# ./docker/data before it will fully start - see docker/data/README.md.
+
+services:
+  mysql:
+    container_name: trinity-mysql
+    image: mysql:8.4
+    networks:
+      - trinity-network
+    ports:
+      - ${DOCKER_DB_EXTERNAL_PORT:-3306}:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DOCKER_DB_ROOT_PASSWORD:-password}
+      TZ: America/Chicago
+    volumes:
+      - trinity-mysql-data:/var/lib/mysql
+      - ./docker/mysql-init:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+    healthcheck:
+      test: "/usr/bin/mysql --user=root --password=$$MYSQL_ROOT_PASSWORD --execute \"SHOW DATABASES;\""
+      interval: 5s
+      timeout: 10s
+      retries: 40
+
+  worldserver:
+    container_name: trinity-worldserver
+    build:
+      context: ./docker
+      args:
+        USER_ID: ${DOCKER_USER_ID:-1000}
+        GROUP_ID: ${DOCKER_GROUP_ID:-1000}
+    network_mode: host
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+    stdin_open: true
+    tty: true
+    environment:
+      TZ: America/Chicago
+    entrypoint: ["/trinity/bin/worldserver", "-c", "/trinity/etc/worldserver.conf", "--config-dir", "/trinity/etc/worldserver.conf.d"]
+    volumes:
+      - /home/brandon/trinity-server/bin:/trinity/bin:ro
+      - /home/brandon/trinity-server/lib:/trinity/lib:ro
+      - ./docker/etc:/trinity/etc:ro
+      - ./docker/data:/trinity/data
+      - ./docker/logs:/trinity/logs
+      - ./docker/tdb:/trinity
+      - .:/trinity/src:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  bnetserver:
+    container_name: trinity-bnetserver
+    build:
+      context: ./docker
+      args:
+        USER_ID: ${DOCKER_USER_ID:-1000}
+        GROUP_ID: ${DOCKER_GROUP_ID:-1000}
+    network_mode: host
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    environment:
+      TZ: America/Chicago
+    entrypoint: ["/trinity/bin/bnetserver", "-c", "/trinity/etc/bnetserver.conf"]
+    volumes:
+      - /home/brandon/trinity-server/bin:/trinity/bin:ro
+      - /home/brandon/trinity-server/lib:/trinity/lib:ro
+      - ./docker/etc:/trinity/etc:ro
+      - ./docker/logs:/trinity/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  trinity-mysql-data:
+
+networks:
+  trinity-network:

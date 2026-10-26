@@ -135,6 +135,27 @@ namespace WorldPackets
             std::string_view Name;
         };
 
+        struct WarbandGroupInput
+        {
+            uint64 GroupID = 0;
+            uint8 OrderIndex = 0;
+            uint32 WarbandSceneID = 0;
+            uint32 Flags = 0;
+            int32 ContentSetID = 0;
+            std::vector<WarbandGroupMember> Members;
+            std::string Name;
+        };
+
+        class SetupWarbandGroups final : public ClientPacket
+        {
+        public:
+            explicit SetupWarbandGroups(WorldPacket&& packet) : ClientPacket(CMSG_SETUP_WARBAND_GROUPS, std::move(packet)) { }
+
+            void Read() override;
+
+            std::vector<WarbandGroupInput> Groups;
+        };
+
         class EnumCharactersResult final : public ServerPacket
         {
         public:

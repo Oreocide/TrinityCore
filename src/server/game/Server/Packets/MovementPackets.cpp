@@ -709,6 +709,15 @@ WorldPacket const* MoveSplineSetFlag::Write()
     return &_worldPacket;
 }
 
+WorldPacket const* MoveAddImpulse::Write()
+{
+    _worldPacket << MoverGUID;
+    _worldPacket << uint32(SequenceIndex);
+    _worldPacket << Direction;
+
+    return &_worldPacket;
+}
+
 WorldPacket const* MoveSetFlag::Write()
 {
     _worldPacket << MoverGUID;

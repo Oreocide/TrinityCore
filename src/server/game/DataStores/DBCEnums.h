@@ -568,7 +568,7 @@ enum class CriteriaType : int16
     DieInInstance                                  = 18,  // Die in an instance which handles at most {#Max Players} players
     RunInstance                                    = 19,  /*NYI*/ // Run an instance which handles at most {#Max Players} players
     KilledByCreature                               = 20,  // Get killed by "{Creature}"
-    CompleteInternalCriteria                       = 21,  /*NYI*/ // Designer Value{`Uses Record ID}
+    CompleteInternalCriteria                       = 21,  // Designer Value{`Uses Record ID}
     CompleteAnyChallengeMode                       = 22,  /*NYI*/ // Complete any challenge mode
     KilledByPlayer                                 = 23,  // Die to a player
     MaxDistFallenWithoutDying                      = 24,  // Maximum distance fallen without dying

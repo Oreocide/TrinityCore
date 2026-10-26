@@ -17,9 +17,15 @@
 
 // This is where scripts' loading functions should be declared:
 void AddSC_covenant_spell_scripts();
+void AddSC_shadowlands_raid_portals();
 void AddSC_torghast_spell_scripts();
+void AddSC_theater_of_pain_arena();
 
+void AddSC_boss_eye_of_the_jailer_sod();
+void AddSC_boss_the_tarragrue_sod();
+void AddSC_boss_kelthuzad_sod();
 void AddSC_boss_sylvanas_windrunner();
+void AddSC_sylvanas_windrunner_adds();
 void AddSC_instance_sanctum_of_domination();
 
 void AddSC_boss_anduin_wrynn();
@@ -30,10 +36,18 @@ void AddSC_instance_sepulcher_of_the_first_ones();
 void AddShadowlandsScripts()
 {
     AddSC_covenant_spell_scripts();
+    AddSC_shadowlands_raid_portals();
     AddSC_torghast_spell_scripts();
 
+    // Maldraxxus
+    AddSC_theater_of_pain_arena();
+
     // Sanctum of Domination
+    AddSC_boss_eye_of_the_jailer_sod();
+    AddSC_boss_the_tarragrue_sod();
+    AddSC_boss_kelthuzad_sod();
     AddSC_boss_sylvanas_windrunner();
+    AddSC_sylvanas_windrunner_adds();
     AddSC_instance_sanctum_of_domination();
 
     // Sepulcher of The First Ones

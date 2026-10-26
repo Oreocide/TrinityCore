@@ -49,6 +49,7 @@
 #include "Player.h"
 #include "RestMgr.h"
 #include "ScriptMgr.h"
+#include "ScenarioEventMgr.h"
 #include "Spell.h"
 #include "SpellPackets.h"
 #include "WhoListStorage.h"
@@ -494,6 +495,9 @@ void WorldSession::HandleAreaTriggerOpcode(WorldPackets::AreaTrigger::AreaTrigge
 
     if (!sConditionMgr->IsObjectMeetingNotGroupedConditions(CONDITION_SOURCE_TYPE_AREATRIGGER_CLIENT_TRIGGERED, atEntry->ID, player))
         return;
+
+    if (packet.Entered)
+        sScenarioEventMgr->Trigger(ScenarioEventTriggerType::AreaTrigger, atEntry->ID, player);
 
     if (sScriptMgr->OnAreaTrigger(player, atEntry, packet.Entered))
         return;
@@ -1078,6 +1082,20 @@ void WorldSession::HandleServerTimeOffsetRequest(WorldPackets::Misc::ServerTimeO
     WorldPackets::Misc::ServerTimeOffset response;
     response.Time = GameTime::GetSystemTime();
     SendPacket(response.Write());
+}
+
+void WorldSession::HandleGetLastCatalogFetch(WorldPackets::Null& /*request*/)
+{
+    WorldPacket response(SMSG_LAST_CATALOG_FETCH_RESPONSE, 8);
+    response << int64(GameTime::GetGameTime());
+    SendPacket(&response);
+}
+
+void WorldSession::HandleFetchBleepProxies(WorldPackets::Null& /*request*/)
+{
+    WorldPacket response(SMSG_FETCH_BLEEP_PROXIES_RESPONSE, 4);
+    response << uint32(0);
+    SendPacket(&response);
 }
 
 void WorldSession::HandleInstanceLockResponse(WorldPackets::Instance::InstanceLockResponse& packet)

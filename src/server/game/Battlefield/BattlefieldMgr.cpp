@@ -166,6 +166,34 @@ Battlefield* BattlefieldMgr::GetBattlefieldByBattleId(Map const* map, uint32 bat
     return nullptr;
 }
 
+Battlefield* BattlefieldMgr::GetBattlefieldForQueue(uint32 battlemasterListId)
+{
+    for (auto const& [map, battlefields] : _battlefieldsByMap)
+        for (std::unique_ptr<Battlefield> const& battlefield : battlefields)
+            if (battlefield->IsEnabled() && battlefield->GetQueueBattlemasterListId() == battlemasterListId)
+                return battlefield.get();
+
+    return nullptr;
+}
+
+Battlefield* BattlefieldMgr::GetBattlefieldByTicket(ObjectGuid guid, uint32 ticketId)
+{
+    for (auto const& [map, battlefields] : _battlefieldsByMap)
+        for (std::unique_ptr<Battlefield> const& battlefield : battlefields)
+            if (battlefield->GetQueueBattlemasterListId() && battlefield->HasQueueTicket(guid, ticketId))
+                return battlefield.get();
+
+    return nullptr;
+}
+
+void BattlefieldMgr::SendQueueStatus(Player* player)
+{
+    for (auto const& [map, battlefields] : _battlefieldsByMap)
+        for (std::unique_ptr<Battlefield> const& battlefield : battlefields)
+            if (battlefield->GetQueueBattlemasterListId())
+                battlefield->SendQueueStatus(player);
+}
+
 void BattlefieldMgr::Update(uint32 diff)
 {
     _updateTimer += diff;

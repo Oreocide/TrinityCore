@@ -66,6 +66,7 @@
 #include "World.h"
 #include <boost/circular_buffer.hpp>
 #include <sstream>
+#include <set>
 
 class LoginQueryHolder : public CharacterDatabaseQueryHolder
 {
@@ -502,14 +503,168 @@ void WorldSession::HandleCharEnum(CharacterDatabaseQueryHolder const& holder)
         });
     }
 
+    if (!charEnum.IsDeletedCharacters)
+    {
+        // warband campsite groups; members that are not (or no longer) characters of this account are left out
+        for (StoredWarbandGroup const& stored : _warbandGroups)
+        {
+            WorldPackets::Character::WarbandGroup& group = charEnum.WarbandGroups.emplace_back();
+            group.GroupID = stored.GroupId;
+            group.OrderIndex = stored.OrderIndex;
+            group.WarbandSceneID = stored.WarbandSceneId;
+            group.Flags = stored.Flags;
+            group.ContentSetID = stored.ContentSetId;
+            group.Name = stored.Name;
+            for (StoredWarbandGroupMember const& member : stored.Members)
+            {
+                if (member.Type == 0 && !IsLegitCharacterForAccount(member.Guid))
+                    continue;
+
+                WorldPackets::Character::WarbandGroupMember& out = group.Members.emplace_back();
+                out.WarbandScenePlacementID = member.PlacementId;
+                out.Type = member.Type;
+                out.ContentSetID = member.ContentSetId;
+                out.Guid = member.Guid;
+            }
+        }
+    }
+
+    TC_LOG_ERROR("network", "Sending character list for account {} with {} realm characters.", GetAccountId(), charEnum.Characters.size());
     SendPacket(charEnum.Write());
 
     if (!charEnum.IsDeletedCharacters)
         _collectionMgr->SendWarbandSceneCollectionData();
 }
 
+void WorldSession::LoadWarbandGroups(PreparedQueryResult groups, PreparedQueryResult members)
+{
+    _warbandGroups.clear();
+    if (!groups)
+        return;
+
+    do
+    {
+        Field* fields = groups->Fetch();
+        StoredWarbandGroup& group = _warbandGroups.emplace_back();
+        group.GroupId = fields[0].GetUInt64();
+        group.OrderIndex = fields[1].GetUInt8();
+        group.WarbandSceneId = fields[2].GetUInt32();
+        group.Flags = fields[3].GetUInt32();
+        group.ContentSetId = fields[4].GetInt32();
+        group.Name = fields[5].GetString();
+    } while (groups->NextRow());
+
+    if (!members)
+        return;
+
+    do
+    {
+        Field* fields = members->Fetch();
+        uint64 groupId = fields[0].GetUInt64();
+        auto itr = std::ranges::find(_warbandGroups, groupId, &StoredWarbandGroup::GroupId);
+        if (itr == _warbandGroups.end())
+            continue;
+
+        StoredWarbandGroupMember& member = itr->Members.emplace_back();
+        member.PlacementId = fields[1].GetUInt32();
+        member.Type = fields[2].GetInt32();
+        member.ContentSetId = fields[3].GetInt32();
+        member.Guid.SetRawValue(fields[4].GetUInt64(), fields[5].GetUInt64());
+    } while (members->NextRow());
+}
+
+void WorldSession::HandleSetupWarbandGroups(WorldPackets::Character::SetupWarbandGroups& setupWarbandGroups)
+{
+    // The client always sends the complete list of groups, so replace what is stored.
+    std::vector<StoredWarbandGroup> groups;
+    std::set<uint64> usedGroupIds;
+    uint64 nextGroupId = 1;
+    for (WorldPackets::Character::WarbandGroupInput const& input : setupWarbandGroups.Groups)
+    {
+        if (!sWarbandSceneStore.HasRecord(input.WarbandSceneID))
+            continue;
+
+        if (input.Name.size() > 255)
+            continue;
+
+        StoredWarbandGroup& group = groups.emplace_back();
+        group.GroupId = input.GroupID;
+        group.OrderIndex = input.OrderIndex;
+        group.WarbandSceneId = input.WarbandSceneID;
+        group.Flags = input.Flags;
+        group.ContentSetId = input.ContentSetID;
+        group.Name = input.Name;
+
+        // ids chosen by the client for new groups can repeat or be zero, give those a free id
+        if (!group.GroupId || usedGroupIds.contains(group.GroupId))
+        {
+            while (usedGroupIds.contains(nextGroupId))
+                ++nextGroupId;
+            group.GroupId = nextGroupId;
+        }
+        usedGroupIds.insert(group.GroupId);
+
+        std::set<uint32> usedPlacements;
+        for (WorldPackets::Character::WarbandGroupMember const& member : input.Members)
+        {
+            if (member.Type == 0 && !IsLegitCharacterForAccount(member.Guid))
+                continue;
+
+            if (!usedPlacements.insert(member.WarbandScenePlacementID).second)
+                continue;
+
+            StoredWarbandGroupMember& out = group.Members.emplace_back();
+            out.PlacementId = member.WarbandScenePlacementID;
+            out.Type = member.Type;
+            out.ContentSetId = member.ContentSetID;
+            out.Guid = member.Type == 0 ? member.Guid : ObjectGuid::Empty;
+        }
+    }
+
+    _warbandGroups = std::move(groups);
+
+    LoginDatabaseTransaction trans = LoginDatabase.BeginTransaction();
+    LoginDatabasePreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_DEL_BNET_WARBAND_GROUP_MEMBERS);
+    stmt->setUInt32(0, GetBattlenetAccountId());
+    trans->Append(stmt);
+
+    stmt = LoginDatabase.GetPreparedStatement(LOGIN_DEL_BNET_WARBAND_GROUPS);
+    stmt->setUInt32(0, GetBattlenetAccountId());
+    trans->Append(stmt);
+
+    for (StoredWarbandGroup const& group : _warbandGroups)
+    {
+        stmt = LoginDatabase.GetPreparedStatement(LOGIN_INS_BNET_WARBAND_GROUP);
+        stmt->setUInt32(0, GetBattlenetAccountId());
+        stmt->setUInt64(1, group.GroupId);
+        stmt->setUInt8(2, group.OrderIndex);
+        stmt->setUInt32(3, group.WarbandSceneId);
+        stmt->setUInt32(4, group.Flags);
+        stmt->setInt32(5, group.ContentSetId);
+        stmt->setString(6, group.Name);
+        trans->Append(stmt);
+
+        for (StoredWarbandGroupMember const& member : group.Members)
+        {
+            stmt = LoginDatabase.GetPreparedStatement(LOGIN_INS_BNET_WARBAND_GROUP_MEMBER);
+            stmt->setUInt32(0, GetBattlenetAccountId());
+            stmt->setUInt64(1, group.GroupId);
+            stmt->setUInt32(2, member.PlacementId);
+            stmt->setInt32(3, member.Type);
+            stmt->setInt32(4, member.ContentSetId);
+            stmt->setUInt64(5, member.Guid.GetRawValue(1));
+            stmt->setUInt64(6, member.Guid.GetRawValue(0));
+            trans->Append(stmt);
+        }
+    }
+
+    LoginDatabase.CommitTransaction(trans);
+}
+
 void WorldSession::HandleCharEnumOpcode(WorldPackets::Character::EnumCharacters& /*enumCharacters*/)
 {
+    TC_LOG_ERROR("network", "CMSG_ENUM_CHARACTERS from account {}.", GetAccountId());
+
     // remove expired bans
     CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_EXPIRED_BANS);
     CharacterDatabase.Execute(stmt);
@@ -605,6 +760,11 @@ bool WorldSession::ValidateAppearance(Races race, Classes playerClass, Gender ge
 {
     std::vector<ChrCustomizationOptionEntry const*> const* options = sDB2Manager.GetCustomiztionOptions(race, gender);
     if (!options)
+        return false;
+
+    // An empty choice list still passes the loop below. 12.1.5 stays on the
+    // character screen while it builds a model from no choices.
+    if (customizations.begin() == customizations.end() && !options->empty())
         return false;
 
     uint32 previousOption = 0;
@@ -1147,6 +1307,26 @@ void WorldSession::HandleContinuePlayerLogin()
 
     // client will respond to SMSG_RESUME_COMMS with CMSG_QUEUED_MESSAGES_END
     RegisterTimeSync(SPECIAL_RESUME_COMMS_TIME_SYNC_COUNTER);
+
+    AddQueryHolderCallback(CharacterDatabase.DelayQueryHolder(holder)).AfterComplete([this](SQLQueryHolderBase const& holder)
+    {
+        HandlePlayerLogin(static_cast<LoginQueryHolder const&>(holder));
+    });
+}
+
+void WorldSession::LoginHeadlessPlayer(ObjectGuid characterGuid)
+{
+    if (!_headless || PlayerLoading() || GetPlayer())
+        return;
+
+    m_playerLoading = characterGuid;
+
+    std::shared_ptr<LoginQueryHolder> holder = std::make_shared<LoginQueryHolder>(GetAccountId(), m_playerLoading);
+    if (!holder->Initialize())
+    {
+        m_playerLoading.Clear();
+        return;
+    }
 
     AddQueryHolderCallback(CharacterDatabase.DelayQueryHolder(holder)).AfterComplete([this](SQLQueryHolderBase const& holder)
     {

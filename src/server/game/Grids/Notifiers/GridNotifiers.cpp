@@ -232,7 +232,8 @@ void DelayedUnitRelocation::Visit(PlayerMapType &m)
         if (player != viewPoint && !viewPoint->IsPositionValid())
             continue;
 
-        i_map.LoadGridsInRange(viewPoint->GetPositionX(), viewPoint->GetPositionY(), i_radius + viewPoint->GetCombatReach());
+        if (player->GetSession()->LoadsVisibilityGrids())
+            i_map.LoadGridsInRange(viewPoint->GetPositionX(), viewPoint->GetPositionY(), i_radius + viewPoint->GetCombatReach());
 
         PlayerRelocationNotifier relocate(*player);
         Cell::VisitAllObjects(viewPoint, relocate, i_radius);

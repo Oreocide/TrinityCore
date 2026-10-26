@@ -37,6 +37,7 @@
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
 #include "ScriptMgr.h"
+#include "ScenarioEventMgr.h"
 #include "Spell.h"
 #include "SpellAuraEffects.h"
 #include "SpellCastRequest.h"
@@ -222,6 +223,7 @@ void WorldSession::HandleGameobjectReportUse(WorldPackets::GameObject::GameObjRe
             return;
 
         _player->UpdateCriteria(CriteriaType::UseGameobject, go->GetEntry());
+        sScenarioEventMgr->Trigger(ScenarioEventTriggerType::GameObjectUse, go->GetEntry(), _player, go);
     }
 }
 

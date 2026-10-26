@@ -23,6 +23,8 @@ void AddSC_areatrigger_scripts();
 void AddSC_conversation_scripts();
 void AddSC_emerald_dragons();
 void AddSC_go_scripts();
+void AddSC_go_hero_call_board();
+void AddSC_npc_chromie_time();
 void AddSC_npc_guard();
 void AddSC_item_scripts();
 void AddSC_npc_professions();
@@ -43,6 +45,8 @@ void AddWorldScripts()
     AddSC_conversation_scripts();
     AddSC_emerald_dragons();
     AddSC_go_scripts();
+    AddSC_go_hero_call_board();
+    AddSC_npc_chromie_time();
     AddSC_npc_guard();
     AddSC_item_scripts();
     AddSC_npc_professions();

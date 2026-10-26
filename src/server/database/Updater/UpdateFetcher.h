@@ -55,7 +55,8 @@ public:
     UpdateFetcher(Path const& updateDirectory,
         std::function<void(std::string const&)> const& apply,
         std::function<void(Path const& path)> const& applyFile,
-        std::function<QueryResult(std::string const&)> const& retrieve);
+        std::function<QueryResult(std::string const&)> const& retrieve,
+        std::vector<std::string> additionalDirectories = {});
     ~UpdateFetcher();
 
     UpdateResult Update(bool const redundancyChecks, bool const allowRehash,
@@ -148,6 +149,9 @@ private:
     std::function<void(std::string const&)> const _apply;
     std::function<void(Path const& path)> const _applyFile;
     std::function<QueryResult(std::string const&)> const _retrieve;
+
+    /// Included in addition to `updates_include` (modules), silently skipped if missing
+    std::vector<std::string> const _additionalDirectories;
 };
 
 #endif // UpdateFetcher_h__

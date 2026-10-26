@@ -2692,6 +2692,31 @@ void SmartScript::ProcessAction(SmartScriptHolder& e, Unit* unit, uint32 var0, u
                     unitTarget->ResumeMovement(e.action.resumeMovement.resumeTimer, e.action.resumeMovement.movementSlot);
             break;
         }
+        case SMART_ACTION_CLEAR_QUEST:
+        {
+            Quest const* quest = sObjectMgr->GetQuestTemplate(e.action.quest.quest);
+            if (!quest)
+                break;
+
+            for (WorldObject* target : targets)
+            {
+                Player* player = Object::ToPlayer(target);
+                if (!player)
+                    continue;
+
+                QuestStatus oldStatus = player->GetQuestStatus(quest->GetQuestId());
+                if (oldStatus == QUEST_STATUS_NONE)
+                    continue;
+
+                player->RemoveActiveQuest(quest->GetQuestId(), false);
+                if (oldStatus != QUEST_STATUS_REWARDED)
+                    player->TakeQuestSourceItem(quest->GetQuestId(), false);
+
+                player->RemoveRewardedQuest(quest->GetQuestId());
+                player->DespawnPersonalSummonsForQuest(quest->GetQuestId());
+            }
+            break;
+        }
         case SMART_ACTION_FALL:
         {
             std::shared_ptr<MultiActionResult<MovementStopReason>> waitEvent = CreateTimedActionListWaitEventFor<void, MultiActionResult<MovementStopReason>>(e, targets.size());

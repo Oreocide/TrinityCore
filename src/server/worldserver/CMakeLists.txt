@@ -36,6 +36,7 @@ target_link_libraries(worldserver
     trinity-core-interface
   PUBLIC
     scripts
+    modules
     game
     readline
     gsoap)

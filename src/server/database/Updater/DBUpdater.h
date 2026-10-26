@@ -22,6 +22,7 @@
 #include "DatabaseEnvFwd.h"
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 template <class T>
 class DatabaseWorkerPool;
@@ -46,15 +47,20 @@ enum BaseLocation
     LOCATION_DOWNLOAD
 };
 
-class DBUpdaterUtil
+class TC_DATABASE_API DBUpdaterUtil
 {
 public:
     static std::string GetCorrectedMySQLExecutable();
 
     static bool CheckExecutable();
 
+    /// Names of the enabled modules, their modules/<name>/data/sql/db-<database> directories are updated too
+    static void SetModuleList(std::vector<std::string> modules);
+    static std::vector<std::string> const& GetModuleList();
+
 private:
     static std::string& corrected_path();
+    static std::vector<std::string>& module_list();
 };
 
 template <class T>
@@ -66,6 +72,9 @@ public:
     static inline std::string GetConfigEntry();
 
     static inline std::string GetTableName();
+
+    /// Directory suffix of module sql updates (modules/<name>/data/sql/db-<suffix>)
+    static inline std::string GetModuleDirectoryName();
 
     static std::string GetBaseFile();
 

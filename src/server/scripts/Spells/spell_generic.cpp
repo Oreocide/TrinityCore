@@ -5726,6 +5726,98 @@ class spell_gen_abandon_vehicle : public SpellScript
     }
 };
 
+// 404471 - Change Flight Style
+// 436854 - Switch Flight Style
+class spell_gen_switch_flight_style : public SpellScript
+{
+    static constexpr uint32 SPELL_FLIGHT_STYLE_SKYRIDING = 404464;
+    static constexpr uint32 SPELL_FLIGHT_STYLE_STEADY = 404468;
+
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_FLIGHT_STYLE_SKYRIDING, SPELL_FLIGHT_STYLE_STEADY });
+    }
+
+    void HandleDummy(SpellEffIndex /*effIndex*/) const
+    {
+        Unit* caster = GetCaster();
+        if (caster->HasAura(SPELL_FLIGHT_STYLE_SKYRIDING))
+        {
+            caster->RemoveAurasDueToSpell(SPELL_FLIGHT_STYLE_SKYRIDING);
+            caster->CastSpell(caster, SPELL_FLIGHT_STYLE_STEADY, TRIGGERED_FULL_MASK);
+        }
+        else
+        {
+            caster->RemoveAurasDueToSpell(SPELL_FLIGHT_STYLE_STEADY);
+            caster->CastSpell(caster, SPELL_FLIGHT_STYLE_SKYRIDING, TRIGGERED_FULL_MASK);
+        }
+
+        // mount capability depends on the flight style aura, reselect it if already mounted
+        caster->UpdateMountCapability();
+    }
+
+    void Register() override
+    {
+        OnEffectHit += SpellEffectFn(spell_gen_switch_flight_style::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
+    }
+};
+
+// 374763 - Lift Off
+// 372610 - Skyward Ascent
+// 372608 - Surge Forward
+// Skyriding thrust is a server sent impulse (SMSG_MOVE_ADD_IMPULSE), values taken from retail sniffs
+class spell_gen_skyriding_impulse : public SpellScript
+{
+    static constexpr float LIFT_OFF_VERTICAL = 45.0f;
+    static constexpr float SKYWARD_ASCENT_HORIZONTAL = 12.25f;
+    static constexpr float SKYWARD_ASCENT_VERTICAL = 49.0f;
+    static constexpr float SURGE_FORWARD_HORIZONTAL = 5.0f;
+
+    void HandleDummy(SpellEffIndex /*effIndex*/) const
+    {
+        Unit* caster = GetCaster();
+        Player* mover = Object::ToPlayer(caster->GetUnitBeingMoved());
+        if (!mover)
+            return;
+
+        float horizontal = 0.0f;
+        float vertical = 0.0f;
+        switch (GetSpellInfo()->Id)
+        {
+            case SPELL_LIFT_OFF:
+                vertical = LIFT_OFF_VERTICAL;
+                break;
+            case SPELL_SKYWARD_ASCENT:
+                // retail only adds the forward component once already gliding
+                if (caster->HasUnitMovementFlag(MOVEMENTFLAG_ADV_FLYING))
+                {
+                    horizontal = SKYWARD_ASCENT_HORIZONTAL;
+                    vertical = SKYWARD_ASCENT_VERTICAL;
+                }
+                else
+                    vertical = LIFT_OFF_VERTICAL;
+                break;
+            case SPELL_SURGE_FORWARD:
+                horizontal = SURGE_FORWARD_HORIZONTAL;
+                break;
+            default:
+                return;
+        }
+
+        float orientation = caster->GetOrientation();
+        caster->SendMoveAddImpulse(mover, std::cos(orientation) * horizontal, std::sin(orientation) * horizontal, vertical);
+    }
+
+    void Register() override
+    {
+        OnEffectHit += SpellEffectFn(spell_gen_skyriding_impulse::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
+    }
+
+    static constexpr uint32 SPELL_LIFT_OFF = 374763;
+    static constexpr uint32 SPELL_SKYWARD_ASCENT = 372610;
+    static constexpr uint32 SPELL_SURGE_FORWARD = 372608;
+};
+
 void AddSC_generic_spell_scripts()
 {
     RegisterSpellScript(spell_gen_absorb0_hitlimit1);
@@ -5922,4 +6014,6 @@ void AddSC_generic_spell_scripts()
     RegisterSpellScript(spell_gen_force_phase_update);
     RegisterSpellScriptWithArgs(spell_gen_no_npc_damage_below_override, "spell_gen_no_npc_damage_below_override_70", 70.0f);
     RegisterSpellScript(spell_gen_abandon_vehicle);
+    RegisterSpellScript(spell_gen_switch_flight_style);
+    RegisterSpellScript(spell_gen_skyriding_impulse);
 }

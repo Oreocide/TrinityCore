@@ -51,6 +51,7 @@
 #include "PhasingHandler.h"
 #include "Player.h"
 #include "ScriptMgr.h"
+#include "ScenarioEventMgr.h"
 #include "SharedDefines.h"
 #include "SpellAuraEffects.h"
 #include "SpellHistory.h"
@@ -3857,6 +3858,7 @@ void Spell::_cast(bool skipCheck)
         player->FailCriteria(CriteriaFailEvent::CastSpell, m_spellInfo->Id);
         player->StartCriteria(CriteriaStartEvent::CastSpell, m_spellInfo->Id);
         player->UpdateCriteria(CriteriaType::CastSpell, m_spellInfo->Id);
+        sScenarioEventMgr->Trigger(ScenarioEventTriggerType::SpellCast, m_spellInfo->Id, player);
     }
 
     // Spells that don't create items can have this attribute - handle here

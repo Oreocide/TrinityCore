@@ -137,12 +137,19 @@ void AddSC_instance_firelands();
 void AddSC_firelands();
 void AddSC_boss_alysrazor();
 void AddSC_boss_baleroc();
+void AddSC_boss_majordomo_staghelm();
+void AddSC_boss_lord_rhyolith();
+void AddSC_boss_ragnaros_firelands();
 
 void AddSC_ashenvale();
 void AddSC_azshara();
 void AddSC_azuremyst_isle();
 void AddSC_bloodmyst_isle();
 void AddSC_darkshore();
+void AddSC_uldum();
+void AddSC_molten_front();
+void AddSC_northern_barrens();
+void AddSC_mount_hyjal();
 void AddSC_desolace();
 void AddSC_durotar();
 void AddSC_dustwallow_marsh();
@@ -280,6 +287,10 @@ void AddKalimdorScripts()
     AddSC_azuremyst_isle();
     AddSC_bloodmyst_isle();
     AddSC_darkshore();
+    AddSC_uldum();
+    AddSC_molten_front();
+    AddSC_northern_barrens();
+    AddSC_mount_hyjal();
     AddSC_desolace();
     AddSC_durotar();
     AddSC_dustwallow_marsh();
@@ -307,4 +318,7 @@ void AddKalimdorScripts()
     AddSC_firelands();
     AddSC_boss_alysrazor();
     AddSC_boss_baleroc();
+    AddSC_boss_majordomo_staghelm();
+    AddSC_boss_lord_rhyolith();
+    AddSC_boss_ragnaros_firelands();
 }

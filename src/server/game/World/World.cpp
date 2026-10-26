@@ -86,6 +86,7 @@
 #include "QuestPools.h"
 #include "RealmList.h"
 #include "ScenarioMgr.h"
+#include "ScenarioEventMgr.h"
 #include "ScriptMgr.h"
 #include "ScriptReloadMgr.h"
 #include "SkillDiscovery.h"
@@ -2071,6 +2072,9 @@ bool World::SetInitialWorldSettings()
 
     TC_LOG_INFO("server.loading", "Loading scenario poi data");
     sScenarioMgr->LoadScenarioPOI();
+
+    TC_LOG_INFO("server.loading", "Loading scenario event triggers");
+    sScenarioEventMgr->LoadFromDB();
 
     TC_LOG_INFO("server.loading", "Loading phase names...");
     sObjectMgr->LoadPhaseNames();

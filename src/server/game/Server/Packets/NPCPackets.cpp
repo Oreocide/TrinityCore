@@ -235,6 +235,28 @@ WorldPacket const* GossipPOI::Write()
     return &_worldPacket;
 }
 
+void ChromieTimeSelectExpansion::Read()
+{
+    _worldPacket >> Chromie;
+    _worldPacket >> ExpansionID;
+}
+
+static void WriteCtrOptionsBlock(ByteBuffer& data, CtrOptionsBlock const& block)
+{
+    data << uint32(block.ConditionalFlags.size());
+    data << uint8(block.FactionGroup);
+    data << uint32(block.ChromieTimeExpansionMask);
+    for (uint32 flags : block.ConditionalFlags)
+        data << uint32(flags);
+}
+
+WorldPacket const* SetCtrOptions::Write()
+{
+    WriteCtrOptionsBlock(_worldPacket, Old);
+    WriteCtrOptionsBlock(_worldPacket, New);
+    return &_worldPacket;
+}
+
 void SpiritHealerActivate::Read()
 {
     _worldPacket >> Healer;

@@ -52,6 +52,7 @@ void AddSC_quest_commandscript();
 void AddSC_rbac_commandscript();
 void AddSC_reload_commandscript();
 void AddSC_reset_commandscript();
+void AddSC_scenario_commandscript();
 void AddSC_scene_commandscript();
 void AddSC_send_commandscript();
 void AddSC_server_commandscript();
@@ -100,6 +101,7 @@ void AddCommandsScripts()
     AddSC_rbac_commandscript();
     AddSC_reload_commandscript();
     AddSC_reset_commandscript();
+    AddSC_scenario_commandscript();
     AddSC_scene_commandscript();
     AddSC_send_commandscript();
     AddSC_server_commandscript();

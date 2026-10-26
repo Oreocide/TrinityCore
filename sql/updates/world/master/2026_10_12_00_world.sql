@@ -1,4 +1,6 @@
-UPDATE `conditions` SET `ConditionValue1`=86852, `Comment`='Apply Phase 27731 If Quest 86852 is not rewarded' WHERE  `SourceTypeOrReferenceId`=26 AND `SourceGroup`=27731 AND `SourceEntry`=16079;
-UPDATE `conditions` SET `ConditionValue1`=86852, `Comment`='Apply Phase 27732 If Quest 86852 is not rewarded' WHERE  `SourceTypeOrReferenceId`=26 AND `SourceGroup`=27732 AND `SourceEntry`=5151;
-UPDATE `conditions` SET `ConditionValue1`=86852, `Comment`='Apply Phase 27733 If Quest 86852 is not rewarded' WHERE  `SourceTypeOrReferenceId`=26 AND `SourceGroup`=27733 AND `SourceEntry`=5170;
-UPDATE `conditions` SET `ConditionValue1`=86852, `Comment`='Apply Phase 27734 If Quest 86852 is not rewarded' WHERE  `SourceTypeOrReferenceId`=26 AND `SourceGroup`=27734 AND `SourceEntry`=15042;
+-- Skyriding thrust impulses (Lift Off / Skyward Ascent / Surge Forward)
+DELETE FROM `spell_script_names` WHERE `spell_id` IN (374763, 372610, 372608) AND `ScriptName` = 'spell_gen_skyriding_impulse';
+INSERT INTO `spell_script_names` (`spell_id`, `ScriptName`) VALUES
+(374763, 'spell_gen_skyriding_impulse'),
+(372610, 'spell_gen_skyriding_impulse'),
+(372608, 'spell_gen_skyriding_impulse');

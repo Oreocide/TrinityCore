@@ -1044,24 +1044,26 @@ void BattlefieldWG::RemoveAurasFromPlayer(Player* player)
     player->RemoveAurasDueToSpell(SPELL_WINTERGRASP_RESTRICTED_FLIGHT_AREA);
 }
 
+bool BattlefieldWG::GetBattleEntryLocation(Player const* player, WorldLocation& location) const
+{
+    if (player->GetTeamId() == GetDefenderTeam())
+        location = WorldLocation(571, 5345.0f, 2842.0f, 410.0f, 3.14f);
+    else if (player->GetTeamId() == TEAM_HORDE)
+        location = WorldLocation(571, 5025.857422f, 3674.628906f, 362.737122f, 4.135169f);
+    else
+        location = WorldLocation(571, 5101.284f, 2186.564f, 373.549f, 3.812f);
+    return true;
+}
+
 void BattlefieldWG::OnPlayerJoinWar(Player* player)
 {
     RemoveAurasFromPlayer(player);
 
     player->CastSpell(player, SPELL_RECRUIT, true);
 
-    if (player->GetZoneId() != m_ZoneId)
-    {
-        if (player->GetTeamId() == GetDefenderTeam())
-            player->TeleportTo(571, 5345, 2842, 410, 3.14f);
-        else
-        {
-            if (player->GetTeamId() == TEAM_HORDE)
-                player->TeleportTo(571, 5025.857422f, 3674.628906f, 362.737122f, 4.135169f);
-            else
-                player->TeleportTo(571, 5101.284f, 2186.564f, 373.549f, 3.812f);
-        }
-    }
+    WorldLocation entry;
+    if (player->GetZoneId() != m_ZoneId && GetBattleEntryLocation(player, entry))
+        player->TeleportTo(entry);
 
     UpdateTenacity();
 

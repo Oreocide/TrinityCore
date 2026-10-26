@@ -65,7 +65,11 @@ void AddSC_boss_chromaggus();
 void AddSC_boss_nefarian();
 void AddSC_instance_blackwing_lair();
 void AddSC_instance_deadmines();             //Deadmines
-void AddSC_gilneas_chapter_1();              //Gilneas
+void AddSC_gilneas_chapter_1();
+void AddSC_gilneas_vsldb();
+void AddSC_gilneas_chapter_2();
+void AddSC_hillsbrad_foothills();
+void AddSC_zone_twilight_highlands();              //Gilneas
 void AddSC_gnomeregan();                     //Gnomeregan
 void AddSC_instance_gnomeregan();
 void AddSC_instance_grim_batol();            //Grim Batol
@@ -164,6 +168,10 @@ void AddSC_boss_hogger();
 void AddSC_boss_randolph_moloch();
 void AddSC_boss_lord_overheat();
 void AddSC_instance_throne_of_the_tides();   //Throne of the Tides
+void AddSC_throne_of_the_tides();            //Throne of the Tides
+void AddSC_boss_commander_ulthok();          //Throne of the Tides
+void AddSC_boss_lady_nazjar();               //Throne of the Tides
+void AddSC_boss_ozumat();                    //Throne of the Tides
 void AddSC_boss_akilzon();                   //Zul'Aman
 void AddSC_boss_halazzi();
 void AddSC_boss_hex_lord_malacrass();
@@ -277,6 +285,10 @@ void AddEasternKingdomsScripts()
     AddSC_instance_blackwing_lair();
     AddSC_instance_deadmines();             //Deadmines
     AddSC_gilneas_chapter_1();              //Gilneas
+    AddSC_gilneas_vsldb();
+    AddSC_gilneas_chapter_2();
+    AddSC_hillsbrad_foothills();
+    AddSC_zone_twilight_highlands();
     AddSC_gnomeregan();                     //Gnomeregan
     AddSC_instance_gnomeregan();
     AddSC_instance_grim_batol();            //Grim Batol
@@ -371,6 +383,10 @@ void AddEasternKingdomsScripts()
     AddSC_boss_randolph_moloch();
     AddSC_boss_lord_overheat();
     AddSC_instance_throne_of_the_tides();   //Throne of the Tides
+    AddSC_throne_of_the_tides();            //Throne of the Tides
+    AddSC_boss_commander_ulthok();          //Throne of the Tides
+    AddSC_boss_lady_nazjar();               //Throne of the Tides
+    AddSC_boss_ozumat();                    //Throne of the Tides
     AddSC_boss_archaedas();                 //Uldaman
     AddSC_boss_ironaya();
     AddSC_uldaman();

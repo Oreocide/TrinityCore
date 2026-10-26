@@ -1037,6 +1037,7 @@ bool SmartAIMgr::CheckUnusedActionParams(SmartScriptHolder const& e)
             case SMART_ACTION_EXIT_VEHICLE: return NO_PARAMS;
             case SMART_ACTION_RESUME_MOVEMENT: return sizeof(SmartAction::resumeMovement);
             case SMART_ACTION_FALL: return sizeof(SmartAction::fall);
+            case SMART_ACTION_CLEAR_QUEST: return sizeof(SmartAction::quest);
             default:
                 TC_LOG_WARN("sql.sql", "SmartAIMgr: Entry {} SourceType {} Event {} Action {} is using an action with no unused params specified in SmartAIMgr::CheckUnusedActionParams(), please report this.",
                     e.entryOrGuid, e.GetScriptType(), e.event_id, e.GetActionType());
@@ -1655,6 +1656,7 @@ bool SmartAIMgr::IsEventValid(SmartScriptHolder& e)
             TC_SAI_IS_BOOLEAN_VALID(e, e.action.questOffer.directAdd);
             break;
         case SMART_ACTION_FAIL_QUEST:
+        case SMART_ACTION_CLEAR_QUEST:
             if (!IsQuestValid(e, e.action.quest.quest))
                 return false;
             break;

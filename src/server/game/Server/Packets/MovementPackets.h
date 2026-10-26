@@ -254,6 +254,18 @@ namespace WorldPackets
             ObjectGuid MoverGUID;
         };
 
+        class MoveAddImpulse final : public ServerPacket
+        {
+        public:
+            explicit MoveAddImpulse() : ServerPacket(SMSG_MOVE_ADD_IMPULSE, 16 + 4 + 12) { }
+
+            WorldPacket const* Write() override;
+
+            ObjectGuid MoverGUID;
+            uint32 SequenceIndex = 0; ///< Unit movement packet index, incremented each time
+            TaggedPosition<Position::XYZ> Direction;
+        };
+
         class MoveSetFlag final : public ServerPacket
         {
         public:

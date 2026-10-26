@@ -22,6 +22,7 @@
 #include "CombatManager.h"
 #include "FlatSet.h"
 #include "SpellAuraDefines.h"
+#include "TaskScheduler.h"
 #include "ThreatManager.h"
 #include "Timer.h"
 #include "UnitDefines.h"
@@ -1091,6 +1092,9 @@ class TC_GAME_API Unit : public WorldObject
         // As a general rule of thumb, any unit pointer MUST be null checked BEFORE passing it to threatmanager methods
         // threatmanager will NOT null check your pointers for you - misuse = crash
         ThreatManager& GetThreatManager() { return m_threatManager; }
+
+        /// Per unit task scheduler for scripts (updated in Unit::Update), as used by the BfA-era scripts we port
+        TaskScheduler& GetScheduler() { return _scheduler; }
         ThreatManager const& GetThreatManager() const { return m_threatManager; }
 
         void SendClearTarget();
@@ -1152,6 +1156,7 @@ class TC_GAME_API Unit : public WorldObject
         void UpdateHeight(float newZ);
 
         void SendMoveKnockBack(Player* player, float speedXY, float speedZ, float vcos, float vsin);
+        void SendMoveAddImpulse(Player* player, float x, float y, float z);
         void KnockbackFrom(Position const& origin, float speedXY, float speedZ, float angle = M_PI, Movement::SpellEffectExtraData const* spellEffectExtraData = nullptr);
 
         void MonsterMoveWithSpeed(float x, float y, float z, float speed, bool generatePath = false, bool forceDestination = false);
@@ -2034,6 +2039,7 @@ class TC_GAME_API Unit : public WorldObject
         CombatManager m_combatManager;
         friend class ThreatManager;
         ThreatManager m_threatManager;
+        TaskScheduler _scheduler;
 
         void UpdateCharmAI();
         void RestoreDisabledAI();

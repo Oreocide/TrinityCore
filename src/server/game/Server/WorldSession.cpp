@@ -141,6 +141,8 @@ WorldSession::WorldSession(uint32 id, std::string&& name, uint32 battlenetAccoun
     _RBACData(nullptr),
     expireTime(60000), // 1 min after socket loss, session is deleted
     forceExit(false),
+    _dormant(false),
+    _headless(false),
     _timeSyncClockDeltaQueue(std::make_unique<boost::circular_buffer<std::pair<int64, uint32>>>(6)),
     _timeSyncClockDelta(0),
     _pendingTimeSyncRequests(),
@@ -184,11 +186,15 @@ WorldSession::~WorldSession()
     while (_recvQueue.next(packet))
         delete packet;
 
-    LoginDatabase.PExecute("UPDATE account SET online = 0 WHERE id = {};", GetAccountId());     // One-time query
+    if (!_headless)
+        LoginDatabase.PExecute("UPDATE account SET online = 0 WHERE id = {};", GetAccountId());     // One-time query
 }
 
 bool WorldSession::PlayerDisconnected() const
 {
+    if (_headless)
+        return false;
+
     return !(m_Socket[CONNECTION_TYPE_REALM] && m_Socket[CONNECTION_TYPE_REALM]->IsOpen() &&
              m_Socket[CONNECTION_TYPE_INSTANCE] && m_Socket[CONNECTION_TYPE_INSTANCE]->IsOpen());
 }
@@ -249,6 +255,13 @@ void WorldSession::SendPacket(WorldPacket const* packet, bool forced /*= false*/
         }
 
         conIdx = packet->GetConnection();
+    }
+
+    if (_headless)
+    {
+        if (_headlessPacketSink)
+            _headlessPacketSink(*packet);
+        return;
     }
 
     if (!m_Socket[conIdx])
@@ -354,7 +367,7 @@ bool WorldSession::Update(uint32 diff, PacketFilter& updater)
     ///- Before we process anything:
     /// If necessary, kick the player because the client didn't send anything for too long
     /// (or they've been idling in character select)
-    if (IsConnectionIdle() && !HasPermission(rbac::RBAC_PERM_IGNORE_IDLE_CONNECTION))
+    if (!_headless && IsConnectionIdle() && !HasPermission(rbac::RBAC_PERM_IGNORE_IDLE_CONNECTION))
         m_Socket[CONNECTION_TYPE_REALM]->CloseSocket();
 
     ///- Retrieve packets from the receive queue and call the appropriate handlers
@@ -368,7 +381,7 @@ bool WorldSession::Update(uint32 diff, PacketFilter& updater)
 
     constexpr uint32 MAX_PROCESSED_PACKETS_IN_SAME_WORLDSESSION_UPDATE = 100;
 
-    while (m_Socket[CONNECTION_TYPE_REALM] && _recvQueue.next(packet, updater))
+    while ((m_Socket[CONNECTION_TYPE_REALM] || _headless) && _recvQueue.next(packet, updater))
     {
         OpcodeClient opcode = static_cast<OpcodeClient>(packet->GetOpcode());
         ClientOpcodeHandler const* opHandle = opcodeTable[opcode];
@@ -510,7 +523,7 @@ bool WorldSession::Update(uint32 diff, PacketFilter& updater)
     if (!updater.ProcessUnsafe()) // <=> updater is of type MapSessionFilter
     {
         // Send time sync packet every 10s.
-        if (_timeSyncTimer > 0)
+        if (_timeSyncTimer > 0 && !_headless)
         {
             if (diff >= _timeSyncTimer)
                 SendTimeSync();
@@ -545,6 +558,9 @@ bool WorldSession::Update(uint32 diff, PacketFilter& updater)
                 }
             }
         }
+
+        if (_headless)
+            return !forceExit;                                  // headless sessions end when they are kicked
 
         if (!m_Socket[CONNECTION_TYPE_REALM])
             return false;                                       //Will remove this session from the world session map
@@ -689,9 +705,13 @@ void WorldSession::LogoutPlayer(bool save)
         TC_LOG_DEBUG("network", "SESSION: Sent SMSG_LOGOUT_COMPLETE Message");
 
         //! Since each account can only have one online character at any given time, ensure all characters for active account are marked as offline
-        CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_UPD_ACCOUNT_ONLINE);
-        stmt->setUInt32(0, GetAccountId());
-        CharacterDatabase.Execute(stmt);
+        //! (a headless session may share the account of a client that is still online)
+        if (!_headless)
+        {
+            CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_UPD_ACCOUNT_ONLINE);
+            stmt->setUInt32(0, GetAccountId());
+            CharacterDatabase.Execute(stmt);
+        }
     }
 
     if (m_Socket[CONNECTION_TYPE_INSTANCE])
@@ -710,6 +730,9 @@ void WorldSession::LogoutPlayer(bool save)
 void WorldSession::KickPlayer(std::string_view reason)
 {
     TC_LOG_INFO("network.kick", "{} kicked with reason: {}", GetPlayerInfo(), reason);
+
+    if (_headless)
+        forceExit = true;
 
     for (std::shared_ptr<WorldSocket> const& socket : m_Socket)
     {
@@ -1320,6 +1343,8 @@ public:
         TRANSMOG_ILLUSIONS,
         TRANSMOG_OUTFITS,
         WARBAND_SCENES,
+        WARBAND_GROUPS,
+        WARBAND_GROUP_MEMBERS,
         PLAYER_DATA_ELEMENTS_ACCOUNT,
         PLAYER_DATA_FLAGS_ACCOUNT,
 
@@ -1377,6 +1402,14 @@ public:
         stmt->setUInt32(0, battlenetAccountId);
         ok = SetPreparedQuery(WARBAND_SCENES, stmt) && ok;
 
+        stmt = LoginDatabase.GetPreparedStatement(LOGIN_SEL_BNET_WARBAND_GROUPS);
+        stmt->setUInt32(0, battlenetAccountId);
+        ok = SetPreparedQuery(WARBAND_GROUPS, stmt) && ok;
+
+        stmt = LoginDatabase.GetPreparedStatement(LOGIN_SEL_BNET_WARBAND_GROUP_MEMBERS);
+        stmt->setUInt32(0, battlenetAccountId);
+        ok = SetPreparedQuery(WARBAND_GROUP_MEMBERS, stmt) && ok;
+
         stmt = LoginDatabase.GetPreparedStatement(LOGIN_SEL_BNET_PLAYER_DATA_ELEMENTS_ACCOUNT);
         stmt->setUInt32(0, battlenetAccountId);
         ok = SetPreparedQuery(PLAYER_DATA_ELEMENTS_ACCOUNT, stmt) && ok;
@@ -1389,7 +1422,7 @@ public:
     }
 };
 
-void WorldSession::InitializeSession()
+void WorldSession::InitializeSession(std::function<void()> onInitialized /*= nullptr*/)
 {
     std::shared_ptr<AccountInfoQueryHolderPerRealm> realmHolder = std::make_shared<AccountInfoQueryHolderPerRealm>();
     if (!realmHolder->Initialize(GetAccountId(), GetBattlenetAccountId()))
@@ -1409,22 +1442,32 @@ void WorldSession::InitializeSession()
     {
         std::shared_ptr<AccountInfoQueryHolderPerRealm> Character;
         std::shared_ptr<AccountInfoQueryHolder> Login;
+        std::function<void()> OnInitialized;
     };
 
     std::shared_ptr<ForkJoinState> state = std::make_shared<ForkJoinState>();
+    state->OnInitialized = std::move(onInitialized);
 
     AddQueryHolderCallback(CharacterDatabase.DelayQueryHolder(realmHolder)).AfterComplete([this, state, realmHolder](SQLQueryHolderBase const& /*result*/)
     {
         state->Character = realmHolder;
         if (state->Login && state->Character)
+        {
             InitializeSessionCallback(*state->Login, *state->Character);
+            if (state->OnInitialized)
+                state->OnInitialized();
+        }
     });
 
     AddQueryHolderCallback(LoginDatabase.DelayQueryHolder(holder)).AfterComplete([this, state, holder](SQLQueryHolderBase const& /*result*/)
     {
         state->Login = holder;
         if (state->Login && state->Character)
+        {
             InitializeSessionCallback(*state->Login, *state->Character);
+            if (state->OnInitialized)
+                state->OnInitialized();
+        }
     });
 }
 
@@ -1440,6 +1483,7 @@ void WorldSession::InitializeSessionCallback(LoginDatabaseQueryHolder const& hol
     _collectionMgr->LoadAccountTransmogIllusions(holder.GetPreparedResult(AccountInfoQueryHolder::TRANSMOG_ILLUSIONS));
     _collectionMgr->LoadAccountTransmogOutfits(holder.GetPreparedResult(AccountInfoQueryHolder::TRANSMOG_OUTFITS));
     _collectionMgr->LoadAccountWarbandScenes(holder.GetPreparedResult(AccountInfoQueryHolder::WARBAND_SCENES));
+    LoadWarbandGroups(holder.GetPreparedResult(AccountInfoQueryHolder::WARBAND_GROUPS), holder.GetPreparedResult(AccountInfoQueryHolder::WARBAND_GROUP_MEMBERS));
     LoadPlayerDataAccount(holder.GetPreparedResult(AccountInfoQueryHolder::PLAYER_DATA_ELEMENTS_ACCOUNT), holder.GetPreparedResult(AccountInfoQueryHolder::PLAYER_DATA_FLAGS_ACCOUNT));
 
     if (!m_inQueue)

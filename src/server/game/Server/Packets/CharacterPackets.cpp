@@ -284,8 +284,8 @@ ByteBuffer& operator<<(ByteBuffer& data, EnumCharactersResult::CharacterRestrict
     data << Size<uint32>(restrictionsAndMails.MailSenderTypes);
     data << uint32(restrictionsAndMails.NoRpeReason);
 
-    if (!restrictionsAndMails.MailSenderTypes.empty())
-        data.append(restrictionsAndMails.MailSenderTypes.data(), restrictionsAndMails.MailSenderTypes.size());
+    for (uint32 senderType : restrictionsAndMails.MailSenderTypes)
+        data << senderType;
 
     for (std::string const& str : restrictionsAndMails.MailSenders)
         data << SizedCString::BitsSize<6>(str);
@@ -450,6 +450,39 @@ WorldPacket const* EnumCharactersResult::Write()
         _worldPacket << warbandGroup;
 
     return &_worldPacket;
+}
+
+void SetupWarbandGroups::Read()
+{
+    constexpr uint32 MaxMembers = 64;
+
+    // the packet starts with a 5 bit group count, then each group as sent in SMSG_ENUM_CHARACTERS_RESULT (verified against a retail capture)
+    _worldPacket >> BitsSize<5>(Groups);
+    for (WarbandGroupInput& group : Groups)
+    {
+        uint32 memberCount = 0;
+        _worldPacket >> group.GroupID;
+        _worldPacket >> group.OrderIndex;
+        _worldPacket >> group.WarbandSceneID;
+        _worldPacket >> group.Flags;
+        _worldPacket >> group.ContentSetID;
+        _worldPacket >> memberCount;
+        if (memberCount > MaxMembers)
+            throw PacketArrayMaxCapacityException(memberCount, MaxMembers);
+
+        group.Members.resize(memberCount);
+        for (WarbandGroupMember& member : group.Members)
+        {
+            _worldPacket >> member.WarbandScenePlacementID;
+            _worldPacket >> member.Type;
+            _worldPacket >> member.ContentSetID;
+            if (member.Type == 0)
+                _worldPacket >> member.Guid;
+        }
+
+        _worldPacket >> SizedString::BitsSize<9>(group.Name);
+        _worldPacket >> SizedString::Data(group.Name);
+    }
 }
 
 void CheckCharacterNameAvailability::Read()

@@ -88,9 +88,11 @@ enum HunterSpells
     SPELL_HUNTER_MASTERS_CALL_TRIGGERED             = 62305,
     SPELL_HUNTER_MISDIRECTION                       = 34477,
     SPELL_HUNTER_MISDIRECTION_PROC                  = 35079,
+    SPELL_HUNTER_MULTI_SHOT_FOCUS                   = 213363,
     SPELL_HUNTER_NO_HARD_FEELINGS_TALENT            = 459546,
     SPELL_HUNTER_NO_HARD_FEELINGS_AURA              = 459547,
     SPELL_HUNTER_NO_SCOPE                           = 473385,
+    SPELL_HUNTER_PET_LAST_STAND_TRIGGERED           = 53479,
     SPELL_HUNTER_PET_HEART_OF_THE_PHOENIX_TRIGGERED = 54114,
     SPELL_HUNTER_PET_HEART_OF_THE_PHOENIX_DEBUFF    = 55711,
     SPELL_HUNTER_POSTHASTE_INCREASE_SPEED           = 118922,
@@ -671,6 +673,7 @@ class spell_hun_focused_aim : public AuraScript
     }
 };
 
+
 // 236775 - High Explosive Trap
 // 9810 - AreatriggerId
 struct areatrigger_hun_high_explosive_trap : AreaTriggerAI
@@ -758,6 +761,28 @@ class spell_hun_kindling_flare : public SpellScript
     {
         OnEffectLaunch += SpellEffectFn(spell_hun_kindling_flare::HandleFlare, EFFECT_0, SPELL_EFFECT_CREATE_AREATRIGGER);
         OnEffectLaunch += SpellEffectFn(spell_hun_kindling_flare::HandleKindlingFlare, EFFECT_1, SPELL_EFFECT_CREATE_AREATRIGGER);
+    }
+};
+
+// 53478 - Last Stand Pet
+class spell_hun_last_stand_pet : public SpellScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_HUNTER_PET_LAST_STAND_TRIGGERED });
+    }
+
+    void HandleDummy(SpellEffIndex /*effIndex*/)
+    {
+        Unit* caster = GetCaster();
+        CastSpellExtraArgs args(TRIGGERED_FULL_MASK);
+        args.AddSpellBP0(caster->CountPctFromMaxHealth(30));
+        caster->CastSpell(caster, SPELL_HUNTER_PET_LAST_STAND_TRIGGERED, args);
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_hun_last_stand_pet::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
     }
 };
 
@@ -1072,6 +1097,32 @@ class spell_hun_no_hard_feelings : public SpellScript
     void Register() override
     {
         OnEffectHitTarget += SpellEffectFn(spell_hun_no_hard_feelings::HandleHitTarget, EFFECT_0, SPELL_EFFECT_REDIRECT_THREAT);
+    }
+};
+
+// 2643 - Multi-Shot
+class spell_hun_multi_shot : public SpellScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_HUNTER_MULTI_SHOT_FOCUS });
+    }
+
+    bool Load() override
+    {
+        return GetCaster()->GetTypeId() == TYPEID_PLAYER;
+    }
+
+    void HandleOnHit()
+    {
+        // We need to check hunter's spec because it doesn't generate focus on other specs than MM
+        if (GetCaster()->ToPlayer()->GetPrimarySpecialization() == ChrSpecialization::HunterMarksmanship)
+            GetCaster()->CastSpell(GetCaster(), SPELL_HUNTER_MULTI_SHOT_FOCUS, true);
+    }
+
+    void Register() override
+    {
+        OnHit += SpellHitFn(spell_hun_multi_shot::HandleOnHit);
     }
 };
 
@@ -1725,6 +1776,7 @@ class spell_hun_tensile_bowstring : public AuraScript
     }
 };
 
+
 // 199921 - Trailblazer
 class spell_hun_trailblazer : public AuraScript
 {
@@ -1918,6 +1970,7 @@ void AddSC_hunter_spell_scripts()
     RegisterSpellScript(spell_hun_hunting_party);
     RegisterAreaTriggerAI(areatrigger_hun_implosive_trap);
     RegisterSpellScript(spell_hun_kindling_flare);
+    RegisterSpellScript(spell_hun_last_stand_pet);
     RegisterSpellScript(spell_hun_latent_poison_damage);
     RegisterSpellScript(spell_hun_latent_poison_trigger);
     RegisterSpellScript(spell_hun_latent_poison_injectors_damage);
@@ -1928,6 +1981,7 @@ void AddSC_hunter_spell_scripts()
     RegisterSpellScript(spell_hun_masters_call);
     RegisterSpellScript(spell_hun_misdirection);
     RegisterSpellScript(spell_hun_misdirection_proc);
+    RegisterSpellScript(spell_hun_multi_shot);
     RegisterSpellScript(spell_hun_no_hard_feelings);
     RegisterSpellScript(spell_hun_no_scope);
     RegisterSpellScript(spell_hun_penetrating_shots);

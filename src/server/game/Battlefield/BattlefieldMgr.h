@@ -57,6 +57,11 @@ class TC_GAME_API BattlefieldMgr
         Battlefield* GetBattlefieldToZoneId(Map const* map, uint32 zoneId);
         Battlefield* GetBattlefieldByBattleId(Map const* map, uint32 battleId);
 
+        // group finder queue (CMSG_BATTLEMASTER_JOIN with a battlefield's BattlemasterList id), across all maps
+        Battlefield* GetBattlefieldForQueue(uint32 battlemasterListId);
+        Battlefield* GetBattlefieldByTicket(ObjectGuid guid, uint32 ticketId);
+        void SendQueueStatus(Player* player);
+
         void AddZone(uint32 zoneId, Battlefield* bf);
 
         void Update(uint32 diff);

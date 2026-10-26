@@ -96,6 +96,13 @@ void WorldSession::HandleBattlemasterJoinOpcode(WorldPackets::Battleground::Batt
     if (_player->InBattleground())
         return;
 
+    // Wintergrasp is queued like a battleground but runs as a battlefield
+    if (Battlefield* battlefield = sBattlefieldMgr->GetBattlefieldForQueue(bgQueueTypeId.BattlemasterListId))
+    {
+        battlefield->HandleQueueJoin(_player);
+        return;
+    }
+
     BattlegroundTemplate const* bgTemplate = sBattlegroundMgr->GetBattlegroundTemplateByTypeId(bgTypeId);
     if (!bgTemplate)
         return;
@@ -280,6 +287,12 @@ void WorldSession::HandleBattlefieldListOpcode(WorldPackets::Battleground::Battl
 
 void WorldSession::HandleBattleFieldPortOpcode(WorldPackets::Battleground::BattlefieldPort& battlefieldPort)
 {
+    if (Battlefield* battlefield = sBattlefieldMgr->GetBattlefieldByTicket(_player->GetGUID(), battlefieldPort.Ticket.Id))
+    {
+        battlefield->HandleQueuePort(_player, battlefieldPort.AcceptedInvite);
+        return;
+    }
+
     if (!_player->InBattlegroundQueue())
     {
         TC_LOG_DEBUG("bg.battleground", "CMSG_BATTLEFIELD_PORT {} Slot: {}, Unk: {}, Time: {}, AcceptedInvite: {}. Player not in queue!",
@@ -440,6 +453,7 @@ void WorldSession::HandleBattlefieldLeaveOpcode(WorldPackets::Battleground::Batt
 void WorldSession::HandleRequestBattlefieldStatusOpcode(WorldPackets::Battleground::RequestBattlefieldStatus& /*requestBattlefieldStatus*/)
 {
     // we must update all queues here
+    sBattlefieldMgr->SendQueueStatus(_player);
     Battleground* bg = nullptr;
     for (uint8 i = 0; i < PLAYER_MAX_BATTLEGROUND_QUEUES; ++i)
     {

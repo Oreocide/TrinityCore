@@ -26,6 +26,7 @@
 #include "Pet.h"
 #include "Player.h"
 #include "Scenario.h"
+#include "ScenarioEventMgr.h"
 #include "SpellAuraEffects.h"
 #include <boost/container/small_vector.hpp>
 
@@ -293,6 +294,8 @@ void KillRewarder::Reward()
 
             if (Scenario* scenario = victim->GetScenario())
                 scenario->UpdateCriteria(CriteriaType::KillCreature, victim->GetEntry(), 1, 0, victim, *_killers.begin());
+
+            sScenarioEventMgr->Trigger(ScenarioEventTriggerType::CreatureDeath, victim->GetEntry(), *_killers.begin(), victim);
         }
     }
 }

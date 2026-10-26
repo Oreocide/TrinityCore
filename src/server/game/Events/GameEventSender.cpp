@@ -62,7 +62,8 @@ void GameEvents::TriggerForPlayer(uint32 gameEventId, Player* source)
 
     source->UpdateCriteria(CriteriaType::PlayerTriggerGameEvent, gameEventId, 0, 0, source);
 
-    if (map->IsScenario())
+    // dungeons and other instance maps can carry a scenario too (not only scenario-type maps)
+    if (map->IsScenario() || source->GetScenario())
         source->UpdateCriteria(CriteriaType::AnyoneTriggerGameEventScenario, gameEventId, 0, 0, source);
 }
 

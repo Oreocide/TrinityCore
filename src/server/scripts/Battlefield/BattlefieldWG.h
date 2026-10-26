@@ -236,6 +236,8 @@ class BattlefieldWG : public Battlefield
          * \param player : Player who accepted invite
          */
         void OnPlayerJoinWar(Player* player) override;
+        uint32 GetQueueBattlemasterListId() const override { return 1017; }   // Battle for Wintergrasp
+        bool GetBattleEntryLocation(Player const* player, WorldLocation& location) const override;
 
         /**
          * \brief Called when player left the battle

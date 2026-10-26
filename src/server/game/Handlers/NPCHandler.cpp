@@ -287,6 +287,20 @@ void WorldSession::HandleSpiritHealerActivate(WorldPackets::NPC::SpiritHealerAct
     SendSpiritResurrect();
 }
 
+void WorldSession::HandleChromieTimeSelectExpansion(WorldPackets::NPC::ChromieTimeSelectExpansion& packet)
+{
+    if (!_player->PlayerTalkClass->GetInteractionData().IsInteractingWith(packet.Chromie, PlayerInteractionType::ChromieTime))
+    {
+        TC_LOG_DEBUG("network", "WORLD: HandleChromieTimeSelectExpansion - {} is not interacting with Chromie {}.", _player->GetGUID().ToString(), packet.Chromie.ToString());
+        return;
+    }
+
+    if (!_player->SelectChromieTime(packet.ExpansionID))
+        return;
+
+    SendPacket(WorldPackets::NPC::ChromieTimeSelectExpansionSuccess().Write());
+}
+
 void WorldSession::SendSpiritResurrect()
 {
     _player->ResurrectPlayer(0.5f, true);

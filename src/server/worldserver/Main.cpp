@@ -26,6 +26,7 @@
 #include "Configuration/Config.h"
 #include "DatabaseEnv.h"
 #include "DatabaseLoader.h"
+#include "DBUpdater.h"
 #include "DeadlineTimer.h"
 #include "GitRevision.h"
 #include "InstanceLockMgr.h"
@@ -35,6 +36,7 @@
 #include "MapManager.h"
 #include "Memory.h"
 #include "Metric.h"
+#include "ModulesScriptLoader.h"
 #include "MySQLThreading.h"
 #include "OpenSSLCrypto.h"
 #include "OutdoorPvP/OutdoorPvPMgr.h"
@@ -120,6 +122,7 @@ void SignalHandler(boost::system::error_code const& error, int signalNumber);
 std::unique_ptr<Trinity::Net::AsyncAcceptor> StartRaSocketAcceptor(Trinity::Asio::IoContext& ioContext);
 bool StartDB();
 void StopDB();
+void AddScriptsAndModules();
 void WorldUpdateLoop();
 void ClearOnlineAccounts(uint32 realmId);
 struct ShutdownTCSoapThread { void operator()(std::thread* thread) const; };
@@ -346,7 +349,7 @@ int main(int argc, char** argv)
 
     auto scriptReloadMgrHandle = Trinity::make_unique_ptr_with_deleter<&ScriptReloadMgr::Unload>(sScriptReloadMgr);
 
-    sScriptMgr->SetScriptLoader(AddScripts);
+    sScriptMgr->SetScriptLoader(AddScriptsAndModules);
     auto sScriptMgrHandle = Trinity::make_unique_ptr_with_deleter<&ScriptMgr::Unload>(sScriptMgr);
 
     // Initialize the World
@@ -648,6 +651,9 @@ bool StartDB()
 {
     MySQL::Library_Init();
 
+    // Module sql directories (modules/<name>/data/sql/db-*) are picked up by the updater
+    DBUpdaterUtil::SetModuleList(GetModulesList());
+
     // Load databases
     DatabaseLoader loader("server.worldserver", DatabaseLoader::DATABASE_NONE);
     loader
@@ -666,6 +672,12 @@ bool StartDB()
 
     TC_LOG_INFO("server.worldserver", "Using World DB: {}", sWorld->GetDBVersion());
     return true;
+}
+
+void AddScriptsAndModules()
+{
+    AddScripts();
+    AddModulesScripts();
 }
 
 void StopDB()

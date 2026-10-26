@@ -1,0 +1,15 @@
+###################################################################################################
+# mod-skeleton
+#
+# Copy this file to worldserver.conf.d/mod_skeleton.conf to change the values.
+# Keys share one namespace with worldserver.conf, so prefix them with the module name.
+###################################################################################################
+
+#
+#    Skeleton.Enable
+#        Description: Log a line at startup to prove the module is loaded.
+#        Default:     0 - (Disabled)
+#                     1 - (Enabled)
+
+[worldserver]
+Skeleton.Enable = 0

@@ -18,6 +18,7 @@
 #include "Battlefield.h"
 #include "BattlefieldMgr.h"
 #include "Battleground.h"
+#include "BattlegroundMgr.h"
 #include "BattlegroundPackets.h"
 #include "CellImpl.h"
 #include "CreatureTextMgr.h"
@@ -121,6 +122,8 @@ void Battlefield::HandlePlayerLeaveZone(Player* player, uint32 /*zone*/)
 
 bool Battlefield::Update(uint32 diff)
 {
+    UpdateTickets(diff);
+
     if (m_Timer <= diff)
     {
         // Battlefield ends on time
@@ -324,6 +327,216 @@ void Battlefield::KickPlayerFromBattlefield(ObjectGuid guid)
             player->TeleportTo(KickPosition);
 }
 
+namespace
+{
+constexpr uint32 QueueInviteSeconds = 60;
+constexpr uint32 QueueStatusIntervalMs = 15000;     // the retail server repeats the queued status this often
+std::atomic<uint32> sNextTicketId{ 18000 };
+
+BattlegroundQueueTypeId QueueTypeOf(uint32 battlemasterListId)
+{
+    return BattlegroundMgr::BGQueueTypeId(uint16(battlemasterListId), BattlegroundQueueIdType::Battleground, false, 0);
+}
+
+// seconds the client shows as "joined at"
+uint32 NowSeconds()
+{
+    return uint32(GameTime::GetGameTime());
+}
+}
+
+// A retail client queues for Wintergrasp through the group finder (CMSG_BATTLEMASTER_JOIN, BattlemasterList 1017) and is
+// answered with the generic queued status, repeated every ~15 s (sniff 2026-10-09). Nothing here touches the zone sets
+// of the battlefield: a ticket holder arrives through the normal zone entry, which joins him to a running war.
+void Battlefield::HandleQueueJoin(Player* player)
+{
+    uint32 listId = GetQueueBattlemasterListId();
+    if (!listId)
+        return;
+
+    BattlegroundQueueTypeId queueId = QueueTypeOf(listId);
+
+    if (!m_IsEnabled || player->GetLevel() < m_MinLevel || player->InBattleground())
+    {
+        WorldPackets::Battleground::BattlefieldStatusFailed failed;
+        BattlegroundMgr::BuildBattlegroundStatusFailed(&failed, queueId, player, 0, ERR_BATTLEGROUND_JOIN_FAILED);
+        player->SendDirectMessage(failed.Write());
+        return;
+    }
+
+    QueueTicket ticket;
+    {
+        std::lock_guard<std::mutex> lock(m_TicketLock);
+        auto [itr, inserted] = m_QueueTickets.try_emplace(player->GetGUID());
+        if (inserted)
+        {
+            itr->second.Id = sNextTicketId.fetch_add(1);
+            itr->second.JoinTime = NowSeconds();
+        }
+        ticket = itr->second;
+    }
+
+    WorldPackets::Battleground::BattlefieldStatusQueued queued;
+    BattlegroundMgr::BuildBattlegroundStatusQueued(&queued, player, ticket.Id, ticket.JoinTime, queueId, 0, false);
+    player->SendDirectMessage(queued.Write());
+}
+
+bool Battlefield::HasQueueTicket(ObjectGuid guid, uint32 ticketId) const
+{
+    std::lock_guard<std::mutex> lock(m_TicketLock);
+    auto itr = m_QueueTickets.find(guid);
+    return itr != m_QueueTickets.end() && itr->second.Id == ticketId;
+}
+
+void Battlefield::SendQueueStatus(Player* player)
+{
+    uint32 listId = GetQueueBattlemasterListId();
+    if (!listId)
+        return;
+
+    QueueTicket ticket;
+    {
+        std::lock_guard<std::mutex> lock(m_TicketLock);
+        auto itr = m_QueueTickets.find(player->GetGUID());
+        if (itr == m_QueueTickets.end())
+            return;
+        ticket = itr->second;
+    }
+
+    BattlegroundQueueTypeId queueId = QueueTypeOf(listId);
+    if (ticket.Invited)
+    {
+        WorldPackets::Battleground::BattlefieldStatusNeedConfirmation confirmation;
+        BattlegroundMgr::BuildBattlegroundStatusHeader(&confirmation.Hdr, player, ticket.Id, ticket.JoinTime, queueId);
+        confirmation.Mapid = m_MapId;
+        confirmation.Timeout = uint32(std::max<time_t>(0, ticket.InviteExpires - GameTime::GetGameTime()));
+        confirmation.Role = 0;
+        player->SendDirectMessage(confirmation.Write());
+        return;
+    }
+
+    WorldPackets::Battleground::BattlefieldStatusQueued queued;
+    BattlegroundMgr::BuildBattlegroundStatusQueued(&queued, player, ticket.Id, ticket.JoinTime, queueId, 0, false);
+    player->SendDirectMessage(queued.Write());
+}
+
+// CMSG_BATTLEFIELD_PORT: the answer to the confirmation, or "leave the queue" (AcceptedInvite false, sniff 2026-10-09)
+void Battlefield::HandleQueuePort(Player* player, bool accepted)
+{
+    uint32 listId = GetQueueBattlemasterListId();
+    QueueTicket ticket;
+    bool invited = false;
+    {
+        std::lock_guard<std::mutex> lock(m_TicketLock);
+        auto itr = m_QueueTickets.find(player->GetGUID());
+        if (itr == m_QueueTickets.end())
+            return;
+        ticket = itr->second;
+        invited = itr->second.Invited && itr->second.InviteExpires >= GameTime::GetGameTime();
+        if (!accepted || !invited)
+            m_QueueTickets.erase(itr);
+        else
+            itr->second.Invited = false;    // arrives in the zone, stays a ticket holder until the battle ends
+    }
+
+    if (!accepted || !invited)
+    {
+        WorldPackets::Battleground::BattlefieldStatusNone none;
+        BattlegroundMgr::BuildBattlegroundStatusNone(&none, player, ticket.Id, ticket.JoinTime);
+        player->SendDirectMessage(none.Write());
+        return;
+    }
+
+    // accepted while the war is on: walk him to his side's entry, the zone entry then joins him to the war
+    WorldLocation entry;
+    if (IsWarTime() && player->GetZoneId() != m_ZoneId && GetBattleEntryLocation(player, entry))
+        player->TeleportTo(entry);
+
+    (void)listId;
+}
+
+void Battlefield::InviteTicketHoldersToWar()
+{
+    uint32 listId = GetQueueBattlemasterListId();
+    if (!listId)
+        return;
+
+    BattlegroundQueueTypeId queueId = QueueTypeOf(listId);
+    std::lock_guard<std::mutex> lock(m_TicketLock);
+    for (auto& [guid, ticket] : m_QueueTickets)
+    {
+        Player* player = ObjectAccessor::FindConnectedPlayer(guid);
+        if (!player || player->GetZoneId() == m_ZoneId || ticket.Invited)
+            continue;
+
+        ticket.Invited = true;
+        ticket.InviteExpires = GameTime::GetGameTime() + QueueInviteSeconds;
+
+        WorldPackets::Battleground::BattlefieldStatusNeedConfirmation confirmation;
+        BattlegroundMgr::BuildBattlegroundStatusHeader(&confirmation.Hdr, player, ticket.Id, ticket.JoinTime, queueId);
+        confirmation.Mapid = m_MapId;
+        confirmation.Timeout = QueueInviteSeconds;
+        confirmation.Role = 0;
+        player->SendDirectMessage(confirmation.Write());
+    }
+}
+
+void Battlefield::UpdateTickets(uint32 diff)
+{
+    uint32 listId = GetQueueBattlemasterListId();
+    if (!listId)
+        return;
+
+    m_TicketRefreshTimer += diff;
+    bool refresh = m_TicketRefreshTimer >= QueueStatusIntervalMs;
+    if (refresh)
+        m_TicketRefreshTimer = 0;
+
+    BattlegroundQueueTypeId queueId = QueueTypeOf(listId);
+    time_t now = GameTime::GetGameTime();
+    std::lock_guard<std::mutex> lock(m_TicketLock);
+    for (auto itr = m_QueueTickets.begin(); itr != m_QueueTickets.end();)
+    {
+        Player* player = ObjectAccessor::FindConnectedPlayer(itr->first);
+        if (!player)
+        {
+            itr = m_QueueTickets.erase(itr);
+            continue;
+        }
+
+        QueueTicket& ticket = itr->second;
+        if (ticket.Invited && ticket.InviteExpires < now)
+            ticket.Invited = false;
+
+        if (refresh && !ticket.Invited)
+        {
+            WorldPackets::Battleground::BattlefieldStatusQueued queued;
+            BattlegroundMgr::BuildBattlegroundStatusQueued(&queued, player, ticket.Id, ticket.JoinTime, queueId, 0, false);
+            player->SendDirectMessage(queued.Write());
+        }
+        ++itr;
+    }
+}
+
+void Battlefield::ClearTickets()
+{
+    uint32 listId = GetQueueBattlemasterListId();
+    if (!listId)
+        return;
+
+    std::lock_guard<std::mutex> lock(m_TicketLock);
+    for (auto const& [guid, ticket] : m_QueueTickets)
+    {
+        if (Player* player = ObjectAccessor::FindConnectedPlayer(guid))
+        {
+            WorldPackets::Battleground::BattlefieldStatusNone none;
+            BattlegroundMgr::BuildBattlegroundStatusNone(&none, player, ticket.Id, ticket.JoinTime);
+            player->SendDirectMessage(none.Write());
+        }
+    }
+    m_QueueTickets.clear();
+}
+
 void Battlefield::StartBattle()
 {
     if (m_isActive)
@@ -340,6 +553,7 @@ void Battlefield::StartBattle()
 
     InvitePlayersInZoneToWar();
     InvitePlayersInQueueToWar();
+    InviteTicketHoldersToWar();
 
     OnBattleStart();
 }
@@ -358,6 +572,8 @@ void Battlefield::EndBattle(bool endByTimer)
 
     // Reset battlefield timer
     m_Timer = m_NoWarBattleTime;
+
+    ClearTickets();
 
     OnBattleEnd(endByTimer);
 }

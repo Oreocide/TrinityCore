@@ -585,7 +585,9 @@ void WorldSession::HandleTransmogOutfitUpdateSlots(WorldPackets::Transmogrificat
 
     _player->UpdateTransmogOutfitSlots(transmogOutfitUpdateSlots.OutfitID, transmogOutfitUpdateSlots.Slots);
 
-    if (transmogOutfitUpdateSlots.OutfitID == _player->m_activePlayerData->TransmogMetadata->TransmogOutfitID)
+    // the client does not cast the equip outfit spell after applying an edit, so equip the edited outfit unless another one is locked in
+    if (transmogOutfitUpdateSlots.OutfitID == _player->m_activePlayerData->TransmogMetadata->TransmogOutfitID
+        || !_player->m_activePlayerData->TransmogMetadata->Locked)
         _player->EquipTransmogOutfit(transmogOutfitUpdateSlots.OutfitID, TransmogSituationTrigger::TransmogUpdate, {});
 
     WorldPackets::Transmogrification::TransmogOutfitSlotsUpdated transmogOutfitSlotsUpdated;

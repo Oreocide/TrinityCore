@@ -23,6 +23,8 @@
 #include "ZoneScript.h"
 #include <map>
 #include <memory>
+#include <mutex>
+#include <unordered_map>
 
 enum BattlefieldTypes
 {
@@ -275,6 +277,17 @@ class TC_GAME_API Battlefield : public ZoneScript
 
         void SendWarning(uint8 id, WorldObject const* target = nullptr);
 
+        /// Group finder queue: retail sends CMSG_BATTLEMASTER_JOIN with this BattlemasterList id (0 = no queue)
+        virtual uint32 GetQueueBattlemasterListId() const { return 0; }
+        /// Where a queued player that accepted the invite arrives (outside the zone), false = nowhere to send him
+        virtual bool GetBattleEntryLocation(Player const* /*player*/, WorldLocation& /*location*/) const { return false; }
+
+        /// Called on the map thread of the player (the client's request), the rest runs on the world thread
+        void HandleQueueJoin(Player* player);
+        bool HasQueueTicket(ObjectGuid guid, uint32 ticketId) const;
+        void HandleQueuePort(Player* player, bool accepted);
+        void SendQueueStatus(Player* player);
+
         void PlayerAcceptInviteToQueue(Player* player);
         void PlayerAcceptInviteToWar(Player* player);
         uint32 GetBattleId() const { return m_BattleId; }
@@ -320,6 +333,22 @@ class TC_GAME_API Battlefield : public ZoneScript
         GuidUnorderedSet m_PlayersInQueue[PVP_TEAMS_COUNT];               // Players in the queue
         GuidUnorderedSet m_PlayersInWar[PVP_TEAMS_COUNT];                 // Players in WG combat
         PlayerTimerMap m_InvitedPlayers[PVP_TEAMS_COUNT];
+
+        struct QueueTicket
+        {
+            uint32 Id = 0;
+            uint32 JoinTime = 0;            // seconds, shown by the client
+            bool Invited = false;           // confirmation sent, waiting for the answer
+            time_t InviteExpires = 0;
+        };
+
+        mutable std::mutex m_TicketLock;                        // tickets are touched by player map threads and the world thread
+        std::unordered_map<ObjectGuid, QueueTicket> m_QueueTickets;
+        uint32 m_TicketRefreshTimer = 0;
+
+        void InviteTicketHoldersToWar();
+        void UpdateTickets(uint32 diff);
+        void ClearTickets();
         PlayerTimerMap m_PlayersWillBeKick[PVP_TEAMS_COUNT];
 
         // Variables that must exist for each battlefield

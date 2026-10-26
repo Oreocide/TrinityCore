@@ -20,7 +20,6 @@
 #include "MotionMaster.h"
 #include "Player.h"
 #include "ScriptedCreature.h"
-#include "SpellInfo.h"
 
 namespace Scripts::EasternKingdoms::Vashjir::AbyssalDepths
 {
@@ -28,7 +27,6 @@ namespace Spells
 {
     static constexpr uint32 SummonVashjirWhirlpoolVehicleTrigger = 82905;
     static constexpr uint32 RideVehicleHardcoded                 = 46598;
-    static constexpr uint32 TeleportUnderWhirlpool               = 82903;
 }
 
 namespace Creatures
@@ -39,6 +37,7 @@ namespace Creatures
 namespace Paths
 {
     static constexpr uint32 PathUnderWhirlpool = 4437300;
+    static constexpr uint32 PathUnderWhirlpoolFinalNode = 4;
 }
 
 // 6200 - Abyssal Depths Whirlpool Entrance
@@ -49,6 +48,13 @@ public:
 
     bool OnTrigger(Player* player, AreaTriggerEntry const* /*areaTrigger*/) override
     {
+        // Prevent re-summoning the whirlpool vehicle while the player is
+        // already riding one - the trigger volume can be re-entered mid
+        // sequence, which previously restarted the whole ride/path chain
+        // from scratch.
+        if (player->GetVehicle())
+            return true;
+
         // cast from nearby worldtrigger
         if (Creature* worldTrigger = player->FindNearestCreature(Creatures::WorldTrigger, 100.0f))
             worldTrigger->CastSpell(player, Spells::SummonVashjirWhirlpoolVehicleTrigger);
@@ -71,17 +77,35 @@ struct npc_abyssal_depths_whirlpool_vehicle : public ScriptedAI
             _scheduler.Schedule(3s + 500ms, [this](TaskContext const& /*task*/)
             {
                 me->SetAIAnimKitId(822);
-                me->CastSpell(nullptr, Spells::TeleportUnderWhirlpool, CastSpellExtraArgsInit{
-                    .TriggerFlags = TRIGGERED_IGNORE_SET_FACING
-                });
+
+                // Previously used an instant same-map CastSpell teleport
+                // (TeleportUnderWhirlpool, 82903) here before starting the
+                // path. That relocates the vehicle server-side but never
+                // notifies the seated player's client (Unit::NearTeleportTo
+                // only sends a teleport packet for the teleporting unit
+                // itself, not its passengers - see Vehicle::RelocatePassengers
+                // / TransportBase::UpdatePassengerPosition, which silently
+                // rewrite the passenger's server position with no client
+                // packet). The client then had to reconcile a 250+ unit gap
+                // on its own, which looked like running/clipping through
+                // walls back toward the whirlpool. Using MovePath for the
+                // ENTIRE distance (spawn to destination) instead avoids any
+                // teleport - ordinary spline movement is properly synced to
+                // clients tick-by-tick.
                 me->GetMotionMaster()->MovePath(Paths::PathUnderWhirlpool, false);
             });
         }
     }
 
-    void OnSpellCast(SpellInfo const* spellInfo) override
+    // Despawning on cast (the previous approach) happened before MovePath
+    // below had a chance to actually run, leaving the passenger's own
+    // motion generator in a bad state - still trying to follow a vehicle
+    // that no longer existed - causing an uncontrollable "clip through
+    // walls back to the whirlpool" bug. Defer the despawn until the
+    // vehicle has actually finished its path instead.
+    void MovementInform(uint32 type, uint32 id) override
     {
-        if (spellInfo->Id == Spells::TeleportUnderWhirlpool)
+        if (type == WAYPOINT_MOTION_TYPE && id == Paths::PathUnderWhirlpoolFinalNode)
             me->DespawnOrUnsummon();
     }
 

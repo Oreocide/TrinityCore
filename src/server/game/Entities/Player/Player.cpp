@@ -90,6 +90,7 @@
 #include "MapManager.h"
 #include "MapUtils.h"
 #include "MiscPackets.h"
+#include "NPCPackets.h"
 #include "MotionMaster.h"
 #include "MovementPackets.h"
 #include "ObjectAccessor.h"
@@ -115,6 +116,7 @@
 #include "ReputationMgr.h"
 #include "RestMgr.h"
 #include "Scenario.h"
+#include "ScenarioEventMgr.h"
 #include "SkillDiscovery.h"
 #include "SocialMgr.h"
 #include "Spell.h"
@@ -887,6 +889,18 @@ void Player::Update(uint32 p_time)
 {
     if (!IsInWorld())
         return;
+
+    // A dormant player (WorldSession::SetDormant, set by scripts) stays in the world for /who but does not tick combat, auras
+    // or the rest of Unit::Update, and Map::Update skips its cell visits: a script simulates it more cheaply.
+    if (GetSession()->IsDormant())
+    {
+        if (GetTeleportState() == TeleportState::DelayedTeleport || GetTeleportState() == TeleportState::DelayedWorldPort)
+        {
+            SetTeleportState(TeleportState::NotTeleporting);
+            TeleportTo(m_teleport_dest, m_teleport_options, m_teleportSpellId);
+        }
+        return;
+    }
 
     // undelivered mail
     if (m_nextMailDelivereTime && m_nextMailDelivereTime <= GameTime::GetGameTime())
@@ -7486,6 +7500,7 @@ void Player::UpdateArea(uint32 newArea)
     if (oldArea != newArea)
     {
         UpdateCriteria(CriteriaType::EnterArea, newArea);
+        sScenarioEventMgr->Trigger(ScenarioEventTriggerType::AreaEnter, newArea, this);
         UpdateCriteria(CriteriaType::LeaveArea, oldArea);
     }
 }
@@ -14138,7 +14153,8 @@ void Player::OnGossipSelect(WorldObject* source, int32 gossipOptionId, uint32 me
             break;
         case GossipOptionNpc::GarrisonRecruitment: // NYI
             break;
-        case GossipOptionNpc::ChromieTimeNpc: // NYI
+        case GossipOptionNpc::ChromieTimeNpc:
+            handled = false; // generic path sends GossipOptionNPCInteraction and starts the ChromieTime interaction
             break;
         case GossipOptionNpc::RuneforgeLegendaryCrafting: // NYI
             break;
@@ -18640,6 +18656,7 @@ bool Player::LoadFromDB(ObjectGuid guid, CharacterDatabaseQueryHolder const& hol
     _LoadQuestStatusObjectives(holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_QUEST_STATUS_OBJECTIVES));
     _LoadQuestStatusObjectiveSpawnTrackings(holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_QUEST_STATUS_OBJECTIVES_SPAWN_TRACKING));
     _LoadQuestStatusRewarded(holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_QUEST_STATUS_REW));
+    RestoreChromieTime();
     _LoadDailyQuestStatus(holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_DAILY_QUEST_STATUS));
     _LoadWeeklyQuestStatus(holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_WEEKLY_QUEST_STATUS));
     _LoadSeasonalQuestStatus(holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_SEASONAL_QUEST_STATUS));
@@ -19109,8 +19126,15 @@ void Player::_LoadAuras(PreparedQueryResult auraResult, PreparedQueryResult effe
         while (auraResult->NextRow());
     }
 
-    // TODO: finish dragonriding - this forces old flight mode
-    AddAura(404468, this);
+    // flight style is persisted as an aura, default to steady flight when none was saved
+    if (!HasAura(404464) && !HasAura(404468))
+        AddAura(404468, this);
+
+    // Switch Flight Style and Single-Button Assistant are available to every character
+    // 376777 (Skyriding) is required by the skyriding mount capability and teaches Surge Forward / Skyward Ascent
+    for (uint32 spellId : { 436854u, 1229376u, 376777u })
+        if (!HasSpell(spellId))
+            LearnSpell(spellId, false);
 }
 
 void Player::_LoadGlyphAuras()
@@ -31755,4 +31779,114 @@ bool Player::CanExecutePendingSpellCastRequest()
         return false;
 
     return true;
+}
+
+
+namespace
+{
+// Sniff 2026-10-09_21-01-44 (CMSG_CHROMIE_TIME_SELECT_EXPANSION / SMSG_SET_CTR_OPTIONS / quest offers).
+// Mask = CtrOptions.ChromieTimeExpansionMask the retail server sent for the timeline, Tracker = hidden tracking quest that stores the choice,
+// the first quest is offered right after the selection (the Horde quests are not known yet).
+struct ChromieTimeInfo
+{
+    int32 ExpansionId;
+    uint32 Mask;
+    uint32 TrackerQuest;
+    uint32 AllianceQuest;
+    uint32 HordeQuest;
+};
+
+constexpr ChromieTimeInfo ChromieTimes[] =
+{
+    {  5,   9, 900005, 60891,     0 },   // Cataclysm (also sets the classic bit)
+    {  6,   2, 900006, 60120,     0 },   // Burning Crusade
+    {  7,   4, 900007, 60096,     0 },   // Wrath of the Lich King
+    {  8,  16, 900008, 60125,     0 },   // Mists of Pandaria
+    {  9,  32, 900009, 60969,     0 },   // Warlords of Draenor
+    { 10,  64, 900010, 60971,     0 },   // Legion
+    { 14, 256, 900014, 60545,     0 },   // Shadowlands
+    { 15, 128, 900015, 47486,     0 },   // Battle for Azeroth
+    { 16, 512, 900016, 65436,     0 },   // Dragonflight
+};
+
+constexpr uint32 CHROMIE_TIME_CONDITIONAL_FLAG = 0x1;
+constexpr uint32 CHROMIE_TIME_CONDITIONAL_BASE = 0x4002;   // value the retail server sent with no timeline selected
+
+ChromieTimeInfo const* FindChromieTime(int32 expansionId)
+{
+    for (ChromieTimeInfo const& info : ChromieTimes)
+        if (info.ExpansionId == expansionId)
+            return &info;
+    return nullptr;
+}
+}
+
+bool Player::SelectChromieTime(int32 expansionId)
+{
+    ChromieTimeInfo const* info = nullptr;
+    if (expansionId)
+    {
+        info = FindChromieTime(expansionId);
+        if (!info)
+            return false;
+    }
+
+    // tracker quests: reward the chosen one, clear every other
+    for (ChromieTimeInfo const& other : ChromieTimes)
+    {
+        if (&other == info)
+            continue;
+        if (GetQuestStatus(other.TrackerQuest) != QUEST_STATUS_NONE)
+        {
+            RemoveActiveQuest(other.TrackerQuest, false);
+            RemoveRewardedQuest(other.TrackerQuest);
+        }
+    }
+
+    if (info && GetQuestStatus(info->TrackerQuest) != QUEST_STATUS_REWARDED && sObjectMgr->GetQuestTemplate(info->TrackerQuest))
+        CompleteQuest(info->TrackerQuest);
+
+    WorldPackets::NPC::SetCtrOptions ctrOptions;
+    ctrOptions.Old.FactionGroup = m_playerData->CtrOptions->FactionGroup;
+    ctrOptions.Old.ChromieTimeExpansionMask = m_playerData->CtrOptions->ChromieTimeExpansionMask;
+    ctrOptions.Old.ConditionalFlags = m_playerData->CtrOptions->ConditionalFlags;
+
+    ctrOptions.New.FactionGroup = GetTeam() == HORDE ? 5 : 3;
+    ctrOptions.New.ChromieTimeExpansionMask = info ? info->Mask : 0;
+    ctrOptions.New.ConditionalFlags = { CHROMIE_TIME_CONDITIONAL_BASE | (info ? CHROMIE_TIME_CONDITIONAL_FLAG : 0) };
+
+    {
+        auto ctr = m_values.ModifyValue(&Player::m_playerData).ModifyValue(&UF::PlayerData::CtrOptions);
+        SetUpdateFieldValue(ctr.ModifyValue(&UF::CTROptions::FactionGroup), ctrOptions.New.FactionGroup);
+        SetUpdateFieldValue(ctr.ModifyValue(&UF::CTROptions::ChromieTimeExpansionMask), ctrOptions.New.ChromieTimeExpansionMask);
+        SetUpdateFieldValue(ctr.ModifyValue(&UF::CTROptions::ConditionalFlags), ctrOptions.New.ConditionalFlags);
+    }
+    SetUpdateFieldValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::UiChromieTimeExpansionID), expansionId);
+    SendDirectMessage(ctrOptions.Write());
+
+    if (info)
+    {
+        uint32 questId = GetTeam() == HORDE ? info->HordeQuest : info->AllianceQuest;
+        if (Quest const* quest = questId ? sObjectMgr->GetQuestTemplate(questId) : nullptr)
+            if (GetQuestStatus(questId) == QUEST_STATUS_NONE && CanTakeQuest(quest, false))
+                PlayerTalkClass->SendQuestGiverQuestDetails(quest, GetGUID(), true, false);
+    }
+
+    return true;
+}
+
+void Player::RestoreChromieTime()
+{
+    for (ChromieTimeInfo const& info : ChromieTimes)
+    {
+        if (GetQuestStatus(info.TrackerQuest) != QUEST_STATUS_REWARDED)
+            continue;
+
+        auto ctr = m_values.ModifyValue(&Player::m_playerData).ModifyValue(&UF::PlayerData::CtrOptions);
+        SetUpdateFieldValue(ctr.ModifyValue(&UF::CTROptions::FactionGroup), uint8(GetTeam() == HORDE ? 5 : 3));
+        SetUpdateFieldValue(ctr.ModifyValue(&UF::CTROptions::ChromieTimeExpansionMask), info.Mask);
+        SetUpdateFieldValue(ctr.ModifyValue(&UF::CTROptions::ConditionalFlags), std::vector<uint32>{ CHROMIE_TIME_CONDITIONAL_BASE | CHROMIE_TIME_CONDITIONAL_FLAG });
+        SetUpdateFieldValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::UiChromieTimeExpansionID), info.ExpansionId);
+        break;
+    }
 }

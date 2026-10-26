@@ -40,9 +40,10 @@ struct UpdateFetcher::DirectoryEntry
 UpdateFetcher::UpdateFetcher(Path const& sourceDirectory,
     std::function<void(std::string const&)> const& apply,
     std::function<void(Path const& path)> const& applyFile,
-    std::function<QueryResult(std::string const&)> const& retrieve) :
+    std::function<QueryResult(std::string const&)> const& retrieve,
+    std::vector<std::string> additionalDirectories) :
         _sourceDirectory(std::make_unique<Path>(sourceDirectory)), _apply(apply), _applyFile(applyFile),
-        _retrieve(retrieve)
+        _retrieve(retrieve), _additionalDirectories(std::move(additionalDirectories))
 {
 }
 
@@ -94,6 +95,19 @@ void UpdateFetcher::FillFileListRecursively(Path const& path, LocaleFileStorage&
 UpdateFetcher::DirectoryStorage UpdateFetcher::ReceiveIncludedDirectories() const
 {
     DirectoryStorage directories;
+
+    for (std::string path : _additionalDirectories)
+    {
+        if (path.starts_with("$"))
+            path = _sourceDirectory->generic_string() + path.substr(1);
+
+        Path const p(path);
+        if (!is_directory(p))
+            continue;
+
+        directories.push_back({ p, RELEASED });
+        TC_LOG_INFO("sql.updates", "DBUpdater: Including module update directory \"{}\".", p.generic_string());
+    }
 
     QueryResult const result = _retrieve("SELECT `path`, `state` FROM `updates_include`");
     if (!result)

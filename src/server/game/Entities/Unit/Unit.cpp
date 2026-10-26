@@ -436,6 +436,7 @@ void Unit::Update(uint32 p_time)
         return;
 
     _UpdateSpells(p_time);
+    _scheduler.Update(p_time);
 
     // If this is set during update SetCantProc(false) call is missing somewhere in the code
     // Having this would prevent spells from being proced, so let's crash
@@ -9111,16 +9112,17 @@ void Unit::UpdateAdvFlyingSpeed(AdvFlyingRateTypeRange speedType, bool clientUpd
     if (!flightCapabilityEntry)
         flightCapabilityEntry = sFlightCapabilityStore.AssertEntry(1);
 
+    // client expects banking and pitching rates in radians per second, db2 stores degrees
     auto [opcode, min, max, rateAura] = [&]
     {
         switch (speedType)
         {
             case ADV_FLYING_BANKING_RATE:
-                return std::tuple(SMSG_MOVE_SET_ADV_FLYING_BANKING_RATE, flightCapabilityEntry->BankingRateMin, flightCapabilityEntry->BankingRateMax, SPELL_AURA_MOD_ADV_FLYING_BANKING_RATE);
+                return std::tuple(SMSG_MOVE_SET_ADV_FLYING_BANKING_RATE, G3D::toRadians(flightCapabilityEntry->BankingRateMin), G3D::toRadians(flightCapabilityEntry->BankingRateMax), SPELL_AURA_MOD_ADV_FLYING_BANKING_RATE);
             case ADV_FLYING_PITCHING_RATE_DOWN:
-                return std::tuple(SMSG_MOVE_SET_ADV_FLYING_PITCHING_RATE_DOWN, flightCapabilityEntry->PitchingRateDownMin, flightCapabilityEntry->PitchingRateDownMax, SPELL_AURA_MOD_ADV_FLYING_PITCHING_RATE_DOWN);
+                return std::tuple(SMSG_MOVE_SET_ADV_FLYING_PITCHING_RATE_DOWN, G3D::toRadians(flightCapabilityEntry->PitchingRateDownMin), G3D::toRadians(flightCapabilityEntry->PitchingRateDownMax), SPELL_AURA_MOD_ADV_FLYING_PITCHING_RATE_DOWN);
             case ADV_FLYING_PITCHING_RATE_UP:
-                return std::tuple(SMSG_MOVE_SET_ADV_FLYING_PITCHING_RATE_UP, flightCapabilityEntry->PitchingRateUpMin, flightCapabilityEntry->PitchingRateUpMax, SPELL_AURA_MOD_ADV_FLYING_PITCHING_RATE_UP);
+                return std::tuple(SMSG_MOVE_SET_ADV_FLYING_PITCHING_RATE_UP, G3D::toRadians(flightCapabilityEntry->PitchingRateUpMin), G3D::toRadians(flightCapabilityEntry->PitchingRateUpMax), SPELL_AURA_MOD_ADV_FLYING_PITCHING_RATE_UP);
             case ADV_FLYING_TURN_VELOCITY_THRESHOLD:
                 return std::tuple(SMSG_MOVE_SET_ADV_FLYING_TURN_VELOCITY_THRESHOLD, flightCapabilityEntry->TurnVelocityThresholdMin, flightCapabilityEntry->TurnVelocityThresholdMax, SPELL_AURA_NONE);
             default:
@@ -12585,6 +12587,15 @@ void Unit::SendMoveKnockBack(Player* player, float speedXY, float speedZ, float 
     moveKnockBack.Speeds.VertSpeed = speedZ;
     moveKnockBack.Direction = Position(vcos, vsin);
     player->GetSession()->SendPacket(moveKnockBack.Write());
+}
+
+void Unit::SendMoveAddImpulse(Player* player, float x, float y, float z)
+{
+    WorldPackets::Movement::MoveAddImpulse moveAddImpulse;
+    moveAddImpulse.MoverGUID = GetGUID();
+    moveAddImpulse.SequenceIndex = m_movementCounter++;
+    moveAddImpulse.Direction = Position(x, y, z);
+    player->GetSession()->SendPacket(moveAddImpulse.Write());
 }
 
 void Unit::KnockbackFrom(Position const& origin, float speedXY, float speedZ, float angle /*= M_PI*/, Movement::SpellEffectExtraData const* spellEffectExtraData /*= nullptr*/)

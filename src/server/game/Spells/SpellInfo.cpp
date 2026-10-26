@@ -34,6 +34,7 @@
 #include "Random.h"
 #include "Spell.h"
 #include "SpellAuraEffects.h"
+#include "ConditionMgr.h"
 #include "SpellMgr.h"
 #include "TraitMgr.h"
 #include "Vehicle.h"

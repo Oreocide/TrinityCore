@@ -58,6 +58,22 @@ bool DBUpdaterUtil::CheckExecutable()
     return true;
 }
 
+void DBUpdaterUtil::SetModuleList(std::vector<std::string> modules)
+{
+    module_list() = std::move(modules);
+}
+
+std::vector<std::string> const& DBUpdaterUtil::GetModuleList()
+{
+    return module_list();
+}
+
+std::vector<std::string>& DBUpdaterUtil::module_list()
+{
+    static std::vector<std::string> modules;
+    return modules;
+}
+
 std::string& DBUpdaterUtil::corrected_path()
 {
     static std::string path;
@@ -75,6 +91,12 @@ template<>
 std::string DBUpdater<LoginDatabaseConnection>::GetTableName()
 {
     return "Auth";
+}
+
+template<>
+std::string DBUpdater<LoginDatabaseConnection>::GetModuleDirectoryName()
+{
+    return "auth";
 }
 
 template<>
@@ -102,6 +124,12 @@ template<>
 std::string DBUpdater<WorldDatabaseConnection>::GetTableName()
 {
     return "World";
+}
+
+template<>
+std::string DBUpdater<WorldDatabaseConnection>::GetModuleDirectoryName()
+{
+    return "world";
 }
 
 template<>
@@ -137,6 +165,12 @@ std::string DBUpdater<CharacterDatabaseConnection>::GetTableName()
 }
 
 template<>
+std::string DBUpdater<CharacterDatabaseConnection>::GetModuleDirectoryName()
+{
+    return "characters";
+}
+
+template<>
 std::string DBUpdater<CharacterDatabaseConnection>::GetBaseFile()
 {
     return BuiltInConfig::GetSourceDirectory() +
@@ -161,6 +195,12 @@ template<>
 std::string DBUpdater<HotfixDatabaseConnection>::GetTableName()
 {
     return "Hotfixes";
+}
+
+template<>
+std::string DBUpdater<HotfixDatabaseConnection>::GetModuleDirectoryName()
+{
+    return "hotfixes";
 }
 
 template<>
@@ -250,9 +290,14 @@ bool DBUpdater<T>::Update(DatabaseWorkerPool<T>& pool)
         return false;
     }
 
+    std::vector<std::string> moduleDirectories;
+    for (std::string const& module : DBUpdaterUtil::GetModuleList())
+        moduleDirectories.push_back(Trinity::StringFormat("$/modules/{}/data/sql/db-{}", module, DBUpdater<T>::GetModuleDirectoryName()));
+
     UpdateFetcher updateFetcher(sourceDirectory, [&](std::string const& query) { DBUpdater<T>::Apply(pool, query); },
         [&](Path const& file) { DBUpdater<T>::ApplyFile(pool, file); },
-            [&](std::string const& query) -> QueryResult { return DBUpdater<T>::Retrieve(pool, query); });
+            [&](std::string const& query) -> QueryResult { return DBUpdater<T>::Retrieve(pool, query); },
+        std::move(moduleDirectories));
 
     UpdateResult result;
     try
