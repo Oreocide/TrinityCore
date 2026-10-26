@@ -295,8 +295,13 @@ void WorldSession::HandleChromieTimeSelectExpansion(WorldPackets::NPC::ChromieTi
         return;
     }
 
-    if (!_player->SelectChromieTime(packet.ExpansionID))
-        return;
+    // The select spell's effect 277 calls SelectChromieTime. Fall back to the direct call if the spell cannot be cast.
+    uint32 spellId = _player->GetChromieTimeSpell(packet.ExpansionID);
+    if (!spellId || _player->CastSpell(_player, spellId, true) != SPELL_CAST_OK)
+    {
+        if (!_player->SelectChromieTime(packet.ExpansionID))
+            return;
+    }
 
     SendPacket(WorldPackets::NPC::ChromieTimeSelectExpansionSuccess().Write());
 }

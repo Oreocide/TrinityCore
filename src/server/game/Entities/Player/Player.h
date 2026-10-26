@@ -2895,6 +2895,7 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         // Chromie Time (timewalking campaigns). The chosen timeline is persisted through hidden tracker quests (see Player.cpp)
         int32 GetChromieTime() const { return m_activePlayerData->UiChromieTimeExpansionID; }
         bool SelectChromieTime(int32 expansionId);   // 0 = back to the present; false when the expansion is unknown
+        uint32 GetChromieTimeSpell(int32 expansionId) const; // "Selected …" spell for that timeline, 0 if unknown
         void RestoreChromieTime();                   // after login: re-applies the timeline stored in the tracker quests
 
         bool MeetPlayerCondition(uint32 conditionId) const;

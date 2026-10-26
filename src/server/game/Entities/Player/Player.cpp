@@ -31848,7 +31848,7 @@ namespace
 {
 // Sniff 2026-10-09_21-01-44 (CMSG_CHROMIE_TIME_SELECT_EXPANSION / SMSG_SET_CTR_OPTIONS / quest offers).
 // Mask = CtrOptions.ChromieTimeExpansionMask the retail server sent for the timeline, Tracker = hidden tracking quest that stores the choice,
-// the first quest is offered right after the selection (the Horde quests are not known yet).
+// the first quest is offered right after the selection. Horde ids are the other AllowableRaces half of the sniffed Alliance quest, except BfA.
 struct ChromieTimeInfo
 {
     int32 ExpansionId;
@@ -31856,19 +31856,21 @@ struct ChromieTimeInfo
     uint32 TrackerQuest;
     uint32 AllianceQuest;
     uint32 HordeQuest;
+    uint32 SelectSpell;   // effect 277 sets this expansion; 0 has no select spell (the present uses 335595)
 };
 
 constexpr ChromieTimeInfo ChromieTimes[] =
 {
-    {  5,   9, 900005, 60891,     0 },   // Cataclysm (also sets the classic bit)
-    {  6,   2, 900006, 60120,     0 },   // Burning Crusade
-    {  7,   4, 900007, 60096,     0 },   // Wrath of the Lich King
-    {  8,  16, 900008, 60125,     0 },   // Mists of Pandaria
-    {  9,  32, 900009, 60969,     0 },   // Warlords of Draenor
-    { 10,  64, 900010, 60971,     0 },   // Legion
-    { 14, 256, 900014, 60545,     0 },   // Shadowlands
-    { 15, 128, 900015, 47486,     0 },   // Battle for Azeroth
-    { 16, 512, 900016, 65436,     0 },   // Dragonflight
+    // Horde quests are the other AllowableRaces half of the sniffed Alliance quest. BfA's Horde quest was not in the sniff.
+    {  5,   9, 900005, 60891, 60887, 325537 },   // Cataclysm (also sets the classic bit), Selected Cataclysm
+    {  6,   2, 900006, 60120, 60123, 325400 },   // Burning Crusade, Selected Outland
+    {  7,   4, 900007, 60096, 60097, 325042 },   // Wrath of the Lich King, Selected Northrend
+    {  8,  16, 900008, 60125, 60126, 325530 },   // Mists of Pandaria, Selected Pandaria
+    {  9,  32, 900009, 60969, 60968, 325534 },   // Warlords of Draenor, Selected Draenor
+    { 10,  64, 900010, 60971, 60970, 325539 },   // Legion, Selected Legion
+    { 14, 256, 900014, 60545, 61874, 397733 },   // Shadowlands, Selected Shadowlands
+    { 15, 128, 900015, 47486,     0, 420123 },   // Battle for Azeroth, Selected Battle for Azeroth
+    { 16, 512, 900016, 65436, 65435, 452212 },   // Dragonflight, Selected Dragonflight
 };
 
 constexpr uint32 CHROMIE_TIME_CONDITIONAL_FLAG = 0x1;
@@ -31935,6 +31937,13 @@ bool Player::SelectChromieTime(int32 expansionId)
     }
 
     return true;
+}
+
+uint32 Player::GetChromieTimeSpell(int32 expansionId) const
+{
+    if (ChromieTimeInfo const* info = FindChromieTime(expansionId))
+        return info->SelectSpell;
+    return 0;
 }
 
 void Player::RestoreChromieTime()
