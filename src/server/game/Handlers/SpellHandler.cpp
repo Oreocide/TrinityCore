@@ -283,6 +283,15 @@ void WorldSession::HandleCancelAuraOpcode(WorldPackets::Spells::CancelAura& canc
     if (!spellInfo->IsPositive() || spellInfo->IsPassive())
         return;
 
+    // Logout sit and the client's first tracking sync both cancel these. The aura is what
+    // gets saved and what checks the minimap box, so put it back on the client instead.
+    if (_player->ShouldPreserveSessionAura(spellInfo))
+    {
+        if (Aura* aura = _player->GetAura(cancelAura.SpellID))
+            aura->SetNeedClientUpdateForTargets();
+        return;
+    }
+
     _player->RemoveOwnedAura(cancelAura.SpellID, cancelAura.CasterGUID, 0, AURA_REMOVE_BY_CANCEL);
 }
 
@@ -328,6 +337,23 @@ void WorldSession::HandleCancelGrowthAuraOpcode(WorldPackets::Spells::CancelGrow
 
 void WorldSession::HandleCancelMountAuraOpcode(WorldPackets::Spells::CancelMountAura& /*cancelMountAura*/)
 {
+    bool preserve = false;
+    for (AuraEffect const* effect : _player->GetAuraEffectsByType(SPELL_AURA_MOUNTED))
+    {
+        SpellInfo const* spellInfo = effect->GetSpellInfo();
+        if (spellInfo->HasAttribute(SPELL_ATTR0_NO_AURA_CANCEL) || !spellInfo->IsPositive() || spellInfo->IsPassive())
+            continue;
+
+        if (_player->ShouldPreserveSessionAura(spellInfo))
+        {
+            effect->GetBase()->SetNeedClientUpdateForTargets();
+            preserve = true;
+        }
+    }
+
+    if (preserve)
+        return;
+
     _player->RemoveAurasByType(SPELL_AURA_MOUNTED, [](AuraApplication const* aurApp)
     {
         SpellInfo const* spellInfo = aurApp->GetBase()->GetSpellInfo();

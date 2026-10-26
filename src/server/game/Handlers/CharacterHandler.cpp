@@ -1681,7 +1681,7 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder const& holder)
 
     m_playerLoading.Clear();
 
-    _player->UpdateMountCapability();
+    _player->UpdateMountCapability(false);
 
     // Handle Login-Achievements (should be handled after loading)
     _player->UpdateCriteria(CriteriaType::Login, 1);

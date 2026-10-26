@@ -934,7 +934,7 @@ class TC_GAME_API Unit : public WorldObject
         void Dismount();
         void CancelMountAura(bool force = false);
         MountCapabilityEntry const* GetMountCapability(uint32 mountType) const;
-        void UpdateMountCapability();
+        void UpdateMountCapability(bool canRemove = true);
 
         void SendDurabilityLoss(Player* receiver, uint32 percent);
         void PlayOneShotAnimKitId(uint16 animKitId);

@@ -8490,7 +8490,7 @@ MountCapabilityEntry const* Unit::GetMountCapability(uint32 mountType) const
     return nullptr;
 }
 
-void Unit::UpdateMountCapability()
+void Unit::UpdateMountCapability(bool canRemove /*= true*/)
 {
     if (IsLoading())
         return;
@@ -8503,7 +8503,14 @@ void Unit::UpdateMountCapability()
     AuraEffectVector mounts = CopyAuraEffectList(GetAuraEffectsByType(SPELL_AURA_MOUNTED));
     for (AuraEffect* aurEff : mounts)
     {
-        aurEff->RecalculateAmount();
+        // Login runs this before the area is ready to answer the capability check. A zero
+        // result would delete a mount that was saved. Keep the saved amount for that call.
+        bool const keepSavedCapability = !canRemove && aurEff->CanBeRecalculated() && aurEff->GetAmountAsInt()
+            && !static_cast<int32>(aurEff->CalculateAmount(aurEff->GetCaster()));
+
+        if (!keepSavedCapability)
+            aurEff->RecalculateAmount();
+
         if (!aurEff->GetAmountAsInt())
             aurEff->GetBase()->Remove();
         else if (MountCapabilityEntry const* capability = sMountCapabilityStore.LookupEntry(aurEff->GetAmountAsInt())) // aura may get removed by interrupt flag, reapply

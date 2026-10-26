@@ -267,10 +267,16 @@ void WorldSession::HandleLogoutRequestOpcode(WorldPackets::Character::LogoutRequ
     // not set flags if player can't free move to prevent lost state at logout cancel
     if (GetPlayer()->CanFreeMove())
     {
-        if (GetPlayer()->GetStandState() == UNIT_STAND_STATE_STAND)
-            GetPlayer()->SetStandState(UNIT_STAND_STATE_SIT);
+        // Sitting or stunning makes the client cancel the mount before the character is saved.
+        if (!GetPlayer()->IsMounted())
+        {
+            if (GetPlayer()->GetStandState() == UNIT_STAND_STATE_STAND)
+                GetPlayer()->SetStandState(UNIT_STAND_STATE_SIT);
+
+            GetPlayer()->SetUnitFlag(UNIT_FLAG_STUNNED);
+        }
+
         GetPlayer()->SetRooted(true);
-        GetPlayer()->SetUnitFlag(UNIT_FLAG_STUNNED);
     }
 
     SetLogoutStartTime(GameTime::GetGameTime());

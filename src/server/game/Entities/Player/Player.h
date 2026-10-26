@@ -1824,6 +1824,9 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         uint32 GetInGameTime() const { return m_ingametime; }
         void SetInGameTime(uint32 time) { m_ingametime = time; }
 
+        // Mount and minimap-tracking auras survive the logout save and the client's login sync.
+        bool ShouldPreserveSessionAura(SpellInfo const* spellInfo) const;
+
         void AddTimedQuest(uint32 questId);
         void RemoveTimedQuest(uint32 questId);
 
