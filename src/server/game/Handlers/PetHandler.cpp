@@ -22,6 +22,7 @@
 #include "DatabaseEnv.h"
 #include "Group.h"
 #include "Log.h"
+#include "GameTime.h"
 #include "Map.h"
 #include "MotionMaster.h"
 #include "ObjectAccessor.h"
@@ -553,6 +554,7 @@ void WorldSession::HandlePetRename(WorldPackets::Pet::PetRename& packet)
     }
 
     pet->SetName(name);
+    pet->SetPetNameTimestamp(uint32(GameTime::GetGameTime())); // makes the client discard its cached name and query the new one
 
     pet->SetGroupUpdateFlag(GROUP_UPDATE_FLAG_PET_NAME);
 
