@@ -2797,9 +2797,9 @@ void AuraEffect::HandleAuraMounted(AuraApplication const* aurApp, uint8 mode, bo
                             displayId = Trinity::Containers::SelectRandomContainerElement(usableDisplays)->CreatureDisplayInfoID;
                     }
                 }
-                // TODO: CREATE TABLE mount_vehicle (mountId, vehicleCreatureId) for future mounts that are vehicles (new mounts no longer have proper data in MiscValue)
-                //if (MountVehicle const* mountVehicle = sObjectMgr->GetMountVehicle(mountEntry->Id))
-                //    creatureEntry = mountVehicle->VehicleCreatureId;
+                // Newer mounts leave a stale creature in EffectMiscValue (the brutosaur spell still says White Stallion).
+                if (uint32 vehicleCreatureId = sObjectMgr->GetMountVehicleCreature(mountEntry->ID))
+                    creatureEntry = vehicleCreatureId;
 
                 if (mode & AURA_EFFECT_HANDLE_REAL && !mountEntry->GetFlags().HasFlag(MountFlags::MountEquipmentEffectsSuppressed))
                 {
