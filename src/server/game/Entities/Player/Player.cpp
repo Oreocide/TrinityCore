@@ -20716,7 +20716,11 @@ void Player::SaveToDB(LoginDatabaseTransaction loginTransaction, CharacterDataba
         stmt->setUInt32(index++, AsUnderlyingType(GetPrimarySpecialization()));
         stmt->setUInt16(index++, (uint16)m_ExtraFlags);
         if (PetStable const* petStable = GetPetStable())
-            stmt->setUInt32(index++, petStable->GetCurrentPet() && petStable->GetCurrentPet()->Health > 0 ? petStable->GetCurrentPet()->PetNumber : 0); // summonedPetNumber
+        {
+            PetStable::PetInfo const* currentPet = petStable->GetCurrentPet();
+            // a pet loaded while the owner could not have it out (dead, flying) is only remembered in m_temporaryUnsummonedPetNumber until it is resummoned
+            stmt->setUInt32(index++, currentPet ? (currentPet->Health > 0 ? currentPet->PetNumber : 0) : m_temporaryUnsummonedPetNumber); // summonedPetNumber
+        }
         else
             stmt->setUInt32(index++, 0); // summonedPetNumber
         stmt->setUInt16(index++, (uint16)m_atLoginFlags);
