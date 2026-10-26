@@ -19,11 +19,17 @@
 #include "Log.h"
 #include "ScriptMgr.h"
 
+// Every module is compiled into the one `modules` static library, so keep script classes in an anonymous
+// namespace (or prefix them with the module name) to avoid link-time collisions with other modules.
+namespace
+{
 class mod_skeleton_world : public WorldScript
 {
 public:
     mod_skeleton_world() : WorldScript("mod_skeleton_world") { }
 
+    // Read config here, not in the constructor: it runs on startup and on `.reload config`.
+    // worldserver only loads *.conf files, never *.conf.dist, so keep this default equal to the .dist value.
     void OnConfigLoad(bool /*reload*/) override
     {
         _enabled = sConfigMgr->GetBoolDefault("Skeleton.Enable", false);
@@ -38,7 +44,9 @@ public:
 private:
     bool _enabled = false;
 };
+}
 
+// Called from the module's *_loader.cpp. Add one `new <ScriptClass>()` line per script object.
 void AddSC_mod_skeleton()
 {
     new mod_skeleton_world();

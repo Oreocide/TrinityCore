@@ -23,7 +23,7 @@ cd "$DIR/$NAME"
 mv src/mod_skeleton.cpp "src/${IDENT}.cpp"
 mv src/mod_skeleton_loader.cpp "src/${IDENT}_loader.cpp"
 mv conf/mod_skeleton.conf.dist "conf/${IDENT}.conf.dist"
-grep -rl --null 'mod_skeleton\|mod-skeleton\|Skeleton' . | xargs -0 sed -i \
-    -e "s/mod_skeleton/${IDENT}/g" -e "s/mod-skeleton/${NAME}/g" -e "s/Skeleton/${KEY}/g"
+grep -rl --null 'mod_skeleton\|mod-skeleton\|MOD_SKELETON\|Skeleton' . | xargs -0 sed -i \
+    -e "s/MOD_SKELETON/${IDENT^^}/g" -e "s/mod_skeleton/${IDENT}/g" -e "s/mod-skeleton/${NAME}/g" -e "s/Skeleton/${KEY}/g"
 
 echo "Created modules/$NAME. Re-run cmake in your build directory to pick it up."
