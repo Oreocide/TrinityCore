@@ -615,7 +615,7 @@ enum SMART_ACTION
     SMART_ACTION_EXIT_VEHICLE                       = 157,
     SMART_ACTION_RESUME_MOVEMENT                    = 158,    // MovementSlot (default = 0, active = 1, controlled = 2), ResumeTime (ms)
     SMART_ACTION_FALL                               = 159,    // pointId
-    SMART_ACTION_CLEAR_QUEST                        = 160,    // QuestID. Resets the quest status like SPELL_EFFECT_CLEAR_QUEST (used to un-flag serverside tracking quests such as the Zidormi time travel toggles)
+    SMART_ACTION_CLEAR_QUEST                        = 160,    // QuestID. Resets the quest status like SPELL_EFFECT_CLEAR_QUEST
     SMART_ACTION_END                                = 161
 };
 

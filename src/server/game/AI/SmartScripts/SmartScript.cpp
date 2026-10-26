@@ -41,6 +41,7 @@
 #include "PhasingHandler.h"
 #include "Random.h"
 #include "ScriptActions.h"
+#include "ScriptMgr.h"
 #include "SmartAI.h"
 #include "SpellMgr.h"
 #include "SpellAuras.h"
@@ -2694,26 +2695,43 @@ void SmartScript::ProcessAction(SmartScriptHolder& e, Unit* unit, uint32 var0, u
         }
         case SMART_ACTION_CLEAR_QUEST:
         {
-            Quest const* quest = sObjectMgr->GetQuestTemplate(e.action.quest.quest);
-            if (!quest)
+            // Mirrors Spell::EffectQuestClear: drops both the active and the rewarded state of the quest
+            Quest const* questTemplate = sObjectMgr->GetQuestTemplate(e.action.quest.quest);
+            if (!questTemplate)
                 break;
 
             for (WorldObject* target : targets)
             {
-                Player* player = Object::ToPlayer(target);
-                if (!player)
+                Player* playerTarget = target->ToPlayer();
+                if (!playerTarget)
                     continue;
 
-                QuestStatus oldStatus = player->GetQuestStatus(quest->GetQuestId());
+                QuestStatus oldStatus = playerTarget->GetQuestStatus(e.action.quest.quest);
                 if (oldStatus == QUEST_STATUS_NONE)
                     continue;
 
-                player->RemoveActiveQuest(quest->GetQuestId(), false);
-                if (oldStatus != QUEST_STATUS_REWARDED)
-                    player->TakeQuestSourceItem(quest->GetQuestId(), false);
+                playerTarget->RemoveActiveQuest(e.action.quest.quest, false);
 
-                player->RemoveRewardedQuest(quest->GetQuestId());
-                player->DespawnPersonalSummonsForQuest(quest->GetQuestId());
+                if (oldStatus != QUEST_STATUS_REWARDED)
+                {
+                    // unequippable quest items are ignored here, they stay equipped
+                    playerTarget->TakeQuestSourceItem(e.action.quest.quest, false);
+
+                    if (questTemplate->HasFlag(QUEST_FLAGS_FLAGS_PVP))
+                    {
+                        playerTarget->pvpInfo.IsHostile = playerTarget->pvpInfo.IsInHostileArea || playerTarget->HasPvPForcingQuest();
+                        playerTarget->UpdatePvPState();
+                    }
+                }
+
+                // RemoveRewardedQuest also refreshes the phase shift for quests flagged QUEST_FLAGS_UPDATE_PHASESHIFT
+                playerTarget->RemoveRewardedQuest(e.action.quest.quest);
+                playerTarget->DespawnPersonalSummonsForQuest(e.action.quest.quest);
+
+                sScriptMgr->OnQuestStatusChange(playerTarget, e.action.quest.quest);
+                sScriptMgr->OnQuestStatusChange(playerTarget, questTemplate, oldStatus, QUEST_STATUS_NONE);
+                TC_LOG_DEBUG("scripts.ai", "SmartScript::ProcessAction:: SMART_ACTION_CLEAR_QUEST: Player {} cleared quest {}",
+                    playerTarget->GetGUID(), e.action.quest.quest);
             }
             break;
         }
