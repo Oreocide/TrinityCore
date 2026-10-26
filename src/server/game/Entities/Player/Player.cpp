@@ -23401,6 +23401,13 @@ void Player::ContinueTaxiFlight()
     if (!sourceNode)
         return;
 
+    // MoveTaxiFlight allows a single flight path generator, restoring a taxi flight on top of a running one would abort the server
+    if (GetMotionMaster()->HasMovementGenerator([](MovementGenerator const* gen) { return gen->GetMovementGeneratorType() == FLIGHT_MOTION_TYPE; }))
+    {
+        TC_LOG_ERROR("entities.unit", "Player::ContinueTaxiFlight: {} already has a flight path generator, not restarting the taxi flight", GetGUID().ToString());
+        return;
+    }
+
     TC_LOG_DEBUG("entities.unit", "Player::ContinueTaxiFlight: Restart {} taxi flight", GetGUID().ToString());
 
     uint32 mountDisplayId = sObjectMgr->GetTaxiMountDisplayId(sourceNode, GetTeam(), true);
