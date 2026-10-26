@@ -15,26 +15,6 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Ported from The-Cataclysm-Preservation-Project/TrinityCore
-// (src/server/scripts/EasternKingdoms/ThroneOfTheTides/throne_of_the_tides.cpp),
-// a fork frozen at Cataclysm client build 4.3.4.15595. Covers the entrance
-// gauntlet: the pre-fight Ozumat vehicle cinematic, Lady Naz'jar's murloc
-// gauntlet (before her real boss encounter), the defense-system/falling-rocks/
-// shock-defense sequence, and the area triggers that drive
-// DATA_CURRENT_EVENT_PROGRESS forward. See instance_throne_of_the_tides.cpp
-// for the event-index state machine this file's triggers feed into.
-//
-// API changes from the reference repo's 4.3.4-era code (see CLAUDE.md for
-// the fuller cheat-sheet built while porting this dungeon):
-//   - AuraScript/SpellScript Register(): `OnX.Register(&Fn, ...)` -> `OnX +=
-//     XFn(Fn, ...)`.
-//   - spellInfo->Effects[EFFECT_N].Field -> spellInfo->GetEffect(EFFECT_N).Field.
-//   - AreaTriggerScript::OnTrigger no longer declared `override` here since
-//     the base virtual signature matches without it in this repo's original
-//     code - added `override` for correctness against our modern base class.
-// Not yet cross-checked against a Warcraft Logs parse per the standing
-// per-encounter workflow.
-
 #include "throne_of_the_tides.h"
 #include "AreaBoundary.h"
 #include "Containers.h"
@@ -259,23 +239,8 @@ struct npc_tott_lady_nazjar : public ScriptedAI
             UntrackMurlocLeashVisual(summon->GetGUID());
     }
 
-    // The murloc gauntlet re-summons a fresh wave of 5 murlocs every 13s,
-    // each casting a leash-visual aura (74563/74568) onto Naz'jar as the
-    // target - with no cleanup, these accumulate on Naz'jar's visible-aura
-    // list indefinitely across multiple waves, eventually exhausting the
-    // visible-aura slot limit ("could not find empty unit visible slot")
-    // and causing a world-thread hang. Remove the corresponding leash-visual
-    // aura instance whenever its casting murloc dies or despawns.
-    //
-    // Deliberately does NOT rely on _leftMurlocGUIDs/_rightMurlocGUIDs to
-    // decide which spell ID to remove - those sets get wiped wholesale by
-    // SpellHitTarget on every ~11s EVENT_TRIGGER_MURLOC pulse (independent
-    // of whether the tracked murlocs are actually dead yet), so a murloc
-    // that dies mid-fight (which routinely takes longer than 11s) would
-    // already be missing from its set by the time this fires, silently
-    // skipping the cleanup. Just remove both possible spell IDs from this
-    // specific caster unconditionally instead - a no-op if that one wasn't
-    // actually applied, cheap either way.
+    // 74563 and 74568 are cast on Naz'jar by each wave and are not removed on murloc death.
+    // The left/right guid sets are cleared every summon pulse, so remove both auras by caster.
     void UntrackMurlocLeashVisual(ObjectGuid murlocGUID)
     {
         _leftMurlocGUIDs.erase(murlocGUID);

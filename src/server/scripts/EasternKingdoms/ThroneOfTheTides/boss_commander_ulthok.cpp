@@ -25,18 +25,6 @@
 #include "Player.h"
 #include "InstanceScript.h"
 
-// Ported from The-Cataclysm-Preservation-Project/TrinityCore
-// (src/server/scripts/EasternKingdoms/ThroneOfTheTides/boss_commander_ulthok.cpp),
-// a fork frozen at Cataclysm client build 4.3.4.15595 - spell IDs and
-// mechanics there are verified against the real client, not reconstructed
-// from addon/wiki sources. Adapted for this core's modern API:
-//   - RAID_MODE<uint32>(normal, heroic) -> DUNGEON_MODE<uint32>(normal, heroic)
-//     (Throne of the Tides is a 5-man dungeon, not a raid)
-//   - AuraScript::Register() OnEffectPeriodic.Register(&Fn, ...) style ->
-//     OnEffectPeriodic += AuraEffectPeriodicFn(&Fn, ...) style
-// Not yet cross-checked against a Warcraft Logs parse per the standing
-// per-encounter workflow - spell IDs/timers here are the reference repo's,
-// treat as high-confidence but not final-tuned.
 namespace ThroneOfTheTides::CommanderUlthok
 {
 enum Texts

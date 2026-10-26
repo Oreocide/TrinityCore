@@ -19171,12 +19171,12 @@ void Player::_LoadAuras(PreparedQueryResult auraResult, PreparedQueryResult effe
         while (auraResult->NextRow());
     }
 
-    // flight style is persisted as an aura, default to steady flight when none was saved
+    // 404464 Skyriding and 404468 Steady Flight are the saved flight-style auras. Default to steady flight when neither was stored.
     if (!HasAura(404464) && !HasAura(404468))
         AddAura(404468, this);
 
-    // Switch Flight Style and Single-Button Assistant are available to every character
-    // 376777 (Skyriding) is required by the skyriding mount capability and teaches Surge Forward / Skyward Ascent
+    // 436854 Switch Flight Style, 1229376 Single-Button Assistant, 376777 Skyriding.
+    // 376777 is the mount capability that teaches Surge Forward and Skyward Ascent.
     for (uint32 spellId : { 436854u, 1229376u, 376777u })
         if (!HasSpell(spellId))
             LearnSpell(spellId, false);

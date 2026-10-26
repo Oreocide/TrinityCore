@@ -15,33 +15,6 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Ported from The-Cataclysm-Preservation-Project/TrinityCore
-// (src/server/scripts/EasternKingdoms/ThroneOfTheTides/instance_throne_of_the_tides.cpp),
-// a fork frozen at Cataclysm client build 4.3.4.15595. Adapted for this
-// core's modern API and this tree's existing enum-key convention (BOSS_* as
-// boss-index/DungeonEncounter key, matching our pre-existing boss_commander_ulthok.cpp,
-// rather than the reference repo's DATA_LADY_NAZJAR/DATA_COMMANDER_ULTHOK/
-// DATA_OZUMAT convention for the same values).
-//
-// API changes from the reference repo's 4.3.4-era code:
-//   - Creature::RemoveFlag(UNIT_FIELD_FLAGS, x)/SetFlag(...) -> RemoveUnitFlag(x)/
-//     SetUnitFlag(x); Creature::SetFlag(UNIT_NPC_FLAGS, x) -> SetNpcFlag(x).
-//     GameObject keeps the plain RemoveFlag(x)/SetFlag(x) (no field-name arg).
-//   - SetUInt32Value(UNIT_NPC_EMOTESTATE, x) -> SetEmoteState(x).
-//   - MotionMaster::MoveJump(pos, speed, maxHeight) -> MoveJump(pointId, pos,
-//     speed, {}, maxHeight) - now takes a leading movement-point id.
-//   - EventMap::CalculateTime(int32) -> CalculateTime(Milliseconds(...)) -
-//     now takes a strongly-typed duration, not a bare integer.
-//   - InstanceScript's old virtual Load(char const*) override and the
-//     WriteSaveDataMore/ReadSaveDataMore raw-stream serialization hooks are
-//     gone. Post-load logic now goes in AfterDataLoad() (called automatically
-//     after saved data is restored), and a single persisted extra value uses
-//     PersistentInstanceScriptValue<T> as a member (auto-registers itself in
-//     the constructor init-list, reads/writes transparently as T via
-//     implicit conversion/assignment - no manual (de)serialization needed).
-// Not yet cross-checked against a Warcraft Logs parse per the standing
-// per-encounter workflow.
-
 #include "ScriptMgr.h"
 #include "throne_of_the_tides.h"
 #include "Creature.h"

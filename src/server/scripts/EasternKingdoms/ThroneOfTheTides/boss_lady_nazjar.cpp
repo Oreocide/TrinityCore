@@ -15,17 +15,6 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Ported from The-Cataclysm-Preservation-Project/TrinityCore
-// (src/server/scripts/EasternKingdoms/ThroneOfTheTides/boss_lady_nazjar.cpp),
-// a fork frozen at Cataclysm client build 4.3.4.15595. See CLAUDE.md for the
-// full old-API -> modern-API cheat-sheet accumulated while porting this
-// dungeon; the same set of changes (RAID_MODE->DUNGEON_MODE, .Register()->
-// operator+=, Effects[]->GetEffect(), SELECT_TARGET_RANDOM->
-// SelectTargetMethod::Random, removed DoMeleeAttackIfReady()/RemoveFlag(FIELD,x)
-// ->RemoveUnitFlag(x)) applies here too.
-// Not yet cross-checked against a Warcraft Logs parse per the standing
-// per-encounter workflow.
-
 #include "ScriptMgr.h"
 #include "throne_of_the_tides.h"
 #include "Containers.h"

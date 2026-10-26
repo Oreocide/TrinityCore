@@ -15,8 +15,6 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Ported from The-Cataclysm-Preservation-Project/TrinityCore (boss_ozumat.cpp) and adapted to the current core API.
-
 #include "ScriptMgr.h"
 #include "throne_of_the_tides.h"
 #include "GameObject.h"

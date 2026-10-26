@@ -46,7 +46,7 @@
 #include "TaskScheduler.h"
 #include "Vehicle.h"
 
-// Kezan (goblin start): quest 14071 "Rolling with my Homies". Ported from the BfA-era kezan.cpp (vSLDB) and adapted to this core.
+// Kezan (goblin start): quest 14071 "Rolling with my Homies".
 // The keys cast spell 66393 which summons the Hot Rod (vehicle 448, summon category vehicle) and boards the player; while the player drives it
 // the three homies standing around Kezan (34892 Ace, 34954 Gobber, 34890 Izzy, detected through the quest's invisibility detection auras)
 // react to the Hot Rod coming within 10 yd: the player casts the homie's summon spell, the personal summon (34957/34958/34959) gives the

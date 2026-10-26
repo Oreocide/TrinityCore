@@ -60,8 +60,6 @@ enum Spells
     SPELL_LIVING_METEOR                         = 99267,
     SPELL_ACHIEVEMENT_CHECK                     = 101091,
     SPELL_AWARD_REPUTATION_BOSS_KILL            = 101620,
-    SPELL_HEART_OF_RAGNAROS                     = 101253, // @todo: handle
-    SPELL_RAGNAROS_KILL_CREDIT                  = 102237, // Serverside Spell
     SPELL_SUMMON_CHEST                          = 101095,
     SPELL_DEATH                                 = 99430,
     SPELL_BURNING_BLAST                         = 99400,
@@ -906,14 +904,12 @@ private:
         {
             DoCastAOE(SPELL_ACHIEVEMENT_CHECK);
             DoCastAOE(SPELL_AWARD_REPUTATION_BOSS_KILL);
-            //DoCastAOE(SPELL_HEART_OF_RAGNAROS);
 
             if (!IsHeroic())
             {
                 Talk(SAY_DEFEATED);
                 DoCastSelf(SPELL_SUMMON_CHEST);
                 DoCastSelf(SPELL_DEATH);
-                // Instance lock / loot credit: handled by InstanceScript::SetBossState(DONE) below (PermBindAllPlayers no longer exists)
             }
             else
             {
@@ -923,11 +919,6 @@ private:
                         if (CreatureAI* ai = archdruid->AI())
                             ai->DoAction(ACTION_RAGNAROS_KILLED);
             }
-
-            // We should probably create a serverside spell for that but since we do not have sniff data due to being serverside, we're sticking with that for now.
-            // TODO(core gap): CriteriaType::BeSpellTarget is marked NYI in CriteriaHandler, so this update is currently a no-op.
-            // UpdateEncounterStateForSpellCast() no longer exists; encounter credit comes from SetBossState(DONE) below.
-            instance->DoUpdateCriteria(CriteriaType::BeSpellTarget, SPELL_RAGNAROS_KILL_CREDIT, 0, me);
 
             instance->instance->SetSpawnGroupInactive(SPAWN_GROUP_ID_RAGNAROS);
             instance->SetBossState(DATA_RAGNAROS, DONE);
@@ -2393,8 +2384,7 @@ class spell_ragnaros_dreadflame_control_aura_deluge : public SpellScript
 
                 caster->CastSpell(dynObject->GetPosition(), SPELL_DELUGE_TRIGGERED);
                 caster->RemoveAurasDueToSpell(SPELL_DREADFLAME_AREA_DUMMY_AURA, dynObject->GetGUID());
-                // TODO(core gap): SPELL_EFFECT_DESPAWN_PERSISTENT_AREA_AURA (177, used by Deluge 100757) is EffectNULL in Spell::EffectHandlers - not implemented.
-                // Until the core supports it, the dynamic object is removed manually.
+                // 100757 Deluge effect 177 (SPELL_EFFECT_DESPAWN_PERSISTENT_AREA_AURA) has no handler.
                 dynObject->Remove();
             }
         }
