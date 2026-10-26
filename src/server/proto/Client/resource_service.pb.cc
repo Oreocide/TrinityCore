@@ -418,19 +418,9 @@ void ResourcesService::CallServerMethod(uint32 token, uint32 methodId, MessageBu
     }
 }
 
-uint32 ResourcesService::HandleGetContentHandle(::bgs::protocol::resources::v1::ContentHandleRequest const* request, ::bgs::protocol::ContentHandle* response, std::function<void(ServiceBase*, uint32, ::google::protobuf::Message const*)>& /*continuation*/) {
-  // Same program/stream/version the 12.1 glue screen requests (enUS "apft").
-  // Hash and usage are the retail content handle for that request.
-  static constexpr uint8 hash[32] = {
-    0x50, 0x63, 0x2d, 0x92, 0xda, 0x0b, 0x7c, 0x34, 0xba, 0x82, 0xaf, 0xf0, 0x31, 0x9e, 0x83, 0x76,
-    0x06, 0x1d, 0xc0, 0xd0, 0x9b, 0x10, 0x94, 0xe2, 0xd3, 0x6d, 0x39, 0x22, 0x8c, 0x2d, 0xac, 0x0c
-  };
-  response->set_region(21843);
-  response->set_usage(1885762681);
-  response->set_hash(hash, sizeof(hash));
-  response->set_proto_url("https://prod.depot.battle.net/${hash}.${usage}");
-  (void)request;
-  return ERROR_OK;
+uint32 ResourcesService::HandleGetContentHandle(::bgs::protocol::resources::v1::ContentHandleRequest const* request, ::bgs::protocol::ContentHandle* /*response*/, std::function<void(ServiceBase*, uint32, ::google::protobuf::Message const*)>& /*continuation*/) {
+  LogUnimplementedServerMethod("ResourcesService.GetContentHandle", request);
+  return ERROR_RPC_NOT_IMPLEMENTED;
 }
 
 uint32 ResourcesService::HandleGetTitleIcons(::bgs::protocol::resources::v1::GetTitleIconsRequest const* request, ::bgs::protocol::resources::v1::GetTitleIconsResponse* /*response*/, std::function<void(ServiceBase*, uint32, ::google::protobuf::Message const*)>& /*continuation*/) {

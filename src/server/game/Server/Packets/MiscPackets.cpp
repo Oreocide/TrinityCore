@@ -200,11 +200,7 @@ WorldPacket const* TriggerMovie::Write()
 
 WorldPacket const* ServerTimeOffset::Write()
 {
-    // 12.1.5 SMSG_SERVER_TIME_OFFSET (0x4501C0) reads one packed 128-bit guid.
-    // Low half is the unix time; high half is zero.
-    ObjectGuid timeGuid;
-    timeGuid.SetRawValue(0, uint64(Time.AsUnderlyingType()));
-    _worldPacket << timeGuid;
+    _worldPacket << Time;
 
     return &_worldPacket;
 }

@@ -529,7 +529,6 @@ void WorldSession::HandleCharEnum(CharacterDatabaseQueryHolder const& holder)
         }
     }
 
-    TC_LOG_ERROR("network", "Sending character list for account {} with {} realm characters.", GetAccountId(), charEnum.Characters.size());
     SendPacket(charEnum.Write());
 
     if (!charEnum.IsDeletedCharacters)
@@ -663,8 +662,6 @@ void WorldSession::HandleSetupWarbandGroups(WorldPackets::Character::SetupWarban
 
 void WorldSession::HandleCharEnumOpcode(WorldPackets::Character::EnumCharacters& /*enumCharacters*/)
 {
-    TC_LOG_ERROR("network", "CMSG_ENUM_CHARACTERS from account {}.", GetAccountId());
-
     // remove expired bans
     CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_EXPIRED_BANS);
     CharacterDatabase.Execute(stmt);
@@ -760,11 +757,6 @@ bool WorldSession::ValidateAppearance(Races race, Classes playerClass, Gender ge
 {
     std::vector<ChrCustomizationOptionEntry const*> const* options = sDB2Manager.GetCustomiztionOptions(race, gender);
     if (!options)
-        return false;
-
-    // An empty choice list still passes the loop below. 12.1.5 stays on the
-    // character screen while it builds a model from no choices.
-    if (customizations.begin() == customizations.end() && !options->empty())
         return false;
 
     uint32 previousOption = 0;

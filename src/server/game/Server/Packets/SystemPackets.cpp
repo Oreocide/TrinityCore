@@ -320,8 +320,8 @@ WorldPacket const* FeatureSystemStatusGlueScreen::Write()
 
     _worldPacket << SizedCString::Data(RealmHiddenAlert);
 
-    for (int32 region : LiveRegionCharacterCopySourceRegions)
-        _worldPacket << region;
+    if (!LiveRegionCharacterCopySourceRegions.empty())
+        _worldPacket.append(LiveRegionCharacterCopySourceRegions.data(), LiveRegionCharacterCopySourceRegions.size());
 
     for (GameModeData const& disabledGameMode : DisabledGameModes)
         _worldPacket << disabledGameMode;
@@ -329,8 +329,8 @@ WorldPacket const* FeatureSystemStatusGlueScreen::Write()
     for (GameRuleValuePair const& gameRuleValue : GameRules)
         _worldPacket << gameRuleValue;
 
-    for (int32 gameModeId : AvailableGameModeIDs)
-        _worldPacket << gameModeId;
+    if (!AvailableGameModeIDs.empty())
+        _worldPacket.append(AvailableGameModeIDs.data(), AvailableGameModeIDs.size());
 
     for (DebugTimeEventInfo const& debugTimeEventInfo : DebugTimeEvents)
         _worldPacket << debugTimeEventInfo;
