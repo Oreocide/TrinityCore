@@ -58,7 +58,7 @@ public:
 
     void LoadMapAndVMap(int32 gx, int32 gy);
     void LoadMMapInstance(uint32 mapId, uint32 instanceId);
-    void LoadMMap(uint32 instanceId, int32 gx, int32 gy);
+    void LoadMMap(uint32 mapId, uint32 instanceId, int32 gx, int32 gy);
 
 private:
     void LoadMapAndVMapImpl(int32 gx, int32 gy);
@@ -135,6 +135,7 @@ public:
     static TerrainMgr& Instance();
 
     void InitializeParentMapData(std::unordered_map<uint32, std::vector<uint32>> const& mapData);
+    void InitializeUsedTerrainSwaps();
 
     std::shared_ptr<TerrainInfo> LoadTerrain(uint32 mapId);
     void UnloadAll();

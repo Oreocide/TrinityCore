@@ -16,13 +16,16 @@
  */
 
 #include "TerrainMgr.h"
+#include "Config.h"
 #include "DB2Stores.h"
 #include "DisableMgr.h"
 #include "DynamicTree.h"
 #include "GridMap.h"
 #include "Log.h"
+#include "MapManager.h"
 #include "Memory.h"
 #include "MMapManager.h"
+#include "ObjectMgr.h"
 #include "PhasingHandler.h"
 #include "Random.h"
 #include "Util.h"
@@ -30,6 +33,25 @@
 #include "VMapManager.h"
 #include "World.h"
 #include <G3D/g3dmath.h>
+#include <unordered_set>
+
+namespace
+{
+// mmap.onlyUsedTerrainSwaps: the terrain swaps each map can show. Written once at startup, before any map thread runs
+std::unordered_map<uint32, std::unordered_set<uint32>> UsedTerrainSwaps;
+bool UsedTerrainSwapsBuilt = false;
+
+// A map only queries its own navmesh or a swap in an object's VisibleMapIds (PhasingHandler::GetTerrainMapId), every other child of the terrain is
+// a copy of the parent's tiles nobody reads. A map created before the table exists loads them all
+bool NeedsChildNavMesh(uint32 mapId, uint32 childMapId)
+{
+    if (!UsedTerrainSwapsBuilt || mapId == childMapId)
+        return true;
+
+    auto itr = UsedTerrainSwaps.find(mapId);
+    return itr != UsedTerrainSwaps.end() && itr->second.contains(childMapId);
+}
+}
 
 TerrainInfo::TerrainInfo(uint32 mapId) : _mapId(mapId), _parentTerrain(nullptr), _loadedGrids(), _cleanupTimer(randtime(CleanupInterval / 2, CleanupInterval))
 {
@@ -167,15 +189,17 @@ void TerrainInfo::LoadMMapInstance(uint32 mapId, uint32 instanceId)
     LoadMMapInstanceImpl(mapId, instanceId);
 
     for (std::shared_ptr<TerrainInfo> const& childTerrain : _childTerrain)
-        childTerrain->LoadMMapInstanceImpl(mapId, instanceId);
+        if (NeedsChildNavMesh(mapId, childTerrain->GetId()))
+            childTerrain->LoadMMapInstanceImpl(mapId, instanceId);
 }
 
-void TerrainInfo::LoadMMap(uint32 instanceId, int32 gx, int32 gy)
+void TerrainInfo::LoadMMap(uint32 mapId, uint32 instanceId, int32 gx, int32 gy)
 {
     LoadMMapImpl(instanceId, gx, gy);
 
     for (std::shared_ptr<TerrainInfo> const& childTerrain : _childTerrain)
-        childTerrain->LoadMMapImpl(instanceId, gx, gy);
+        if (NeedsChildNavMesh(mapId, childTerrain->GetId()))
+            childTerrain->LoadMMapImpl(instanceId, gx, gy);
 }
 
 void TerrainInfo::LoadMapAndVMapImpl(int32 gx, int32 gy)
@@ -780,6 +804,30 @@ TerrainMgr& TerrainMgr::Instance()
 void TerrainMgr::InitializeParentMapData(std::unordered_map<uint32, std::vector<uint32>> const& mapData)
 {
     _parentMapData = mapData;
+}
+
+void TerrainMgr::InitializeUsedTerrainSwaps()
+{
+    if (!sConfigMgr->GetBoolDefault("mmap.onlyUsedTerrainSwaps", false))
+        return;
+
+    for (auto const& [mapId, terrainSwaps] : sObjectMgr->GetTerrainSwaps())
+        for (TerrainSwapInfo const* terrainSwap : terrainSwaps)
+            UsedTerrainSwaps[mapId].insert(terrainSwap->Id);
+
+    for (auto const& [spawnId, data] : sObjectMgr->GetAllCreatureData())
+        if (data.terrainSwapMap != -1)
+            UsedTerrainSwaps[data.mapId].insert(data.terrainSwapMap);
+
+    for (auto const& [spawnId, data] : sObjectMgr->GetAllGameObjectData())
+        if (data.terrainSwapMap != -1)
+            UsedTerrainSwaps[data.mapId].insert(data.terrainSwapMap);
+
+    UsedTerrainSwapsBuilt = true;
+
+    uint32 mapsCreated = 0;
+    sMapMgr->DoForAllMaps([&mapsCreated](Map const*) { ++mapsCreated; });
+    TC_LOG_INFO("server.loading", ">> Navmesh limited to used terrain swaps on {} maps, {} maps were created before that", UsedTerrainSwaps.size(), mapsCreated);
 }
 
 std::shared_ptr<TerrainInfo> TerrainMgr::LoadTerrain(uint32 mapId)

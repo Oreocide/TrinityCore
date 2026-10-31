@@ -424,6 +424,17 @@ DisconnectToleranceInterval = 0
 mmap.enablePathFinding = 1
 
 #
+#    mmap.onlyUsedTerrainSwaps
+#        Description: Load the navmesh of a terrain swap map only for maps that can show it
+#                     (terrain_swap_defaults, terrainSwapMap of their spawns). Otherwise every
+#                     grid loads a copy of its tile for every child map of the terrain.
+#                     Pathing with a swap forced by a GM command falls back to straight lines.
+#        Default:     0 - (Disabled)
+#                     1 - (Enabled)
+
+mmap.onlyUsedTerrainSwaps = 0
+
+#
 #    vmap.enableLOS
 #    vmap.enableHeight
 #        Description: Vmap support for line of sight and height calculation.

@@ -296,7 +296,7 @@ void Map::EnsureGridCreated(GridCoord const& p)
         int gy = (MAX_NUMBER_OF_GRIDS - 1) - p.y_coord;
 
         m_terrain->LoadMapAndVMap(gx, gy);
-        m_terrain->LoadMMap(GetInstanceId(), gx, gy);
+        m_terrain->LoadMMap(GetId(), GetInstanceId(), gx, gy);
     }
 }
 

@@ -1859,6 +1859,7 @@ bool World::SetInitialWorldSettings()
     WorldStateMgr::SetValue(WS_PREVIOUS_PVP_SEASON_ID, getIntConfig(CONFIG_ARENA_SEASON_ID) - getBoolConfig(CONFIG_ARENA_SEASON_IN_PROGRESS), false, nullptr);
 
     sObjectMgr->LoadPhases();
+    sTerrainMgr.InitializeUsedTerrainSwaps();                    // must be after LoadPhases(), LoadCreatures() and LoadGameObjects()
 
     TC_LOG_INFO("server.loading", "Loading Conditions...");
     sConditionMgr->LoadConditions();
