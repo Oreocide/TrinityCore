@@ -3082,6 +3082,12 @@ void Player::RemoveTemporarySpell(uint32 spellId)
 
 bool Player::HandlePassiveSpellLearn(SpellInfo const* spellInfo)
 {
+    // a passive spell that needs an explicit gameobject, item or corpse target cannot be cast at the player: target selection
+    // would assert in Spell::SelectImplicitTargetObjectTargets (retail ships such passives, e.g. SPELL_EFFECT_GATHERING on TARGET_GAMEOBJECT_TARGET)
+    if ((spellInfo->RequiredExplicitTargetMask & (TARGET_FLAG_GAMEOBJECT_MASK | TARGET_FLAG_ITEM_MASK | TARGET_FLAG_CORPSE_MASK))
+        && !(spellInfo->GetExplicitTargetMask() & TARGET_FLAG_UNIT_MASK))
+        return false;
+
     // note: form passives activated with shapeshift spells be implemented by HandleShapeshiftBoosts instead of spell_learn_spell
     // talent dependent passives activated at form apply have proper stance data
     ShapeshiftForm form = GetShapeshiftForm();
