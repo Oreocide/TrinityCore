@@ -109,6 +109,7 @@
 #include "WhoListStorage.h"
 #include "WorldSession.h"
 #include "WorldStateMgr.h"
+#include "WorldStateScheduler.h"
 #include <zlib.h>
 
 TC_GAME_API std::atomic<bool> World::m_stopEvent(false);
@@ -2064,6 +2065,9 @@ bool World::SetInitialWorldSettings()
     TC_LOG_INFO("server.loading", "Deleting expired bans...");
     LoginDatabase.Execute("DELETE FROM ip_banned WHERE unbandate <= UNIX_TIMESTAMP() AND unbandate<>bandate");      // One-time query
 
+    TC_LOG_INFO("server.loading", "Loading world state scheduler...");
+    WorldStateScheduler::LoadFromDB();                              // after game events, they own their world states
+
     TC_LOG_INFO("server.loading", "Initializing quest reset times...");
     InitQuestResetTimes();
     CheckScheduledResetTimes();
@@ -2199,6 +2203,8 @@ void World::Update(uint32 diff)
 
     {
         TC_METRIC_TIMER("world_update_time", TC_METRIC_TAG("type", "Check daily reset times"));
+        // scheduler first, so quest resets and quest giver status see the new rotation
+        WorldStateScheduler::Update();
         CheckScheduledResetTimes();
     }
 

@@ -50,12 +50,15 @@ EndScriptData */
 #include "PhasingHandler.h"
 #include "PoolMgr.h"
 #include "RBAC.h"
+#include "ResetClock.h"
 #include "SpellMgr.h"
 #include "SpellPackets.h"
 #include "Transport.h"
+#include "Util.h"
 #include "World.h"
 #include "WorldSession.h"
 #include "WorldStateMgr.h"
+#include "WorldStateScheduler.h"
 #include <fstream>
 #include <limits>
 #include <map>
@@ -94,8 +97,16 @@ public:
             { "spellfail",          HandleDebugSendSpellFailCommand,       rbac::RBAC_PERM_COMMAND_DEBUG,   Console::No },
             { "playerchoice",       HandleDebugSendPlayerChoiceCommand,    rbac::RBAC_PERM_COMMAND_DEBUG,   Console::No },
         };
+        static ChatCommandTable debugScheduleCommandTable =
+        {
+            { "list",               HandleDebugScheduleListCommand,        rbac::RBAC_PERM_COMMAND_DEBUG,   Console::Yes },
+            { "show",               HandleDebugScheduleShowCommand,        rbac::RBAC_PERM_COMMAND_DEBUG,   Console::Yes },
+            { "reload",             HandleDebugScheduleReloadCommand,      rbac::RBAC_PERM_COMMAND_DEBUG,   Console::Yes },
+            { "value",              HandleDebugScheduleValueCommand,       rbac::RBAC_PERM_COMMAND_DEBUG,   Console::Yes },
+        };
         static ChatCommandTable debugCommandTable =
         {
+            { "schedule",           debugScheduleCommandTable },
             { "threat",             HandleDebugThreatListCommand,          rbac::RBAC_PERM_COMMAND_DEBUG,   Console::No },
             { "threatinfo",         HandleDebugThreatInfoCommand,          rbac::RBAC_PERM_COMMAND_DEBUG,   Console::No },
             { "combat",             HandleDebugCombatListCommand,          rbac::RBAC_PERM_COMMAND_DEBUG,   Console::No },
@@ -512,6 +523,72 @@ public:
         data.hexlike();
         player->GetSession()->SendPacket(&data, true);
         handler->PSendSysMessage(LANG_COMMAND_OPCODESENT, data.GetOpcode(), unit->GetName().c_str());
+        return true;
+    }
+
+    static std::string FormatScheduledGroup(ScheduledWorldStateGroup const& group)
+    {
+        return Trinity::StringFormat("group {} [{}] period {}s offset {}s, selection {} x{}, priority {}, {} rows{}{}",
+            group.Id, group.Enabled ? "on" : "off", group.Interval ? group.Interval->DurationSecs : 0, group.Interval ? group.Interval->OffsetSecs : 0,
+            uint32(group.SelectionType), group.SelectionCount, group.Priority, group.States.size(), group.Comment.empty() ? "" : " - ", group.Comment);
+    }
+
+    static bool HandleDebugScheduleListCommand(ChatHandler* handler, Optional<EXACT_SEQUENCE("all")> all)
+    {
+        uint32 shown = 0;
+        for (auto const& [groupId, group] : WorldStateScheduler::GetGroups())
+        {
+            if (!group.Enabled && !all)
+                continue;
+
+            handler->SendSysMessage(FormatScheduledGroup(group));
+            ++shown;
+        }
+
+        handler->SendSysMessage(Trinity::StringFormat("{} groups shown, {} world states scheduled, next boundary {} ({})", shown,
+            WorldStateScheduler::GetOwnedWorldStateCount(), TimeToTimestampStr(WorldStateScheduler::GetNextBoundary()), int64(WorldStateScheduler::GetNextBoundary())));
+        return true;
+    }
+
+    // rows the group selects now, or at the given unix time
+    static bool HandleDebugScheduleShowCommand(ChatHandler* handler, uint32 groupId, Optional<int64> unixTime)
+    {
+        ScheduledWorldStateGroup const* group = WorldStateScheduler::GetGroup(groupId);
+        if (!group || !group->Interval || group->Interval->DurationSecs <= 0)
+        {
+            handler->SendSysMessage(Trinity::StringFormat("Scheduled world state group {} does not exist or has no interval", groupId));
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        time_t t = unixTime ? time_t(*unixTime) : GameTime::GetGameTime();
+        int64 index = WorldStateScheduler::GetPeriodIndex(*group, t);
+        time_t periodStart = Trinity::ResetClock::PeriodStart(index, group->Interval->DurationSecs, group->Interval->OffsetSecs);
+        handler->SendSysMessage(FormatScheduledGroup(*group));
+        handler->SendSysMessage(Trinity::StringFormat("at {}: period {} ({} - {}), week index {}", TimeToTimestampStr(t), index,
+            TimeToTimestampStr(periodStart), TimeToTimestampStr(periodStart + group->Interval->DurationSecs), Trinity::ResetClock::WeekIndex(t)));
+
+        for (ScheduledWorldState const* row : WorldStateScheduler::SelectRows(*group, t))
+        {
+            bool inWindow = !row->DurationSecs || t < periodStart + row->DurationSecs;
+            handler->SendSysMessage(Trinity::StringFormat("  row {}: world state {} = {} (order {}, weight {}, category {}){}{}", row->Id, row->WorldStateId, row->Value,
+                row->OrderIndex, row->Weight, row->UniqueCategory, inWindow ? "" : " - outside its on-window",
+                unixTime ? "" : Trinity::StringFormat(", current value {}", WorldStateMgr::GetValue(row->WorldStateId, nullptr))));
+        }
+        return true;
+    }
+
+    static bool HandleDebugScheduleReloadCommand(ChatHandler* handler)
+    {
+        WorldStateScheduler::LoadFromDB();
+        handler->SendSysMessage(Trinity::StringFormat("World state scheduler reloaded: {} world states scheduled", WorldStateScheduler::GetOwnedWorldStateCount()));
+        return true;
+    }
+
+    static bool HandleDebugScheduleValueCommand(ChatHandler* handler, int32 worldStateId)
+    {
+        Map const* map = handler->GetPlayer() ? handler->GetPlayer()->GetMap() : nullptr;
+        handler->SendSysMessage(Trinity::StringFormat("World state {} = {}", worldStateId, WorldStateMgr::GetValue(worldStateId, map)));
         return true;
     }
 

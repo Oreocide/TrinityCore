@@ -1126,6 +1126,7 @@ ResetSchedule.Hour = 8
 #                     Reset.Epoch instead of the local-time hours and weekdays above.
 #                     Realm clock boundaries are whole multiples of a day/week after the
 #                     epoch, so they do not move with daylight saving time.
+#                     Also used by the world state scheduler (which always uses Reset.Epoch).
 #                     Can't be changed on config reload.
 #        Default:     0 - (Disabled, use Quests.DailyResetTime, Quests.WeeklyResetWDay,
 #                          ResetSchedule.*, Guild.ResetHour, Battleground.Random.ResetHour,
@@ -1142,6 +1143,24 @@ Reset.RealmClock = 0
 #        Default:     1771945200 - (Tuesday 2026-02-24 15:00 UTC, retail US)
 
 Reset.Epoch = 1771945200
+
+#
+#    WorldStateScheduler.Enable
+#        Description: Set realm world states on the schedules in the world database tables
+#                     scheduled_interval, scheduled_world_state_group and scheduled_world_state
+#                     (rotating world quests, assaults, world bosses, raid entrances).
+#        Default:     1 - (Enabled)
+#                     0 - (Disabled)
+
+WorldStateScheduler.Enable = 1
+
+#
+#    WorldStateScheduler.Seed
+#        Description: Seed of the weighted random picks. Picks are a function of the seed,
+#                     the group and the period, so restarts never re-roll them.
+#        Default:     0
+
+WorldStateScheduler.Seed = 0
 
 #
 #    Quests.EnableQuestTracker
