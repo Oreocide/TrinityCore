@@ -5759,60 +5759,283 @@ class spell_gen_switch_flight_style : public SpellScript
     }
 };
 
+namespace Skyriding
+{
+    enum Spells : uint32
+    {
+        SPELL_SKYRIDING                 = 406095,
+        SPELL_LIFT_OFF                  = 374763,
+        SPELL_SKYWARD_ASCENT            = 372610,
+        SPELL_SURGE_FORWARD             = 372608,
+        SPELL_WHIRLING_SURGE            = 361584,
+        SPELL_LAUNCH_BOOST              = 392752,
+        SPELL_OHNAHRAS_GUSTS            = 388367,
+        SPELL_DRAGONS_REST              = 372606,
+        SPELL_WINDS_RESPITE             = 425663,
+        SPELL_THRILL_OF_THE_SKIES       = 377234,
+        SPELL_GROUND_SKIMMING           = 404184
+    };
+
+    // Impulse speeds of retail SMSG_MOVE_ADD_IMPULSE
+    constexpr float LIFT_OFF_VERTICAL = 45.0f;
+    constexpr float SKYWARD_ASCENT_HORIZONTAL = 12.25f;
+    constexpr float SKYWARD_ASCENT_VERTICAL = 49.0f;
+    constexpr float SURGE_FORWARD_SPEED = 18.0f;
+    constexpr float WHIRLING_SURGE_SPEED = 60.0f;
+    constexpr float LAUNCH_BOOST_SPEED = 5.0f;
+
+    // Impulse along the look direction, pitch included (positive pitch is up)
+    void SendLookImpulse(Unit* unit, float speed)
+    {
+        Player* mover = Object::ToPlayer(unit->GetUnitBeingMoved());
+        if (!mover)
+            return;
+
+        float pitch = unit->m_movementInfo.pitch;
+        float orientation = unit->GetOrientation();
+        float horizontal = std::cos(pitch) * speed;
+        unit->SendMoveAddImpulse(mover, std::cos(orientation) * horizontal, std::sin(orientation) * horizontal, std::sin(pitch) * speed);
+    }
+
+    void SendImpulse(Unit* unit, float horizontal, float vertical)
+    {
+        Player* mover = Object::ToPlayer(unit->GetUnitBeingMoved());
+        if (!mover)
+            return;
+
+        float orientation = unit->GetOrientation();
+        unit->SendMoveAddImpulse(mover, std::cos(orientation) * horizontal, std::sin(orientation) * horizontal, vertical);
+    }
+
+    void SetAuraState(Unit* target, uint32 spellId, bool apply)
+    {
+        if (apply == target->HasAura(spellId))
+            return;
+
+        if (apply)
+            target->CastSpell(target, spellId, TRIGGERED_FULL_MASK);
+        else
+            target->RemoveAurasDueToSpell(spellId);
+    }
+}
+
+// 406095 - Skyriding
+// The 300 ms periodic keeps Thrill of the Skies (fast) and Ground Skimming (low) in step with the flight
+class spell_gen_skyriding : public AuraScript
+{
+public:
+    // false until a tick has seen the glide: Skyward Ascent then acts as Lift Off
+    bool IsGlideEstablished() const { return _glideTicks > 0; }
+
+    static void UpdateVigorRegenAuras(Unit* target)
+    {
+        bool thrill = false;
+        bool skimming = false;
+        if (target->HasUnitMovementFlag(MOVEMENTFLAG_ADV_FLYING))
+        {
+            FlightCapabilityEntry const* flightCapability = sFlightCapabilityStore.LookupEntry(target->GetFlightCapabilityID());
+            if (!flightCapability)
+                flightCapability = sFlightCapabilityStore.LookupEntry(1);
+
+            if (flightCapability)
+            {
+                // retail adds and drops Thrill at 0.92 x the aura-modified max velocity (50.8 under Riding Abroad)
+                if (flightCapability->VigorRegenMaxVelCoefficient > 0.0f && target->m_movementInfo.advFlying)
+                    thrill = target->m_movementInfo.advFlying->forwardVelocity >= flightCapability->VigorRegenMaxVelCoefficient * target->GetAdvFlyingSpeed(ADV_FLYING_MAX_VEL);
+
+                // Unknown1000_2 is the skimming height (20 yd), retail switches at 18-21 yd above ground or water
+                if (flightCapability->Unknown1000_2 > 0.0f)
+                {
+                    float level = target->GetMapWaterOrGroundLevel(target->GetPositionX(), target->GetPositionY(), target->GetPositionZ());
+                    skimming = level > INVALID_HEIGHT && target->GetPositionZ() - level <= flightCapability->Unknown1000_2;
+                }
+            }
+        }
+
+        Skyriding::SetAuraState(target, Skyriding::SPELL_THRILL_OF_THE_SKIES, thrill);
+        Skyriding::SetAuraState(target, Skyriding::SPELL_GROUND_SKIMMING, skimming);
+    }
+
+private:
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ Skyriding::SPELL_THRILL_OF_THE_SKIES, Skyriding::SPELL_GROUND_SKIMMING });
+    }
+
+    void HandlePeriodic(AuraEffect const* /*aurEff*/)
+    {
+        Unit* target = GetTarget();
+        if (target->HasUnitMovementFlag(MOVEMENTFLAG_ADV_FLYING))
+            ++_glideTicks;
+        else
+            _glideTicks = 0;
+
+        UpdateVigorRegenAuras(target);
+    }
+
+    void HandleRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    {
+        Unit* target = GetTarget();
+        target->RemoveAurasDueToSpell(Skyriding::SPELL_THRILL_OF_THE_SKIES);
+        target->RemoveAurasDueToSpell(Skyriding::SPELL_GROUND_SKIMMING);
+    }
+
+    void Register() override
+    {
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_gen_skyriding::HandlePeriodic, EFFECT_2, SPELL_AURA_PERIODIC_DUMMY);
+        AfterEffectRemove += AuraEffectRemoveFn(spell_gen_skyriding::HandleRemove, EFFECT_2, SPELL_AURA_PERIODIC_DUMMY, AURA_EFFECT_HANDLE_REAL);
+    }
+
+    uint32 _glideTicks = 0;
+};
+
 // 374763 - Lift Off
 // 372610 - Skyward Ascent
 // 372608 - Surge Forward
 // Skyriding thrust is a server sent impulse (SMSG_MOVE_ADD_IMPULSE), values taken from retail sniffs
 class spell_gen_skyriding_impulse : public SpellScript
 {
-    static constexpr float LIFT_OFF_VERTICAL = 45.0f;
-    static constexpr float SKYWARD_ASCENT_HORIZONTAL = 12.25f;
-    static constexpr float SKYWARD_ASCENT_VERTICAL = 49.0f;
-    static constexpr float SURGE_FORWARD_HORIZONTAL = 5.0f;
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ Skyriding::SPELL_LAUNCH_BOOST, Skyriding::SPELL_OHNAHRAS_GUSTS });
+    }
+
+    // Skyward Ascent right after the glide starts (or without one) is a take-off: retail sends the
+    // Lift Off impulse and Launch Boost instead (glide 0-268 ms old: take-off, 398 ms or more: ascent)
+    bool IsTakeOff(Unit* caster) const
+    {
+        if (!caster->HasUnitMovementFlag(MOVEMENTFLAG_ADV_FLYING))
+            return true;
+
+        if (Aura* skyriding = caster->GetAura(Skyriding::SPELL_SKYRIDING))
+            if (spell_gen_skyriding const* script = skyriding->GetScript<spell_gen_skyriding>())
+                return !script->IsGlideEstablished();
+
+        return false;
+    }
+
+    void TakeOff(Unit* caster) const
+    {
+        Skyriding::SendImpulse(caster, 0.0f, Skyriding::LIFT_OFF_VERTICAL);
+        caster->CastSpell(caster, Skyriding::SPELL_LAUNCH_BOOST, GetSpell());
+    }
 
     void HandleDummy(SpellEffIndex /*effIndex*/) const
     {
         Unit* caster = GetCaster();
-        Player* mover = Object::ToPlayer(caster->GetUnitBeingMoved());
-        if (!mover)
-            return;
-
-        float horizontal = 0.0f;
-        float vertical = 0.0f;
         switch (GetSpellInfo()->Id)
         {
-            case SPELL_LIFT_OFF:
-                vertical = LIFT_OFF_VERTICAL;
+            case Skyriding::SPELL_LIFT_OFF:
+                TakeOff(caster);
                 break;
-            case SPELL_SKYWARD_ASCENT:
-                // retail only adds the forward component once already gliding
-                if (caster->HasUnitMovementFlag(MOVEMENTFLAG_ADV_FLYING))
-                {
-                    horizontal = SKYWARD_ASCENT_HORIZONTAL;
-                    vertical = SKYWARD_ASCENT_VERTICAL;
-                }
+            case Skyriding::SPELL_SKYWARD_ASCENT:
+                // retail evaluates Ground Skimming before the impulse when the glide has just started
+                spell_gen_skyriding::UpdateVigorRegenAuras(caster);
+                if (IsTakeOff(caster))
+                    TakeOff(caster);
                 else
-                    vertical = LIFT_OFF_VERTICAL;
+                    Skyriding::SendImpulse(caster, Skyriding::SKYWARD_ASCENT_HORIZONTAL, Skyriding::SKYWARD_ASCENT_VERTICAL);
                 break;
-            case SPELL_SURGE_FORWARD:
-                horizontal = SURGE_FORWARD_HORIZONTAL;
+            case Skyriding::SPELL_SURGE_FORWARD:
+                Skyriding::SendLookImpulse(caster, Skyriding::SURGE_FORWARD_SPEED);
+                caster->CastSpell(caster, Skyriding::SPELL_OHNAHRAS_GUSTS, GetSpell());
                 break;
             default:
-                return;
+                break;
         }
-
-        float orientation = caster->GetOrientation();
-        caster->SendMoveAddImpulse(mover, std::cos(orientation) * horizontal, std::sin(orientation) * horizontal, vertical);
     }
 
     void Register() override
     {
         OnEffectHit += SpellEffectFn(spell_gen_skyriding_impulse::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
     }
+};
 
-    static constexpr uint32 SPELL_LIFT_OFF = 374763;
-    static constexpr uint32 SPELL_SKYWARD_ASCENT = 372610;
-    static constexpr uint32 SPELL_SURGE_FORWARD = 372608;
+// 361584 - Whirling Surge
+class spell_gen_skyriding_whirling_surge : public SpellScript
+{
+    void HandleImpulse(SpellEffIndex /*effIndex*/) const
+    {
+        Skyriding::SendLookImpulse(GetHitUnit(), Skyriding::WHIRLING_SURGE_SPEED);
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_gen_skyriding_whirling_surge::HandleImpulse, EFFECT_0, SPELL_EFFECT_APPLY_AURA);
+    }
+};
+
+// 392752 - Launch Boost
+// Forward pushes after a take-off: retail starts about 0.7 s in and sends one per 100 ms tick, 3 to 7 of them (median 5)
+class spell_gen_skyriding_launch_boost : public AuraScript
+{
+    static constexpr uint32 FIRST_BOOST_TICK = 7;
+    static constexpr uint32 LAST_BOOST_TICK = 11;
+
+    void HandlePeriodic(AuraEffect const* aurEff)
+    {
+        uint32 tick = aurEff->GetTickNumber();
+        if (tick < FIRST_BOOST_TICK)
+            return;
+
+        Unit* target = GetTarget();
+        if (target->HasUnitMovementFlag(MOVEMENTFLAG_ADV_FLYING))
+            Skyriding::SendLookImpulse(target, Skyriding::LAUNCH_BOOST_SPEED);
+        else
+            tick = LAST_BOOST_TICK;
+
+        if (tick >= LAST_BOOST_TICK)
+            Remove();
+    }
+
+    void Register() override
+    {
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_gen_skyriding_launch_boost::HandlePeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
+    }
+};
+
+// 403092 - Aerial Halt
+class spell_gen_skyriding_aerial_halt : public SpellScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ Skyriding::SPELL_DRAGONS_REST });
+    }
+
+    // retail casts Dragon's Rest (one skyriding charge) from the halt
+    void HandleDummy(SpellEffIndex /*effIndex*/) const
+    {
+        Unit* caster = GetCaster();
+        caster->CastSpell(caster, Skyriding::SPELL_DRAGONS_REST, GetSpell());
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_gen_skyriding_aerial_halt::HandleDummy, EFFECT_1, SPELL_EFFECT_DUMMY);
+    }
+};
+
+class spell_gen_skyriding_aerial_halt_aura : public AuraScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ Skyriding::SPELL_WINDS_RESPITE });
+    }
+
+    // Wind's Respite follows when the halt runs out
+    void HandleRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/) const
+    {
+        if (GetTargetApplication()->GetRemoveMode() != AURA_REMOVE_BY_EXPIRE)
+            return;
+
+        Unit* target = GetTarget();
+        target->CastSpell(target, Skyriding::SPELL_WINDS_RESPITE, TRIGGERED_FULL_MASK);
+    }
+
+    void Register() override
+    {
+        AfterEffectRemove += AuraEffectRemoveFn(spell_gen_skyriding_aerial_halt_aura::HandleRemove, EFFECT_0, SPELL_AURA_MOD_ADV_FLYING_AIR_FRICTION, AURA_EFFECT_HANDLE_REAL);
+    }
 };
 
 void AddSC_generic_spell_scripts()
@@ -6013,4 +6236,8 @@ void AddSC_generic_spell_scripts()
     RegisterSpellScript(spell_gen_abandon_vehicle);
     RegisterSpellScript(spell_gen_switch_flight_style);
     RegisterSpellScript(spell_gen_skyriding_impulse);
+    RegisterSpellScript(spell_gen_skyriding);
+    RegisterSpellScript(spell_gen_skyriding_whirling_surge);
+    RegisterSpellScript(spell_gen_skyriding_launch_boost);
+    RegisterSpellAndAuraScriptPair(spell_gen_skyriding_aerial_halt, spell_gen_skyriding_aerial_halt_aura);
 }

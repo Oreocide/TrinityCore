@@ -19206,7 +19206,9 @@ void Player::_LoadAuras(PreparedQueryResult auraResult, PreparedQueryResult effe
 
     // 436854 Switch Flight Style, 1229376 Single-Button Assistant, 376777 Skyriding.
     // 376777 is the mount capability that teaches Surge Forward and Skyward Ascent.
-    for (uint32 spellId : { 436854u, 1229376u, 376777u })
+    // Retail login also grants 425782 Second Wind, 403092 Aerial Halt, 376359 (teaches 361584 Whirling Surge),
+    // and the passives 383363 Lift Off and 383366 Thrill of the Skies (SMSG_LEARNED_SPELLS, sniff 2026-11-03).
+    for (uint32 spellId : { 436854u, 1229376u, 376777u, 425782u, 403092u, 376359u, 383363u, 383366u })
         if (!HasSpell(spellId))
             LearnSpell(spellId, false);
 }
