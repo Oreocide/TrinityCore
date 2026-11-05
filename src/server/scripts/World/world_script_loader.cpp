@@ -24,6 +24,7 @@ void AddSC_conversation_scripts();
 void AddSC_emerald_dragons();
 void AddSC_go_scripts();
 void AddSC_go_hero_call_board();
+void AddSC_housing_intro();
 void AddSC_npc_chromie_time();
 void AddSC_npc_guard();
 void AddSC_item_scripts();
@@ -46,6 +47,7 @@ void AddWorldScripts()
     AddSC_emerald_dragons();
     AddSC_go_scripts();
     AddSC_go_hero_call_board();
+    AddSC_housing_intro();
     AddSC_npc_chromie_time();
     AddSC_npc_guard();
     AddSC_item_scripts();
