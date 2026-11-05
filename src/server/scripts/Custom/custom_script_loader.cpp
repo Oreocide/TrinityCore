@@ -20,8 +20,10 @@
 // The name of this function should match:
 // void Add${NameOfDirectory}Scripts()
 void AddSC_token_shop();
+void AddSC_horrific_visions();
 
 void AddCustomScripts()
 {
     AddSC_token_shop();
+    AddSC_horrific_visions();
 }
