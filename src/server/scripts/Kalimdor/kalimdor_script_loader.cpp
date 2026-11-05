@@ -132,6 +132,9 @@ void AddSC_boss_temple_guardian_anhuur();
 void AddSC_boss_earthrager_ptah();
 void AddSC_boss_anraphet();
 void AddSC_halls_of_origination();
+// Ny'alotha
+void AddSC_instance_nyalotha();
+void AddSC_boss_vexiona();
 // Firelands
 void AddSC_instance_firelands();
 void AddSC_firelands();
@@ -313,6 +316,9 @@ void AddKalimdorScripts()
     AddSC_boss_earthrager_ptah();
     AddSC_boss_anraphet();
     AddSC_halls_of_origination();
+    // Ny'alotha
+    AddSC_instance_nyalotha();
+    AddSC_boss_vexiona();
     // Firelands
     AddSC_instance_firelands();
     AddSC_firelands();
