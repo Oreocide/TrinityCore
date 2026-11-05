@@ -1212,9 +1212,10 @@ void WorldSession::HandleSortAccountBankBags(WorldPackets::Item::SortAccountBank
 
 void WorldSession::HandleSortBags(WorldPackets::Item::SortBags& /*sortBags*/)
 {
-    // TODO: Implement sorting
-    // Placeholder to prevent completely locking out bags clientside
+    // retail answers first, the moved items follow in the next object update
     SendPacket(WorldPackets::Item::BagCleanupFinished().Write());
+
+    _player->SortBags();
 }
 
 void WorldSession::HandleSortBankBags(WorldPackets::Item::SortBankBags& /*sortBankBags*/)

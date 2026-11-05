@@ -1612,6 +1612,7 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         void DestroyZoneLimitedItem(bool update, uint32 new_zone);
         void SplitItem(uint16 src, uint16 dst, uint32 count);
         void SwapItem(uint16 src, uint16 dst);
+        void SortBags();
         void AddItemToBuyBackSlot(Item* pItem);
         void SetBuybackPrice(uint32 slot, uint32 price) { SetUpdateFieldValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::BuybackPrice, slot), price); }
         void SetBuybackTimestamp(uint32 slot, time_t timestamp) { SetUpdateFieldValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::BuybackTimestamp, slot), timestamp); }
@@ -3351,6 +3352,7 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         InventoryResult CanStoreItem_InBag(uint8 bag, ItemPosCountVec& dest, ItemTemplate const* pProto, uint32& count, bool merge, bool non_specialized, Item* pSrcItem, uint8 skip_bag, uint8 skip_slot) const;
         InventoryResult CanStoreItem_InInventorySlots(uint8 slot_begin, uint8 slot_end, ItemPosCountVec& dest, ItemTemplate const* pProto, uint32& count, bool merge, Item* pSrcItem, uint8 skip_bag, uint8 skip_slot) const;
         Item* _StoreItem(uint16 pos, Item* pItem, uint32 count, bool clone, bool update);
+        void SortBagSlots(std::vector<uint16> const& slots);
         Item* _LoadItem(CharacterDatabaseTransaction trans, uint32 zoneId, uint32 timeDiff, Field* fields);
 
         std::unique_ptr<CinematicMgr> _cinematicMgr;
