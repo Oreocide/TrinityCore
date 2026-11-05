@@ -680,15 +680,22 @@ class spell_monk_stagger_damage_aura : public AuraScript
 
     void OnPeriodicDamage(AuraEffect const* aurEff)
     {
-        // Update our light/medium/heavy stagger with the correct stagger amount left
-        if (Aura* auraStagger = FindExistingStaggerEffect(GetTarget()))
+        Aura* auraStagger = FindExistingStaggerEffect(GetTarget());
+        if (!auraStagger)
         {
-            if (AuraEffect* totalEffect = auraStagger->GetEffect(AuraStaggerEffectTotal))
-            {
-                SpellEffectValue total = totalEffect->GetAmount();
-                SpellEffectValue tickDamage = aurEff->GetAmount();
-                totalEffect->ChangeAmount(total - tickDamage);
-            }
+            // This aura has no duration, the debuff that owns it does: a debuff that expired offline is dropped
+            // on login without its remove hook, leaving this aura to tick forever
+            PreventDefaultAction();
+            Remove();
+            return;
+        }
+
+        // Update our light/medium/heavy stagger with the correct stagger amount left
+        if (AuraEffect* totalEffect = auraStagger->GetEffect(AuraStaggerEffectTotal))
+        {
+            SpellEffectValue total = totalEffect->GetAmount();
+            SpellEffectValue tickDamage = aurEff->GetAmount();
+            totalEffect->ChangeAmount(total - tickDamage);
         }
     }
 
