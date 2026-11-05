@@ -306,7 +306,7 @@ NonDefaultConstructible<SpellEffectHandlerFn> SpellEffectHandlers[TOTAL_SPELL_EF
     &Spell::EffectCreateGarrison,                           //214 SPELL_EFFECT_CREATE_GARRISON
     &Spell::EffectNULL,                                     //215 SPELL_EFFECT_UPGRADE_CHARACTER_SPELLS
     &Spell::EffectNULL,                                     //216 SPELL_EFFECT_CREATE_SHIPMENT
-    &Spell::EffectNULL,                                     //217 SPELL_EFFECT_UPGRADE_GARRISON
+    &Spell::EffectUpgradeGarrison,                          //217 SPELL_EFFECT_UPGRADE_GARRISON
     &Spell::EffectNULL,                                     //218 SPELL_EFFECT_218
     &Spell::EffectCreateConversation,                       //219 SPELL_EFFECT_CREATE_CONVERSATION
     &Spell::EffectAddGarrisonFollower,                      //220 SPELL_EFFECT_ADD_GARRISON_FOLLOWER
@@ -5525,6 +5525,19 @@ void Spell::EffectCreateGarrison()
         return;
 
     unitTarget->ToPlayer()->CreateGarrison(effectInfo->MiscValue);
+}
+
+void Spell::EffectUpgradeGarrison()
+{
+    if (effectHandleMode != SPELL_EFFECT_HANDLE_HIT_TARGET)
+        return;
+
+    if (!unitTarget || unitTarget->GetTypeId() != TYPEID_PLAYER)
+        return;
+
+    // server-cast spells (Upgrade Garrison, its test variant): quest and cost were checked by whoever cast it
+    if (Garrison* garrison = unitTarget->ToPlayer()->GetGarrison())
+        garrison->Upgrade(false);
 }
 
 void Spell::EffectCreateConversation()

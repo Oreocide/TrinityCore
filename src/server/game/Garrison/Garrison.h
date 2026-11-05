@@ -29,6 +29,7 @@
 class GameObject;
 class Map;
 class Player;
+struct AreaTableEntry;
 struct GarrSiteLevelEntry;
 
 enum GarrisonType
@@ -224,10 +225,14 @@ public:
 
     bool Create(uint32 garrSiteId);
     void Delete();
-    void Upgrade();
+    GarrisonError CanUpgrade(bool checkRequirements) const;
+    void Upgrade(bool checkRequirements);
 
     void Enter() const;
     void Leave() const;
+    bool IsAllowedArea(AreaTableEntry const* area) const;
+    void OnAreaUpdate(AreaTableEntry const* area) const;
+    void OnMovieComplete(uint32 movieId);
 
     static constexpr GarrisonFactionIndex GetFaction(Team team) { return team == HORDE ? GARRISON_FACTION_INDEX_HORDE : GARRISON_FACTION_INDEX_ALLIANCE; }
     GarrisonFactionIndex GetFaction() const;
@@ -276,6 +281,7 @@ private:
     Player* _owner;
     GarrSiteLevelEntry const* _siteLevel;
     uint32 _followerActivationsRemainingToday;
+    uint32 _pendingUpgradeMovieId;
 
     std::unordered_map<uint32 /*garrPlotInstanceId*/, Plot> _plots;
     std::unordered_set<uint32 /*garrBuildingId*/> _knownBuildings;

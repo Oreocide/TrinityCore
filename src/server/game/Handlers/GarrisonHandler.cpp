@@ -16,6 +16,7 @@
  */
 
 #include "WorldSession.h"
+#include "DB2Structure.h"
 #include "Garrison.h"
 #include "GarrisonPackets.h"
 #include "Player.h"
@@ -59,4 +60,28 @@ void WorldSession::HandleGarrisonGetMapData(WorldPackets::Garrison::GarrisonGetM
 {
     if (Garrison* garrison = _player->GetGarrison())
         garrison->SendMapData(_player);
+}
+
+void WorldSession::HandleGarrisonCheckUpgradeable(WorldPackets::Garrison::GarrisonCheckUpgradeable& garrisonCheckUpgradeable)
+{
+    WorldPackets::Garrison::GarrisonIsUpgradeableResponse isUpgradeableResponse;
+    isUpgradeableResponse.Result = GARRISON_ERROR_NO_GARRISON;
+    if (Garrison* garrison = _player->GetGarrison())
+    {
+        if (garrison->GetSiteLevel()->GarrSiteID == uint32(garrisonCheckUpgradeable.GarrSiteID))
+            isUpgradeableResponse.Result = garrison->CanUpgrade(true);
+        else
+            isUpgradeableResponse.Result = GARRISON_ERROR_INVALID_SITE_ID;
+    }
+
+    SendPacket(isUpgradeableResponse.Write());
+}
+
+void WorldSession::HandleUpgradeGarrison(WorldPackets::Garrison::UpgradeGarrison& upgradeGarrison)
+{
+    if (!_player->GetNPCIfCanInteractWith(upgradeGarrison.NpcGUID, UNIT_NPC_FLAG_NONE, UNIT_NPC_FLAG_2_GARRISON_ARCHITECT))
+        return;
+
+    if (Garrison* garrison = _player->GetGarrison())
+        garrison->Upgrade(true);
 }

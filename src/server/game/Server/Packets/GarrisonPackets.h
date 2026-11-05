@@ -437,6 +437,47 @@ namespace WorldPackets
 
             uint32 GarrPlotInstanceID = 0;
         };
+
+        class GarrisonCheckUpgradeable final : public ClientPacket
+        {
+        public:
+            explicit GarrisonCheckUpgradeable(WorldPacket&& packet) : ClientPacket(CMSG_GARRISON_CHECK_UPGRADEABLE, std::move(packet)) { }
+
+            void Read() override;
+
+            int32 GarrSiteID = 0;
+        };
+
+        class GarrisonIsUpgradeableResponse final : public ServerPacket
+        {
+        public:
+            explicit GarrisonIsUpgradeableResponse() : ServerPacket(SMSG_GARRISON_IS_UPGRADEABLE_RESPONSE, 4) { }
+
+            WorldPacket const* Write() override;
+
+            uint32 Result = 0;
+        };
+
+        class UpgradeGarrison final : public ClientPacket
+        {
+        public:
+            explicit UpgradeGarrison(WorldPacket&& packet) : ClientPacket(CMSG_UPGRADE_GARRISON, std::move(packet)) { }
+
+            void Read() override;
+
+            ObjectGuid NpcGUID;
+        };
+
+        class GarrisonUpgradeResult final : public ServerPacket
+        {
+        public:
+            explicit GarrisonUpgradeResult() : ServerPacket(SMSG_GARRISON_UPGRADE_RESULT, 4 + 4) { }
+
+            WorldPacket const* Write() override;
+
+            uint32 Result = 0;
+            uint32 GarrSiteLevelID = 0;
+        };
     }
 }
 

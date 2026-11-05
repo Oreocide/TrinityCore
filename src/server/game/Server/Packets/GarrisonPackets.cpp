@@ -484,4 +484,29 @@ WorldPacket const* GarrisonBuildingActivated::Write()
 
     return &_worldPacket;
 }
+
+void GarrisonCheckUpgradeable::Read()
+{
+    _worldPacket >> GarrSiteID;
+}
+
+WorldPacket const* GarrisonIsUpgradeableResponse::Write()
+{
+    _worldPacket << uint32(Result);
+
+    return &_worldPacket;
+}
+
+void UpgradeGarrison::Read()
+{
+    _worldPacket >> NpcGUID;
+}
+
+WorldPacket const* GarrisonUpgradeResult::Write()
+{
+    _worldPacket << uint32(Result);
+    _worldPacket << uint32(GarrSiteLevelID);
+
+    return &_worldPacket;
+}
 }

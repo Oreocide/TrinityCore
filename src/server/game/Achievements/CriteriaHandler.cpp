@@ -559,6 +559,7 @@ void CriteriaHandler::UpdateCriteria(Criteria const* criteria, uint64 miscValue1
         case CriteriaType::DefeatDungeonEncounter:
         case CriteriaType::PlaceGarrisonBuilding:
         case CriteriaType::ActivateAnyGarrisonBuilding:
+        case CriteriaType::UpgradeGarrison:
         case CriteriaType::LearnAnyHeirloom:
         case CriteriaType::LearnAnyTransmog:
         case CriteriaType::HonorLevelIncrease:
@@ -845,7 +846,6 @@ void CriteriaHandler::UpdateCriteria(Criteria const* criteria, uint64 miscValue1
         case CriteriaType::WinPetBattle:
         case CriteriaType::PlayerObtainPetThroughBattle:
         case CriteriaType::ActivateGarrisonBuilding:
-        case CriteriaType::UpgradeGarrison:
         case CriteriaType::StartAnyGarrisonMissionWithFollowerType:
         case CriteriaType::SucceedAnyGarrisonMissionWithFollowerType:
         case CriteriaType::SucceedGarrisonMission:
@@ -1242,6 +1242,7 @@ bool CriteriaHandler::IsCompletedCriteria(Criteria const* criteria, uint64 requi
         case CriteriaType::ActivelyEarnPetLevel:
         case CriteriaType::DefeatDungeonEncounter:
         case CriteriaType::PlaceGarrisonBuilding:
+        case CriteriaType::UpgradeGarrison:
         case CriteriaType::LearnHeirloom:
         case CriteriaType::LearnAnyHeirloom:
         case CriteriaType::LearnToy:
@@ -1690,6 +1691,10 @@ bool CriteriaHandler::RequirementsSatisfied(Criteria const* criteria, uint64 mis
         case CriteriaType::PlaceGarrisonBuilding:
         case CriteriaType::ActivateGarrisonBuilding:
             if (miscValue1 != uint32(criteria->Entry->Asset.GarrBuildingID))
+                return false;
+            break;
+        case CriteriaType::UpgradeGarrison:
+            if (miscValue1 != uint32(criteria->Entry->Asset.GarrisonLevel))
                 return false;
             break;
         case CriteriaType::RecruitGarrisonFollower:

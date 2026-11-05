@@ -28,11 +28,39 @@
 #include "ObjectMgr.h"
 #include "PhasingHandler.h"
 #include "Player.h"
+#include "TerrainMgr.h"
 #include "VehicleDefines.h"
 #include "advstd.h"
 #include <G3D/Quat.h>
 
-Garrison::Garrison(Player* owner) : _owner(owner), _siteLevel(nullptr), _followerActivationsRemainingToday(1)
+namespace
+{
+    constexpr uint32 CURRENCY_GARRISON_RESOURCES = 824;
+
+    // quest that must be in progress to upgrade from a tier; no client data links quest and tier
+    uint32 GetUpgradeQuestId(GarrSiteLevelEntry const* siteLevel, Team team)
+    {
+        switch (siteLevel->GarrLevel)
+        {
+            case 1: return team == ALLIANCE ? 36592 : 36567;    // Bigger is Better
+            case 2: return team == ALLIANCE ? 36615 : 36614;    // My Very Own Castle / My Very Own Fortress
+            default: return 0;
+        }
+    }
+
+    // zone the player walks into to reach the garrison map (retail switches maps on its border)
+    uint32 GetSiteZoneId(uint32 garrSiteId)
+    {
+        switch (garrSiteId)
+        {
+            case 2: return 7078;    // Lunarfall
+            case 71: return 7004;   // Frostwall
+            default: return 0;
+        }
+    }
+}
+
+Garrison::Garrison(Player* owner) : _owner(owner), _siteLevel(nullptr), _followerActivationsRemainingToday(1), _pendingUpgradeMovieId(0)
 {
 }
 
@@ -282,22 +310,147 @@ void Garrison::InitializePlots()
     }
 }
 
-void Garrison::Upgrade()
+GarrisonError Garrison::CanUpgrade(bool checkRequirements) const
 {
+    if (!sGarrisonMgr.GetGarrSiteLevelEntry(_siteLevel->GarrSiteID, _siteLevel->GarrLevel + 1))
+        return GARRISON_ERROR_INVALID_UPGRADE_LEVEL;
+
+    if (!checkRequirements)
+        return GARRISON_SUCCESS;
+
+    if (uint32 questId = GetUpgradeQuestId(_siteLevel, _owner->GetTeam()))
+        if (_owner->GetQuestStatus(questId) != QUEST_STATUS_INCOMPLETE)
+            return GARRISON_ERROR_UPGRADE_CONDITION_FAILED;
+
+    // the cost of an upgrade is stored on the tier being left
+    if (!_owner->HasCurrency(CURRENCY_GARRISON_RESOURCES, _siteLevel->UpgradeCost))
+        return GARRISON_ERROR_NOT_ENOUGH_CURRENCY;
+
+    if (!_owner->HasEnoughMoney(uint64(_siteLevel->UpgradeGoldCost) * GOLD))
+        return GARRISON_ERROR_NOT_ENOUGH_GOLD;
+
+    return GARRISON_SUCCESS;
+}
+
+void Garrison::Upgrade(bool checkRequirements)
+{
+    WorldPackets::Garrison::GarrisonUpgradeResult upgradeResult;
+    upgradeResult.Result = CanUpgrade(checkRequirements);
+    if (upgradeResult.Result == GARRISON_SUCCESS)
+    {
+        GarrSiteLevelEntry const* oldSiteLevel = _siteLevel;
+        _siteLevel = sGarrisonMgr.GetGarrSiteLevelEntry(oldSiteLevel->GarrSiteID, oldSiteLevel->GarrLevel + 1);
+
+        // building objects spawned for the old tier stay on its map, the new map spawns its own
+        for (auto& [garrPlotInstanceId, plot] : _plots)
+        {
+            plot.BuildingInfo.Guid.Clear();
+            plot.BuildingInfo.Spawns.clear();
+        }
+
+        InitializePlots();
+
+        if (checkRequirements)
+        {
+            _owner->RemoveCurrency(CURRENCY_GARRISON_RESOURCES, oldSiteLevel->UpgradeCost, CurrencyDestroyReason::Garrison);
+            _owner->ModifyMoney(-int64(oldSiteLevel->UpgradeGoldCost) * GOLD, false);
+        }
+
+        upgradeResult.GarrSiteLevelID = _siteLevel->ID;
+        _owner->UpdateCriteria(CriteriaType::UpgradeGarrison, _siteLevel->GarrLevel);
+        PhasingHandler::OnConditionChange(_owner);
+        SendRemoteInfo();
+
+        // move to the new tier's map once the upgrade movie ends
+        if (_owner->GetMapId() == oldSiteLevel->MapID)
+        {
+            if (_siteLevel->UpgradeMovieID)
+            {
+                _pendingUpgradeMovieId = _siteLevel->UpgradeMovieID;
+                _owner->SendMovieStart(_siteLevel->UpgradeMovieID);
+            }
+            else
+                _owner->TeleportTo(WorldLocation(_siteLevel->MapID, *_owner), TELE_TO_SEAMLESS);
+        }
+    }
+
+    _owner->SendDirectMessage(upgradeResult.Write());
 }
 
 void Garrison::Enter() const
 {
-    if (MapEntry const* map = sMapStore.LookupEntry(_siteLevel->MapID))
-        if (int32(_owner->GetMapId()) == map->ParentMapID)
-            _owner->TeleportTo(WorldLocation(_siteLevel->MapID, *_owner), TELE_TO_SEAMLESS);
+    MapEntry const* map = sMapStore.LookupEntry(_siteLevel->MapID);
+    if (!map || int32(_owner->GetMapId()) != map->ParentMapID)
+        return;
+
+    // area data of the two maps does not line up exactly at the border, do not bounce back and forth
+    if (!IsAllowedArea(sAreaTableStore.LookupEntry(_owner->GetMap()->GetTerrain()->GetAreaId(_owner->GetPhaseShift(), _siteLevel->MapID, *_owner))))
+        return;
+
+    _owner->TeleportTo(WorldLocation(_siteLevel->MapID, *_owner), TELE_TO_SEAMLESS);
 }
 
 void Garrison::Leave() const
 {
-    if (MapEntry const* map = sMapStore.LookupEntry(_siteLevel->MapID))
-        if (_owner->GetMapId() == _siteLevel->MapID)
-            _owner->TeleportTo(WorldLocation(map->ParentMapID, *_owner), TELE_TO_SEAMLESS);
+    MapEntry const* map = sMapStore.LookupEntry(_siteLevel->MapID);
+    if (!map || _owner->GetMapId() != _siteLevel->MapID)
+        return;
+
+    if (IsAllowedArea(sAreaTableStore.LookupEntry(_owner->GetMap()->GetTerrain()->GetAreaId(_owner->GetPhaseShift(), map->ParentMapID, *_owner))))
+        return;
+
+    _owner->TeleportTo(WorldLocation(map->ParentMapID, *_owner), TELE_TO_SEAMLESS);
+}
+
+bool Garrison::IsAllowedArea(AreaTableEntry const* area) const
+{
+    uint32 siteZoneId = GetSiteZoneId(_siteLevel->GarrSiteID);
+    for (uint8 depth = 0; area && depth < 8; ++depth)
+    {
+        if (area->ID == siteZoneId)
+            return true;
+
+        area = area->ParentAreaID != area->ID ? sAreaTableStore.LookupEntry(area->ParentAreaID) : nullptr;
+    }
+
+    return false;
+}
+
+void Garrison::OnAreaUpdate(AreaTableEntry const* area) const
+{
+    if (_pendingUpgradeMovieId || _owner->IsBeingTeleported() || !_owner->IsInWorld())
+        return;
+
+    MapEntry const* map = sMapStore.LookupEntry(_siteLevel->MapID);
+    if (!map)
+        return;
+
+    if (int32(_owner->GetMapId()) == map->ParentMapID)
+    {
+        if (IsAllowedArea(area))
+            Enter();
+    }
+    else if (_owner->GetMapId() == _siteLevel->MapID)
+    {
+        if (!IsAllowedArea(area))
+            Leave();
+    }
+    else if (MapEntry const* currentMap = _owner->GetMap()->GetEntry())
+    {
+        // still on the map of a lower tier of this site (logged out during the upgrade movie)
+        if (currentMap->IsGarrison() && currentMap->ParentMapID == map->ParentMapID && IsAllowedArea(area))
+            _owner->TeleportTo(WorldLocation(_siteLevel->MapID, *_owner), TELE_TO_SEAMLESS);
+    }
+}
+
+void Garrison::OnMovieComplete(uint32 movieId)
+{
+    if (!_pendingUpgradeMovieId || movieId != _pendingUpgradeMovieId)
+        return;
+
+    _pendingUpgradeMovieId = 0;
+    if (_owner->GetMapId() != _siteLevel->MapID && _owner->GetMap()->GetEntry()->IsGarrison())
+        _owner->TeleportTo(WorldLocation(_siteLevel->MapID, *_owner), TELE_TO_SEAMLESS);
 }
 
 GarrisonFactionIndex Garrison::GetFaction() const

@@ -32,6 +32,7 @@
 #include "DatabaseEnv.h"
 #include "DB2Stores.h"
 #include "GameTime.h"
+#include "Garrison.h"
 #include "GossipDef.h"
 #include "Group.h"
 #include "Guild.h"
@@ -803,6 +804,9 @@ void WorldSession::HandleCompleteMovie(WorldPackets::Misc::CompleteMovie& /*pack
 
     _player->SetMovie(0);
     sScriptMgr->OnMovieComplete(_player, movie);
+
+    if (Garrison* garrison = _player->GetGarrison())
+        garrison->OnMovieComplete(movie);
 }
 
 void WorldSession::HandleSetActionBarToggles(WorldPackets::Character::SetActionBarToggles& packet)
