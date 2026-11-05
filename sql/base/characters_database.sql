@@ -1532,6 +1532,31 @@ LOCK TABLES `character_queststatus_rewarded` WRITE;
 UNLOCK TABLES;
 
 --
+-- Table structure for table `character_queststatus_scheduled`
+--
+
+DROP TABLE IF EXISTS `character_queststatus_scheduled`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `character_queststatus_scheduled` (
+  `guid` bigint unsigned NOT NULL DEFAULT '0' COMMENT 'Global Unique Identifier',
+  `quest` int unsigned NOT NULL DEFAULT '0' COMMENT 'Quest Identifier',
+  `expires` bigint NOT NULL DEFAULT '0',
+  PRIMARY KEY (`guid`,`quest`),
+  KEY `idx_guid` (`guid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Player System';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `character_queststatus_scheduled`
+--
+
+LOCK TABLES `character_queststatus_scheduled` WRITE;
+/*!40000 ALTER TABLE `character_queststatus_scheduled` DISABLE KEYS */;
+/*!40000 ALTER TABLE `character_queststatus_scheduled` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `character_queststatus_seasonal`
 --
 

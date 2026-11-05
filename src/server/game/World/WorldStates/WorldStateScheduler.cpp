@@ -164,7 +164,11 @@ void Apply(time_t now)
     }
 
     if (changed)
+    {
         TC_LOG_DEBUG("misc", "WorldStateScheduler: {} world states changed, next boundary at {}", changed, data.NextBoundary);
+        // quests gated on these states may have rotated: expire completions, refresh quest giver status
+        sWorld->RefreshQuestStatusForAll();
+    }
 }
 }
 

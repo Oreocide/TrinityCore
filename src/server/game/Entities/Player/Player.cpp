@@ -146,6 +146,7 @@
 #include "WorldPacket.h"
 #include "WorldSession.h"
 #include "WorldStateMgr.h"
+#include "WorldStateScheduler.h"
 #include "WorldStatePackets.h"
 #include <boost/dynamic_bitset.hpp>
 #include <G3D/g3dmath.h>
@@ -231,6 +232,7 @@ Player::Player(WorldSession* session) : Unit(true), m_sceneMgr(this)
     m_currentBuybackSlot = BUYBACK_SLOT_START;
 
     m_DailyQuestChanged = false;
+    m_ScheduledQuestChanged = false;
     m_lastDailyQuestTime = 0;
 
     m_environmentalDamageTimer = 1 * IN_MILLISECONDS;
@@ -4078,6 +4080,10 @@ void Player::DeleteFromDB(ObjectGuid playerguid, uint32 accountId, bool updateRe
             trans->Append(stmt);
 
             stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CHARACTER_QUESTSTATUS_DAILY);
+            stmt->setUInt64(0, guid);
+            trans->Append(stmt);
+
+            stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CHARACTER_QUESTSTATUS_SCHEDULED);
             stmt->setUInt64(0, guid);
             trans->Append(stmt);
 
@@ -15081,10 +15087,12 @@ void Player::RewardQuest(Quest const* quest, LootItemType rewardType, uint32 rew
         SetMonthlyQuestStatus(quest_id);
     else if (quest->IsSeasonal())
         SetSeasonalQuestStatus(quest_id);
+    else if (WorldStateScheduler::IsScheduledQuest(quest_id))
+        SetScheduledQuestStatus(quest_id);
 
     RemoveTimedQuest(quest_id);
     RemoveActiveQuest(quest_id, false);
-    if (quest->CanIncreaseRewardedQuestCounters())
+    if (quest->CanIncreaseRewardedQuestCounters() && !WorldStateScheduler::IsScheduledQuest(quest_id))
         SetRewardedQuest(quest_id);
 
     SetQuestCompletedBit(quest_id, true);
@@ -15953,6 +15961,9 @@ bool Player::GetQuestRewardStatus(uint32 quest_id) const
     {
         if (qInfo->IsSeasonal() && !qInfo->IsRepeatable())
             return !SatisfyQuestSeasonal(qInfo, false);
+
+        if (!qInfo->IsDailyOrWeekly() && !qInfo->IsMonthly() && WorldStateScheduler::IsScheduledQuest(quest_id))
+            return IsScheduledQuestDone(quest_id);
 
         // for repeatable quests: rewarded field is set after first reward only to prevent getting XP more than once
         if (!qInfo->IsRepeatable())
@@ -18703,6 +18714,7 @@ bool Player::LoadFromDB(ObjectGuid guid, CharacterDatabaseQueryHolder const& hol
     _LoadQuestStatusRewarded(holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_QUEST_STATUS_REW));
     RestoreChromieTime();
     _LoadDailyQuestStatus(holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_DAILY_QUEST_STATUS));
+    _LoadScheduledQuestStatus(holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_SCHEDULED_QUEST_STATUS));
     _LoadWeeklyQuestStatus(holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_WEEKLY_QUEST_STATUS));
     _LoadSeasonalQuestStatus(holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_SEASONAL_QUEST_STATUS));
     _LoadMonthlyQuestStatus(holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_MONTHLY_QUEST_STATUS));
@@ -19682,7 +19694,8 @@ void Player::_LoadQuestStatus(PreparedQueryResult result)
             if (quest->HasFlagEx(QUEST_FLAGS_EX_REMOVE_ON_PERIODIC_RESET))
             {
                 if ((quest->IsDaily() && questStatusData.AcceptTime < lastDailyReset)
-                    || (quest->IsWeekly() && questStatusData.AcceptTime < lastWeeklyReset))
+                    || (quest->IsWeekly() && questStatusData.AcceptTime < lastWeeklyReset)
+                    || WorldStateScheduler::IsQuestGateClosed(quest_id))
                 {
                     questStatusData.Status = QUEST_STATUS_NONE;
                     m_QuestStatusSave[quest_id] = QUEST_DELETE_SAVE_TYPE;
@@ -19840,7 +19853,10 @@ void Player::_LoadQuestStatusRewarded(PreparedQueryResult result)
 
                 // Skip loading special quests - they are also added to rewarded quests but only once and remain there forever
                 // instead add them separately from load daily/weekly/monthly/seasonal
-                if (!quest->IsDailyOrWeekly() && !quest->IsMonthly() && !quest->IsSeasonal())
+                // world quests gated by scheduled world states load from character_queststatus_scheduled instead
+                // (rows saved here before the scheduler existed are ignored, the quest is available again)
+                bool scheduledQuest = WorldStateScheduler::IsScheduledQuest(quest_id);
+                if (!quest->IsDailyOrWeekly() && !quest->IsMonthly() && !quest->IsSeasonal() && !scheduledQuest)
                     SetQuestCompletedBit(quest_id, true);
 
                 for (uint32 i = 0; i < quest->GetRewChoiceItemsCount(); ++i)
@@ -19853,7 +19869,7 @@ void Player::_LoadQuestStatusRewarded(PreparedQueryResult result)
                     for (QuestPackageItemEntry const* questPackageItem : *questPackageItems)
                         GetSession()->GetCollectionMgr()->AddItemAppearance(questPackageItem->ItemID);
 
-                if (quest->CanIncreaseRewardedQuestCounters())
+                if (quest->CanIncreaseRewardedQuestCounters() && !scheduledQuest)
                     m_RewardedQuests.insert(quest_id);
             }
         }
@@ -19900,6 +19916,33 @@ void Player::_LoadDailyQuestStatus(PreparedQueryResult result)
     }
 
     m_DailyQuestChanged = false;
+}
+
+void Player::_LoadScheduledQuestStatus(PreparedQueryResult result)
+{
+    m_scheduledQuests.clear();
+    m_ScheduledQuestChanged = false;
+
+    //                                                       0       1
+    // SELECT quest, expires FROM character_queststatus_scheduled WHERE guid = ?
+    if (!result)
+        return;
+
+    time_t now = GameTime::GetGameTime();
+    do
+    {
+        Field* fields = result->Fetch();
+        uint32 questId = fields[0].GetUInt32();
+        time_t expires = fields[1].GetInt64();
+        if (expires <= now || !WorldStateScheduler::IsScheduledQuest(questId))
+        {
+            m_ScheduledQuestChanged = true;     // drop the row on next save
+            continue;
+        }
+
+        m_scheduledQuests[questId] = expires;
+        SetQuestCompletedBit(questId, true);
+    } while (result->NextRow());
 }
 
 void Player::_LoadWeeklyQuestStatus(PreparedQueryResult result)
@@ -20808,6 +20851,7 @@ void Player::SaveToDB(LoginDatabaseTransaction loginTransaction, CharacterDataba
     _SaveInventory(trans);
     _SaveQuestStatus(trans);
     _SaveDailyQuestStatus(trans);
+    _SaveScheduledQuestStatus(trans);
     _SaveWeeklyQuestStatus(trans);
     _SaveSeasonalQuestStatus(trans);
     _SaveMonthlyQuestStatus(trans);
@@ -21431,6 +21475,27 @@ void Player::_SaveDailyQuestStatus(CharacterDatabaseTransaction trans)
             stmt->setInt64(2, m_lastDailyQuestTime);
             trans->Append(stmt);
         }
+    }
+}
+
+void Player::_SaveScheduledQuestStatus(CharacterDatabaseTransaction trans)
+{
+    if (!m_ScheduledQuestChanged)
+        return;
+
+    m_ScheduledQuestChanged = false;
+
+    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CHARACTER_QUESTSTATUS_SCHEDULED);
+    stmt->setUInt64(0, GetGUID().GetCounter());
+    trans->Append(stmt);
+
+    for (auto const& [questId, expires] : m_scheduledQuests)
+    {
+        stmt = CharacterDatabase.GetPreparedStatement(CHAR_INS_CHARACTER_QUESTSTATUS_SCHEDULED);
+        stmt->setUInt64(0, GetGUID().GetCounter());
+        stmt->setUInt32(1, questId);
+        stmt->setInt64(2, expires);
+        trans->Append(stmt);
     }
 }
 
@@ -25650,14 +25715,7 @@ void Player::DailyReset()
         if (!quest || !quest->IsDaily() || !quest->HasFlagEx(QUEST_FLAGS_EX_REMOVE_ON_PERIODIC_RESET))
             continue;
 
-        RemoveActiveQuest(questId);
-        AbandonQuest(questId);
-        DespawnPersonalSummonsForQuest(questId);
-
-        if (quest->GetLimitTime())
-            RemoveTimedQuest(questId);
-
-        SendDirectMessage(WorldPackets::Quest::QuestForceRemoved(questId).Write());
+        ForceRemovePeriodicQuest(quest);
     }
 
     // DB data deleted in caller
@@ -25668,6 +25726,61 @@ void Player::DailyReset()
         _garrison->ResetFollowerActivationLimit();
 
     FailCriteria(CriteriaFailEvent::DailyQuestsCleared, 0);
+}
+
+void Player::ForceRemovePeriodicQuest(Quest const* quest)
+{
+    uint32 questId = quest->GetQuestId();
+    RemoveActiveQuest(questId);
+    AbandonQuest(questId);
+    DespawnPersonalSummonsForQuest(questId);
+
+    if (quest->GetLimitTime())
+        RemoveTimedQuest(questId);
+
+    SendDirectMessage(WorldPackets::Quest::QuestForceRemoved(questId).Write());
+}
+
+void Player::SetScheduledQuestStatus(uint32 questId)
+{
+    m_scheduledQuests[questId] = WorldStateScheduler::GetQuestCompletionExpiry(questId, GameTime::GetGameTime());
+    m_ScheduledQuestChanged = true;
+}
+
+bool Player::IsScheduledQuestDone(uint32 questId) const
+{
+    auto itr = m_scheduledQuests.find(questId);
+    return itr != m_scheduledQuests.end() && itr->second > GameTime::GetGameTime();
+}
+
+// expire completions whose gate period ended, and drop remove-on-reset quests whose gate rotated away
+void Player::UpdateScheduledQuests(time_t now)
+{
+    for (auto itr = m_scheduledQuests.begin(); itr != m_scheduledQuests.end();)
+    {
+        if (itr->second > now)
+        {
+            ++itr;
+            continue;
+        }
+
+        SetQuestCompletedBit(itr->first, false);
+        itr = m_scheduledQuests.erase(itr);
+        m_ScheduledQuestChanged = true;
+    }
+
+    for (uint16 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+    {
+        uint32 questId = GetQuestSlotQuestId(slot);
+        if (!questId)
+            continue;
+
+        Quest const* quest = sObjectMgr->GetQuestTemplate(questId);
+        if (!quest || !quest->HasFlagEx(QUEST_FLAGS_EX_REMOVE_ON_PERIODIC_RESET) || !WorldStateScheduler::IsQuestGateClosed(questId))
+            continue;
+
+        ForceRemovePeriodicQuest(quest);
+    }
 }
 
 void Player::ResetWeeklyQuestStatus()
@@ -25688,14 +25801,7 @@ void Player::ResetWeeklyQuestStatus()
         if (!quest || !quest->IsWeekly() || !quest->HasFlagEx(QUEST_FLAGS_EX_REMOVE_ON_PERIODIC_RESET))
             continue;
 
-        RemoveActiveQuest(questId);
-        AbandonQuest(questId);
-        DespawnPersonalSummonsForQuest(questId);
-
-        if (quest->GetLimitTime())
-            RemoveTimedQuest(questId);
-
-        SendDirectMessage(WorldPackets::Quest::QuestForceRemoved(questId).Write());
+        ForceRemovePeriodicQuest(quest);
     }
 
     m_weeklyquests.clear();

@@ -3137,6 +3137,9 @@ void World::DailyReset()
     // reselect pools
     sQuestPoolMgr->ChangeDailyQuests();
 
+    // retail pushes quest giver status at the reset without a client query
+    RefreshQuestStatusForAll();
+
     // store next reset time
     time_t now = GameTime::GetGameTime();
     time_t next = GetNextDailyResetTime(now);
@@ -3175,6 +3178,8 @@ void World::ResetWeeklyQuests()
 
     // reselect pools
     sQuestPoolMgr->ChangeWeeklyQuests();
+
+    RefreshQuestStatusForAll();
 
     // Update faction balance
     UpdateWarModeRewardValues();
@@ -3227,6 +3232,23 @@ void World::ResetMonthlyQuests()
     SetPersistentWorldVariable(NextMonthlyQuestResetTimeVarId, uint64(next));
 
     TC_LOG_INFO("misc", "Monthly quests for all characters have been reset.");
+}
+
+// expire scheduled (world) quest completions and refresh the markers of already visible quest givers
+void World::RefreshQuestStatusForAll()
+{
+    time_t now = GameTime::GetGameTime();
+    for (SessionMap::const_iterator itr = m_sessions.begin(); itr != m_sessions.end(); ++itr)
+    {
+        if (Player* player = itr->second->GetPlayer())
+        {
+            if (!player->IsInWorld())
+                continue;
+
+            player->UpdateScheduledQuests(now);
+            player->SendQuestGiverStatusMultiple();
+        }
+    }
 }
 
 void World::CheckScheduledResetTimes()

@@ -955,6 +955,7 @@ enum PlayerLoginQueryIndex
     PLAYER_LOGIN_QUERY_LOAD_QUEST_STATUS_OBJECTIVES_CRITERIA_PROGRESS,
     PLAYER_LOGIN_QUERY_LOAD_QUEST_STATUS_OBJECTIVES_SPAWN_TRACKING,
     PLAYER_LOGIN_QUERY_LOAD_DAILY_QUEST_STATUS,
+    PLAYER_LOGIN_QUERY_LOAD_SCHEDULED_QUEST_STATUS,
     PLAYER_LOGIN_QUERY_LOAD_REPUTATION,
     PLAYER_LOGIN_QUERY_LOAD_INVENTORY,
     PLAYER_LOGIN_QUERY_LOAD_ARTIFACTS,
@@ -1750,6 +1751,11 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         void SetMonthlyQuestStatus(uint32 quest_id);
         void SetSeasonalQuestStatus(uint32 quest_id);
         void DailyReset();
+        // world / task quests gated by scheduled world states (WorldStateScheduler)
+        void SetScheduledQuestStatus(uint32 questId);
+        bool IsScheduledQuestDone(uint32 questId) const;
+        void UpdateScheduledQuests(time_t now);
+        void ForceRemovePeriodicQuest(Quest const* quest);
         void ResetWeeklyQuestStatus();
         void ResetMonthlyQuestStatus();
         void ResetSeasonalQuestStatus(uint16 event_id, time_t eventStartTime);
@@ -3127,6 +3133,7 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         void _LoadQuestStatusObjectiveSpawnTrackings(PreparedQueryResult result);
         void _LoadQuestStatusRewarded(PreparedQueryResult result);
         void _LoadDailyQuestStatus(PreparedQueryResult result);
+        void _LoadScheduledQuestStatus(PreparedQueryResult result);
         void _LoadWeeklyQuestStatus(PreparedQueryResult result);
         void _LoadMonthlyQuestStatus(PreparedQueryResult result);
         void _LoadSeasonalQuestStatus(PreparedQueryResult result);
@@ -3164,6 +3171,7 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         void _SaveMail(CharacterDatabaseTransaction trans);
         void _SaveQuestStatus(CharacterDatabaseTransaction trans);
         void _SaveDailyQuestStatus(CharacterDatabaseTransaction trans);
+        void _SaveScheduledQuestStatus(CharacterDatabaseTransaction trans);
         void _SaveWeeklyQuestStatus(CharacterDatabaseTransaction trans);
         void _SaveMonthlyQuestStatus(CharacterDatabaseTransaction trans);
         void _SaveSeasonalQuestStatus(CharacterDatabaseTransaction trans);
@@ -3274,6 +3282,8 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         TradeData* m_trade;
 
         bool   m_DailyQuestChanged;
+        bool   m_ScheduledQuestChanged;
+        std::unordered_map<uint32, time_t> m_scheduledQuests;   // quest -> completion expiry
         bool   m_WeeklyQuestChanged;
         bool   m_MonthlyQuestChanged;
         bool   m_SeasonalQuestChanged;
