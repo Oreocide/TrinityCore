@@ -501,6 +501,13 @@ void PhasingHandler::SendToPlayer(Player const* player, PhaseShift const& phaseS
     phaseShiftChange.VisibleMapIDs.resize(phaseShift.VisibleMapIds.size());
     std::ranges::transform(phaseShift.VisibleMapIds, phaseShiftChange.VisibleMapIDs.begin(), Trinity::Containers::MapKey);
 
+    // retail also preloads the outdoor terrain swaps whose Map.db2 Flags[1] lacks 0x8 (8.x+ swaps: Vale 1795, Silithus 1817,
+    // Arathi 1945, Darkshore 2131); without it the client keeps the parent terrain and areas (world map, zone ui)
+    for (auto const& [visibleMapId, _] : phaseShift.VisibleMapIds)
+        if (MapEntry const* visibleMap = sMapStore.LookupEntry(visibleMapId))
+            if (visibleMap->InstanceType == MAP_COMMON && !visibleMap->GetFlags2().HasFlag(MapFlags2::DontVoxelizePathData))
+                phaseShiftChange.PreloadMapIDs.push_back(visibleMapId);
+
     phaseShiftChange.UiMapPhaseIDs.resize(phaseShift.UiMapPhaseIds.size());
     std::ranges::transform(phaseShift.UiMapPhaseIds, phaseShiftChange.UiMapPhaseIDs.begin(), Trinity::Containers::MapKey);
 
