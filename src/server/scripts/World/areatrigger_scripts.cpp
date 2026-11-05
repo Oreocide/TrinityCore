@@ -542,6 +542,63 @@ private:
     uint8 _remainingSummons;
 };
 
+// Generic areatrigger behaviours measured on retail sniffs. Each row binds one areatrigger_create_properties id
+// (IsCustom = 0) whose ScriptName is the script that reads the table.
+namespace GenericAreaTrigger
+{
+struct MovementForceEntry
+{
+    uint32 CreatePropertiesId;
+    MovementForceType Type;
+    float Magnitude;
+};
+
+// Applies a movement force to players while they are inside, with the areatrigger position as origin
+constexpr MovementForceEntry MovementForces[] =
+{
+    { 39608, MovementForceType::Gravity, 1.5f }, // Soulrending Roar (1254266), Rak'tul, Vessel of Souls
+};
+
+template <typename Entry, std::size_t N>
+Entry const* FindEntry(Entry const (&entries)[N], AreaTrigger const* at)
+{
+    AreaTriggerCreateProperties const* createProperties = at->GetCreateProperties();
+    if (!createProperties || createProperties->Id.IsCustom)
+        return nullptr;
+
+    for (Entry const& entry : entries)
+        if (entry.CreatePropertiesId == createProperties->Id.Id)
+            return &entry;
+
+    return nullptr;
+}
+}
+
+struct at_generic_movement_force : AreaTriggerAI
+{
+    at_generic_movement_force(AreaTrigger* areatrigger) : AreaTriggerAI(areatrigger),
+        _entry(GenericAreaTrigger::FindEntry(GenericAreaTrigger::MovementForces, areatrigger)) { }
+
+    void OnUnitEnter(Unit* unit) override
+    {
+        if (!_entry || !unit->IsPlayer())
+            return;
+
+        unit->ApplyMovementForce(at->GetGUID(), at->GetPosition(), _entry->Magnitude, _entry->Type);
+    }
+
+    void OnUnitExit(Unit* unit, AreaTriggerExitReason /*reason*/) override
+    {
+        if (!_entry || !unit->IsPlayer())
+            return;
+
+        unit->RemoveMovementForce(at->GetGUID());
+    }
+
+private:
+    GenericAreaTrigger::MovementForceEntry const* _entry;
+};
+
 void AddSC_areatrigger_scripts()
 {
     new AreaTrigger_at_coilfang_waterfall();
@@ -558,4 +615,5 @@ void AddSC_areatrigger_scripts()
     RegisterAreaTriggerAI(areatrigger_action_capture_flag);
     RegisterAreaTriggerAI(at_void_orb_harbinger);
     RegisterAreaTriggerAI(at_abyssal_portal_harbinger);
+    RegisterAreaTriggerAI(at_generic_movement_force);
 }
