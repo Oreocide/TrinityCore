@@ -523,7 +523,7 @@ NonDefaultConstructible<pAuraEffectHandler> AuraEffectHandler[TOTAL_AURAS]=
     &AuraEffect::HandleOverridePetSpecs,                          //451 SPELL_AURA_OVERRIDE_PET_SPECS
     &AuraEffect::HandleNULL,                                      //452
     &AuraEffect::HandleNoImmediateEffect,                         //453 SPELL_AURA_CHARGE_RECOVERY_MOD implemented in SpellHistory::GetChargeRecoveryTime
-    &AuraEffect::HandleNoImmediateEffect,                         //454 SPELL_AURA_CHARGE_RECOVERY_MULTIPLIER implemented in SpellHistory::GetChargeRecoveryTime
+    &AuraEffect::HandleChargeRecoveryMultiplier,                  //454 SPELL_AURA_CHARGE_RECOVERY_MULTIPLIER also implemented in SpellHistory::GetChargeRecoveryTime
     &AuraEffect::HandleAuraModRoot,                               //455 SPELL_AURA_MOD_ROOT_2
     &AuraEffect::HandleNoImmediateEffect,                         //456 SPELL_AURA_CHARGE_RECOVERY_AFFECTED_BY_HASTE implemented in SpellHistory::GetChargeRecoveryTime
     &AuraEffect::HandleNoImmediateEffect,                         //457 SPELL_AURA_CHARGE_RECOVERY_AFFECTED_BY_HASTE_REGEN implemented in SpellHistory::GetChargeRecoveryTime
@@ -6503,6 +6503,16 @@ void AuraEffect::HandleModChargeRecoveryRate(AuraApplication const* aurApp, uint
 
     float rate = 100.0f / (std::max<float>(GetAmount(), -99.0f) + 100.0f);
     aurApp->GetTarget()->GetSpellHistory()->UpdateChargeRecoveryRate(GetMiscValue(), rate, apply);
+}
+
+void AuraEffect::HandleChargeRecoveryMultiplier(AuraApplication const* aurApp, uint8 mode, bool apply) const
+{
+    if (!(mode & AURA_EFFECT_HANDLE_CHANGE_AMOUNT_MASK))
+        return;
+
+    // the amount scales the recovery time, so charges already recharging speed up or slow down with it
+    float multiplier = (std::max<float>(GetAmount(), -99.0f) + 100.0f) / 100.0f;
+    aurApp->GetTarget()->GetSpellHistory()->UpdateChargeRecoveryRate(GetMiscValue(), multiplier, apply);
 }
 
 void AuraEffect::HandleShowConfirmationPrompt(AuraApplication const* aurApp, uint8 mode, bool apply) const
