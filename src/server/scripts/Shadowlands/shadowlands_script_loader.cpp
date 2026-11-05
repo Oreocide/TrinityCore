@@ -19,6 +19,7 @@
 void AddSC_covenant_spell_scripts();
 void AddSC_shadowlands_raid_portals();
 void AddSC_torghast_spell_scripts();
+void AddSC_instance_torghast();
 void AddSC_theater_of_pain_arena();
 
 void AddSC_boss_eye_of_the_jailer_sod();
@@ -38,6 +39,7 @@ void AddShadowlandsScripts()
     AddSC_covenant_spell_scripts();
     AddSC_shadowlands_raid_portals();
     AddSC_torghast_spell_scripts();
+    AddSC_instance_torghast();
 
     // Maldraxxus
     AddSC_theater_of_pain_arena();
