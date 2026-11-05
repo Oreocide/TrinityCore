@@ -17,6 +17,7 @@
 
 #include "Player.h"
 #include "ScriptMgr.h"
+#include "Spell.h"
 #include "SpellAuraEffects.h"
 #include "SpellScript.h"
 
@@ -25,7 +26,47 @@ namespace Scripts::QuelThalas::SilvermoonCityMidnight
 namespace Quests
 {
     static constexpr uint32 CompleteMidnightCampaign = 90806;
+    static constexpr uint32 NoFearOfTheDark = 86549;
 }
+
+namespace QuestObjectives
+{
+    static constexpr uint32 PortalEntered = 458798;
+}
+
+namespace Spells
+{
+    static constexpr uint32 PortalToVoidstormQuest = 1214507;
+    static constexpr uint32 PortalToVoidstorm = 1225695;
+}
+
+// 1214506 - Portal to Voidstorm (gameobject 504395, Duskglow Gloriette)
+// Both effects are dummies naming a teleport. Retail casts 1214507 (teleport plus the "Portal entered" credit of 86549) while
+// that objective is open, and 1225695 (teleport only) on every later use.
+class spell_silvermoon_portal_to_voidstorm : public SpellScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ Spells::PortalToVoidstormQuest, Spells::PortalToVoidstorm });
+    }
+
+    void HandleDummy(SpellEffIndex /*effIndex*/)
+    {
+        Player* player = Object::ToPlayer(GetHitUnit());
+        if (!player)
+            return;
+
+        bool onStep = player->GetQuestStatus(Quests::NoFearOfTheDark) == QUEST_STATUS_INCOMPLETE
+            && !player->IsQuestObjectiveComplete(Quests::NoFearOfTheDark, QuestObjectives::PortalEntered);
+        player->CastSpell(player, onStep ? Spells::PortalToVoidstormQuest : Spells::PortalToVoidstorm, CastSpellExtraArgs(TRIGGERED_FULL_MASK)
+            .SetOriginalCastId(GetSpell()->m_castId));
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_silvermoon_portal_to_voidstorm::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
+    }
+};
 
 // 1278767 - [DNT] Skip Midnight Intro - Flag Campaign
 class spell_silvermoon_skip_midnight_intro : public SpellScript
@@ -50,4 +91,5 @@ void AddSC_silvermoon_city_midnight()
 
     // Spells
     RegisterSpellScript(spell_silvermoon_skip_midnight_intro);
+    RegisterSpellScript(spell_silvermoon_portal_to_voidstorm);
 }
