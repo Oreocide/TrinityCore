@@ -49,6 +49,7 @@
 #include "CombatPackets.h"
 #include "Common.h"
 #include "ConditionMgr.h"
+#include "Config.h"
 #include "Containers.h"
 #include "CreatureAI.h"
 #include "DB2Stores.h"
@@ -168,6 +169,14 @@ Player::Player(WorldSession* session) : Unit(true), m_sceneMgr(this)
     m_objectTypeId = TYPEID_PLAYER;
 
     m_entityFragments.Add(WowCS::EntityFragment::Tag_Player, false);
+
+    // Retail sends both housing components on every player create (own and others), empty for a player without a house.
+    // Gated by the housing switch so a wrong layout here can be turned off without a rebuild.
+    if (sConfigMgr->GetBoolDefault("Housing.Service.Enable"sv, false))
+    {
+        m_entityFragments.Add(WowCS::EntityFragment::PlayerHouseInfoComponent_C, false, WowCS::GetRawFragmentData(m_playerHouseInfoComponentData));
+        m_entityFragments.Add(WowCS::EntityFragment::PlayerInitiativeComponent_C, false, WowCS::GetRawFragmentData(m_playerInitiativeComponentData));
+    }
 
     m_session = session;
 

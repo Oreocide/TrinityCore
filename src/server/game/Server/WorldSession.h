@@ -422,6 +422,15 @@ namespace WorldPackets
     namespace Housing
     {
         class DeclineNeighborhoodInvites;
+        class GetPlayerHousesInfo;
+        class NeighborhoodInitiativeServiceStatusCheck;
+        class StartTutorial;
+        class HousingDecorRequestStorage;
+        class HousingBlueprintRequestCollection;
+        class HousingPhotoSharingCompleteAuthorization;
+        class GetDecorRefundList;
+        class GetAllLicensedDecorQuantities;
+        class GetPlayerInitiativeInfoRequest;
     }
 
     namespace Inspect
@@ -1499,6 +1508,15 @@ class TC_GAME_API WorldSession
         void HandleDeclineGuildInvites(WorldPackets::Guild::DeclineGuildInvites& packet);
 
         void HandleDeclineNeighborhoodInvites(WorldPackets::Housing::DeclineNeighborhoodInvites const& declineNeighborhoodInvites);
+        void HandleGetPlayerHousesInfo(WorldPackets::Housing::GetPlayerHousesInfo const& getPlayerHousesInfo);
+        void HandleNeighborhoodInitiativeServiceStatusCheck(WorldPackets::Housing::NeighborhoodInitiativeServiceStatusCheck const& statusCheck);
+        void HandleHousingSvcsStartTutorial(WorldPackets::Housing::StartTutorial const& startTutorial);
+        void HandleHousingDecorRequestStorage(WorldPackets::Housing::HousingDecorRequestStorage const& request);
+        void HandleHousingBlueprintRequestCollection(WorldPackets::Housing::HousingBlueprintRequestCollection const& request);
+        void HandleHousingPhotoSharingCompleteAuthorization(WorldPackets::Housing::HousingPhotoSharingCompleteAuthorization const& request);
+        void HandleGetDecorRefundList(WorldPackets::Housing::GetDecorRefundList const& request);
+        void HandleGetAllLicensedDecorQuantities(WorldPackets::Housing::GetAllLicensedDecorQuantities const& request);
+        void HandleGetPlayerInitiativeInfoRequest(WorldPackets::Housing::GetPlayerInitiativeInfoRequest const& request);
 
         void HandleEnableTaxiNodeOpcode(WorldPackets::Taxi::EnableTaxiNode& enableTaxiNode);
         void HandleTaxiNodeStatusQueryOpcode(WorldPackets::Taxi::TaxiNodeStatusQuery& taxiNodeStatusQuery);

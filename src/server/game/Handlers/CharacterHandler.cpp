@@ -30,6 +30,7 @@
 #include "CharacterPackets.h"
 #include "Chat.h"
 #include "Common.h"
+#include "Config.h"
 #include "DB2Stores.h"
 #include "DatabaseEnv.h"
 #include "EquipmentSetPackets.h"
@@ -40,6 +41,7 @@
 #include "GroupMgr.h"
 #include "Guild.h"
 #include "GuildMgr.h"
+#include "HousingPackets.h"
 #include "Item.h"
 #include "Language.h"
 #include "Log.h"
@@ -1281,6 +1283,8 @@ void WorldSession::HandlePlayerLoginOpcode(WorldPackets::Character::PlayerLogin&
         return;
     }
 
+    // retail repeats the glue screen status and mirror vars here (before SMSG_CONNECT_TO); the client drops them when leaving the glue screen
+    SendFeatureSystemStatusGlueScreen();
     SendConnectToInstance(WorldPackets::Auth::ConnectToSerial::WorldAttempt1);
 }
 
@@ -1499,6 +1503,10 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder const& holder)
     pCurrChar->RemoveAurasWithInterruptFlags(SpellAuraInterruptFlags::Login);
 
     pCurrChar->SendInitialPacketsAfterAddToMap();
+
+    // retail sends SMSG_PLAYER_CHOICE_CLEAR (ChoiceID 0, ForceClose false) on world entry; the client then starts its housing service checks
+    if (sConfigMgr->GetBoolDefault("Housing.Service.Enable"sv, false))
+        SendPacket(WorldPackets::Housing::HousingFixedResponse(SMSG_PLAYER_CHOICE_CLEAR, { 0x00, 0x00, 0x00, 0x00, 0x00 }).Write());
 
     CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_UPD_CHAR_ONLINE);
     stmt->setUInt64(0, pCurrChar->GetGUID().GetCounter());

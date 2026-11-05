@@ -20,6 +20,7 @@
 #include "BattlenetRpcErrorCodes.h"
 #include "CharacterTemplateDataStore.h"
 #include "ClientConfigPackets.h"
+#include "Config.h"
 #include "DisableMgr.h"
 #include "GameTime.h"
 #include "ObjectMgr.h"
@@ -142,7 +143,7 @@ void WorldSession::SendFeatureSystemStatusGlueScreen()
 
     SendPacket(features.Write());
 
-    WorldPackets::System::MirrorVarSingle vars[] =
+    std::vector<WorldPackets::System::MirrorVarSingle> vars =
     {
         { "raidLockoutExtendEnabled"sv, "1"sv },
         { "sellAllJunkEnabled"sv, "1"sv },
@@ -151,14 +152,54 @@ void WorldSession::SendFeatureSystemStatusGlueScreen()
         { "bpayStoreEnable"sv, "0"sv },
         { "recentAlliesEnabledClient"sv, "0"sv },
         { "browserEnabled"sv, "0"sv },
-        { "housingEnableCreateGuildNeighborhood"sv, "0"sv },
-        { "housingEnableDeleteHouse"sv, "0"sv },
-        { "housingServiceEnabled"sv, "0"sv },
-        { "housingEnableMoveHouse"sv, "0"sv },
-        { "housingEnableCreateCharterNeighborhood"sv, "0"sv },
-        { "housingEnableBuyHouse"sv, "0"sv },
-        { "housingMarketEnabled"sv, "0"sv },
     };
+
+    if (sConfigMgr->GetBoolDefault("Housing.Service.Enable"sv, false))
+    {
+        // retail values (12.1.5.70575 login SMSG_MIRROR_VARS); housingMarket* stays off, there is no shop
+        static constexpr std::array<std::pair<std::string_view, std::string_view>, 26> housingVars =
+        { {
+            { "housingServiceEnabled"sv, "1"sv },
+            { "performHousingExpansionCheckClient"sv, "1"sv },
+            { "housingEnableBuyHouse"sv, "1"sv },
+            { "housingEnableMoveHouse"sv, "1"sv },
+            { "housingEnableDeleteHouse"sv, "1"sv },
+            { "housingEnableCreateGuildNeighborhood"sv, "1"sv },
+            { "housingEnableCreateCharterNeighborhood"sv, "1"sv },
+            { "housingBlueprintsEnabled"sv, "1"sv },
+            { "housingBlueprintExportEnabled"sv, "1"sv },
+            { "housingBlueprintImportEnabled"sv, "1"sv },
+            { "housingEntryRoomMoveEnabled"sv, "1"sv },
+            { "housingExteriorLightsAllowed"sv, "1"sv },
+            { "housingExteriorLightsRadiusMultiplier"sv, "0.500000"sv },
+            { "housingExteriorTypeByNeighborhoodFactionRestriction"sv, "1"sv },
+            { "housingBasicDecor_MaxPreviewLimit"sv, "100"sv },
+            { "housingCatalog_CartSizeLimit"sv, "20"sv },
+            { "housingDecorReportScreenshotDistanceThreshold"sv, "150.000000"sv },
+            { "housingDecorReportScreenshotFacingDotThreshold"sv, "0.500000"sv },
+            { "housingExpertDecor_Scale_Indoor_Min"sv, "0.200000"sv },
+            { "housingExpertDecor_Scale_Indoor_Max"sv, "2.000000"sv },
+            { "housingExpertDecor_Scale_Outdoor_Min"sv, "0.200000"sv },
+            { "housingExpertDecor_Scale_Outdoor_Max"sv, "2.000000"sv },
+            { "housingMaxPetBedsExterior"sv, "25"sv },
+            { "housingMaxPetBedsInterior"sv, "100"sv },
+            { "housingMarketEnabled"sv, "0"sv },
+            { "housingMarketShopEnabled"sv, "0"sv }
+        } };
+
+        for (auto const& [name, value] : housingVars)
+            vars.emplace_back(name, value);
+    }
+    else
+    {
+        vars.emplace_back("housingEnableCreateGuildNeighborhood"sv, "0"sv);
+        vars.emplace_back("housingEnableDeleteHouse"sv, "0"sv);
+        vars.emplace_back("housingServiceEnabled"sv, "0"sv);
+        vars.emplace_back("housingEnableMoveHouse"sv, "0"sv);
+        vars.emplace_back("housingEnableCreateCharterNeighborhood"sv, "0"sv);
+        vars.emplace_back("housingEnableBuyHouse"sv, "0"sv);
+        vars.emplace_back("housingMarketEnabled"sv, "0"sv);
+    }
 
     WorldPackets::System::MirrorVars variables;
     variables.Variables = vars;

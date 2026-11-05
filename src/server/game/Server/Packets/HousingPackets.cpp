@@ -24,4 +24,43 @@ void DeclineNeighborhoodInvites::Read()
 {
     _worldPacket >> Bits<1>(Allow);
 }
+
+void HousingDecorRequestStorage::Read()
+{
+    _worldPacket >> BnetAccountGUID;
+}
+
+void HousingPhotoSharingCompleteAuthorization::Read()
+{
+    _worldPacket >> Field_00;
+}
+
+void GetPlayerInitiativeInfoRequest::Read()
+{
+    _worldPacket >> Field_00;
+}
+
+WorldPacket const* HousingFixedResponse::Write()
+{
+    for (uint8 byte : _bytes)
+        _worldPacket << byte;
+
+    return &_worldPacket;
+}
+
+WorldPacket const* GetPlayerHousesInfoResponse::Write()
+{
+    _worldPacket << uint32(0); // PlayerHousesCount
+    _worldPacket << uint8(Result);
+
+    return &_worldPacket;
+}
+
+WorldPacket const* InitiativeServiceStatus::Write()
+{
+    _worldPacket << Bits<1>(ServiceEnabled);
+    _worldPacket.FlushBits();
+
+    return &_worldPacket;
+}
 }

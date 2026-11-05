@@ -2394,6 +2394,16 @@ Support.ComplaintsEnabled = 0
 Support.SuggestionsEnabled = 0
 
 #
+#    Housing.Service.Enable
+#        Description: Tell the client the housing service is available (mirror var
+#                     housingServiceEnabled). Enables the Housing Dashboard micro button.
+#                     Housing itself is not implemented: the dashboard shows no houses.
+#        Default:     0 - (Disabled)
+#                     1 - (Enabled, Experimental)
+
+Housing.Service.Enable = 0
+
+#
 ###################################################################################################
 
 ###################################################################################################
