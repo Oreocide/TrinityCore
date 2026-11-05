@@ -92,6 +92,7 @@
 #include "MapUtils.h"
 #include "MiscPackets.h"
 #include "NPCPackets.h"
+#include "Neighborhood.h"
 #include "MotionMaster.h"
 #include "MovementPackets.h"
 #include "ObjectAccessor.h"
@@ -3516,6 +3517,9 @@ void Player::BuildCreateUpdateBlockForPlayer(UpdateData* data, Player* target) c
                 item->BuildCreateUpdateBlockForPlayer(data, target);
 
         GetSession()->GetBattlenetAccount().BuildCreateUpdateBlockForPlayer(data, target);
+
+        if (Housing::Neighborhood* neighborhood = Housing::Neighborhood::GetForMap(GetMapId()))
+            neighborhood->BuildCreateUpdateBlockForPlayer(data, target);
     }
 
     Unit::BuildCreateUpdateBlockForPlayer(data, target);
@@ -25154,6 +25158,9 @@ void Player::SendInitialPacketsBeforeAddToMap()
     // worldServerInfo.RestrictedAccountMaxLevel; /// @todo
     // worldServerInfo.RestrictedAccountMaxMoney; /// @todo
     worldServerInfo.DifficultyID = GetMap()->GetDifficultyID();
+    // Retail tells the client which neighborhood it entered (houseless player on Founder's Point: neighborhood guid, empty house guids)
+    if (Housing::Neighborhood* neighborhood = Housing::Neighborhood::GetForMap(GetMapId()))
+        worldServerInfo.NeighborhoodGUID = neighborhood->GetGUID();
     // worldServerInfo.XRealmPvpAlert;  /// @todo
     SendDirectMessage(worldServerInfo.Write());
 

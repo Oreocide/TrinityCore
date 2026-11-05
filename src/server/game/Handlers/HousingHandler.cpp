@@ -17,6 +17,7 @@
 
 #include "WorldSession.h"
 #include "Config.h"
+#include "DB2Stores.h"
 #include "HousingPackets.h"
 #include "Log.h"
 #include "Player.h"
@@ -54,6 +55,53 @@ void WorldSession::HandleNeighborhoodInitiativeServiceStatusCheck(WorldPackets::
 
     WorldPackets::Housing::InitiativeServiceStatus status;
     SendPacket(status.Write());
+}
+
+namespace
+{
+// The client sends the plot index (0..54 within a neighborhood), not a NeighborhoodPlot row id.
+NeighborhoodPlotEntry const* FindNeighborhoodPlot(uint32 mapId, uint32 plotIndex)
+{
+    NeighborhoodMapEntry const* neighborhood = nullptr;
+    for (NeighborhoodMapEntry const* entry : sNeighborhoodMapStore)
+    {
+        if (uint32(entry->MapID) == mapId)
+        {
+            neighborhood = entry;
+            break;
+        }
+    }
+
+    if (!neighborhood)
+        return nullptr;
+
+    for (NeighborhoodPlotEntry const* plot : sNeighborhoodPlotStore)
+        if (uint32(plot->NeighborhoodMapID) == neighborhood->ID && uint32(plot->PlotIndex) == plotIndex)
+            return plot;
+
+    return nullptr;
+}
+}
+
+// Plot sign (GO type 48, UILinkType 4) click: GameObject::Use sends interaction 70, then the client asks for the plot window.
+// Only the unowned-plot reply (retail sample, 30 bytes) is implemented; the price shown by the client comes from NeighborhoodPlot.Cost.
+void WorldSession::HandleNeighborhoodOpenCornerstoneUI(WorldPackets::Housing::OpenCornerstoneUI const& openCornerstoneUI)
+{
+    if (!sConfigMgr->GetBoolDefault("Housing.Service.Enable"sv, false))
+        return;
+
+    NeighborhoodPlotEntry const* plot = FindNeighborhoodPlot(_player->GetMapId(), openCornerstoneUI.PlotIndex);
+    TC_LOG_INFO("server.housing", "OPEN_CORNERSTONE_UI from {}: plot index {} cornerstone {} map {} -> plot row {}, cost {}", GetPlayerInfo(),
+        openCornerstoneUI.PlotIndex, openCornerstoneUI.CornerstoneGUID.ToString(), _player->GetMapId(), plot ? plot->ID : 0, plot ? plot->Cost : 0);
+    if (!plot)
+        return;
+
+    WorldPackets::Housing::OpenCornerstoneUIResponse response;
+    response.PlotIndex = openCornerstoneUI.PlotIndex;
+    response.Name = "66-71-65"; // TEMP: constant in all 5 retail samples, meaning unknown
+    WorldPacket const* data = response.Write();
+    TC_LOG_INFO("server.housing", "OPEN_CORNERSTONE_UI_RESPONSE {} bytes: {}", data->size(), ByteArrayToHexStr(std::span<uint8 const>(data->data(), data->size())));
+    SendPacket(data);
 }
 
 // Dashboard "Start Tutorial": retail answers with a server-side cast of the neighborhood teleport (sniff: no CMSG_CAST_SPELL).

@@ -52,6 +52,7 @@
 #include "QueryPackets.h"
 #include "SpellAuras.h"
 #include "SpellMgr.h"
+#include "StringConvert.h"
 #include "Transport.h"
 #include "Util.h"
 #include "Vignette.h"
@@ -2005,6 +2006,46 @@ void GameObject::SaveToDB(uint32 mapid, std::vector<Difficulty> const& spawnDiff
     WorldDatabase.CommitTransaction(trans);
 }
 
+// Plot sign (GO type 48, UILinkType 4): the client reads the plot index and the price from this entity fragment (retail create
+// block: Cost 10000000, PlotIndex 27) and only then sends CMSG_NEIGHBORHOOD_OPEN_CORNERSTONE_UI.
+// The plot index comes from the spawn's StringId ("housing_plot_<index>"), the price from NeighborhoodPlot.
+void GameObject::SetupHousingCornerstone()
+{
+    GameObjectTemplate const* goInfo = GetGOInfo();
+    if (goInfo->type != GAMEOBJECT_TYPE_UI_LINK || goInfo->UILink.UILinkType != 4)
+        return;
+
+    constexpr std::string_view prefix = "housing_plot_";
+    std::string_view stringId = GetStringId(StringIdType::Spawn);
+    if (!stringId.starts_with(prefix))
+        return;
+
+    Optional<uint32> plotIndex = Trinity::StringTo<uint32>(stringId.substr(prefix.size()));
+    if (!plotIndex)
+        return;
+
+    uint64 cost = 0;
+    for (NeighborhoodMapEntry const* neighborhood : sNeighborhoodMapStore)
+    {
+        if (uint32(neighborhood->MapID) != GetMapId())
+            continue;
+
+        for (NeighborhoodPlotEntry const* plot : sNeighborhoodPlotStore)
+        {
+            if (uint32(plot->NeighborhoodMapID) == neighborhood->ID && uint32(plot->PlotIndex) == *plotIndex)
+            {
+                cost = plot->Cost;
+                break;
+            }
+        }
+        break;
+    }
+
+    m_entityFragments.Add(WowCS::EntityFragment::FJamHousingCornerstone_C, false, WowCS::GetRawFragmentData(m_housingCornerstoneData));
+    SetUpdateFieldValue(m_values.ModifyValue(&GameObject::m_housingCornerstoneData).ModifyValue(&UF::HousingCornerstoneData::PlotIndex), int32(*plotIndex));
+    SetUpdateFieldValue(m_values.ModifyValue(&GameObject::m_housingCornerstoneData).ModifyValue(&UF::HousingCornerstoneData::Cost), cost);
+}
+
 bool GameObject::LoadFromDB(ObjectGuid::LowType spawnId, Map* map, bool addToMap, bool)
 {
     GameObjectData const* data = sObjectMgr->GetGameObjectData(spawnId);
@@ -2069,6 +2110,8 @@ bool GameObject::LoadFromDB(ObjectGuid::LowType spawnId, Map* map, bool addToMap
     m_goData = data;
 
     m_stringIds[AsUnderlyingType(StringIdType::Spawn)] = &data->StringId;
+
+    SetupHousingCornerstone();
 
     if (addToMap && !GetMap()->AddToMap(this))
         return false;
@@ -3486,6 +3529,14 @@ void GameObject::Use(Unit* user, bool ignoreCastInProgress /*= false*/)
                 case 3:
                     gameObjectUILink.InteractionType = PlayerInteractionType::ItemInteraction;
                     break;
+                case 4:
+                    gameObjectUILink.InteractionType = PlayerInteractionType::CornerstoneInteraction;
+                {
+                    std::span<WowCS::EntityFragment const> fragmentIds = m_entityFragments.GetIds();
+                    TC_LOG_INFO("server.housing", "Plot sign {} used by {}: cornerstone fragment {}", GetGUID().ToString(), player->GetName(),
+                        std::ranges::find(fragmentIds, WowCS::EntityFragment::FJamHousingCornerstone_C) != fragmentIds.end() ? "present" : "MISSING");
+                    break;
+                }
                 default:
                     break;
             }

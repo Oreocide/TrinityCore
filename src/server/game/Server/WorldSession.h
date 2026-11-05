@@ -424,6 +424,7 @@ namespace WorldPackets
         class DeclineNeighborhoodInvites;
         class GetPlayerHousesInfo;
         class NeighborhoodInitiativeServiceStatusCheck;
+        class OpenCornerstoneUI;
         class StartTutorial;
         class HousingDecorRequestStorage;
         class HousingBlueprintRequestCollection;
@@ -1510,6 +1511,7 @@ class TC_GAME_API WorldSession
         void HandleDeclineNeighborhoodInvites(WorldPackets::Housing::DeclineNeighborhoodInvites const& declineNeighborhoodInvites);
         void HandleGetPlayerHousesInfo(WorldPackets::Housing::GetPlayerHousesInfo const& getPlayerHousesInfo);
         void HandleNeighborhoodInitiativeServiceStatusCheck(WorldPackets::Housing::NeighborhoodInitiativeServiceStatusCheck const& statusCheck);
+        void HandleNeighborhoodOpenCornerstoneUI(WorldPackets::Housing::OpenCornerstoneUI const& openCornerstoneUI);
         void HandleHousingSvcsStartTutorial(WorldPackets::Housing::StartTutorial const& startTutorial);
         void HandleHousingDecorRequestStorage(WorldPackets::Housing::HousingDecorRequestStorage const& request);
         void HandleHousingBlueprintRequestCollection(WorldPackets::Housing::HousingBlueprintRequestCollection const& request);

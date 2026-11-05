@@ -144,6 +144,40 @@ namespace WorldPackets::Housing
 
         bool ServiceEnabled = true;
     };
+
+    // client writer 0x3B000B (build 70575): u32 plot index, packed guid
+    class OpenCornerstoneUI final : public ClientPacket
+    {
+    public:
+        explicit OpenCornerstoneUI(WorldPacket&& packet) : ClientPacket(CMSG_NEIGHBORHOOD_OPEN_CORNERSTONE_UI, std::move(packet)) { }
+
+        void Read() override;
+
+        uint32 PlotIndex = 0;
+        ObjectGuid CornerstoneGUID;
+    };
+
+    // Layout from the client reader (0x7ff72d6a73d0, build 70575), validated against 5 retail samples. The optional
+    // trailing u64 / struct / u32 are never sent here (flags stay 0), as in every retail sample.
+    class OpenCornerstoneUIResponse final : public ServerPacket
+    {
+    public:
+        OpenCornerstoneUIResponse() : ServerPacket(SMSG_NEIGHBORHOOD_OPEN_CORNERSTONE_UI_RESPONSE, 48) { }
+
+        WorldPacket const* Write() override;
+
+        uint32 PlotIndex = 0;
+        ObjectGuid HouseGUID;       // retail: empty for an unowned plot
+        ObjectGuid OwnerGUID;
+        uint64 Field_48 = 0;
+        uint8 Field_50 = 0;
+        ObjectGuid Field_80;
+        bool Flag_51 = false;
+        bool Flag_A0 = false;
+        bool Flag_100 = false;
+        bool Flag_10C = false;
+        std::string Name;           // retail sample: "66-71-65" (constant across plots, meaning unknown)
+    };
 }
 
 #endif // TRINITYCORE_HOUSING_PACKETS_H

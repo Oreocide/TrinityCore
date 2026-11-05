@@ -63,4 +63,34 @@ WorldPacket const* InitiativeServiceStatus::Write()
 
     return &_worldPacket;
 }
+
+void OpenCornerstoneUI::Read()
+{
+    _worldPacket >> PlotIndex;
+    _worldPacket >> CornerstoneGUID;
+}
+
+WorldPacket const* OpenCornerstoneUIResponse::Write()
+{
+    _worldPacket << uint32(PlotIndex);
+    _worldPacket << HouseGUID;
+    _worldPacket << OwnerGUID;
+    _worldPacket << uint64(Field_48);
+    _worldPacket << uint8(Field_50);
+    _worldPacket << Field_80;
+    // 15 flag bits as read by the client: bool, 8-bit string length (incl. NUL), optional u64, bool, optional struct, bool, optional u32, bool
+    _worldPacket << Bits<1>(Flag_51);
+    _worldPacket << Bits<8>(Name.size() + 1);
+    _worldPacket << Bits<1>(0);
+    _worldPacket << Bits<1>(Flag_A0);
+    _worldPacket << Bits<1>(0);
+    _worldPacket << Bits<1>(Flag_100);
+    _worldPacket << Bits<1>(0);
+    _worldPacket << Bits<1>(Flag_10C);
+    _worldPacket.FlushBits();
+    _worldPacket.append(Name.data(), Name.size());
+    _worldPacket << uint8(0);
+
+    return &_worldPacket;
+}
 }
