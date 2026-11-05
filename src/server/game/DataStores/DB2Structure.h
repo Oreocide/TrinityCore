@@ -2190,6 +2190,14 @@ struct HolidaysEntry
     std::array<int32, 3> TextureFileDataID;
 };
 
+struct HouseLevelDataEntry
+{
+    uint32 ID;
+    int32 Level;
+    int32 QuestID;
+    int32 Field_12_0_7_67808_003;
+};
+
 struct ImportPriceArmorEntry
 {
     uint32 ID;
@@ -3175,6 +3183,36 @@ struct NamesReservedLocaleEntry
     uint32 ID;
     char const* Name;
     uint8 LocaleMask;
+};
+
+struct NeighborhoodMapEntry
+{
+    DBCPosition3D EntryPosition;
+    uint32 ID;
+    int32 MapID;
+    float EntryRotation;
+    uint32 UiTextureKitID;
+    int32 Flags;
+};
+
+struct NeighborhoodPlotEntry
+{
+    uint64 Cost;
+    char const* Name;
+    DBCPosition3D Field_12_0_0_63534_004;
+    DBCPosition3D Field_12_0_0_63534_005;
+    DBCPosition3D CornerstonePosition;
+    DBCPosition3D CornerstoneRotation;
+    DBCPosition3D TeleportPosition;
+    uint32 ID;
+    int32 NeighborhoodMapID;
+    int32 Field_12_0_0_63534_010;
+    int32 CornerstoneGameObjectID;
+    int32 PlotIndex;
+    int32 WorldState;
+    int32 PlotGameObjectID;
+    float Field_12_0_0_65028_014;
+    int32 Field_12_0_0_64741_016;
 };
 
 struct NumTalentsAtLevelEntry

@@ -848,6 +848,10 @@ void HotfixDatabaseConnection::DoPrepareStatements()
         " WHERE (`VerifiedBuild` > 0) = ?", CONNECTION_SYNCH);
     PREPARE_MAX_ID_STMT(HOTFIX_SEL_HOLIDAYS, "SELECT MAX(ID) + 1 FROM holidays", CONNECTION_SYNCH);
 
+    // HouseLevelData.db2
+    PrepareStatement(HOTFIX_SEL_HOUSE_LEVEL_DATA, "SELECT ID, Level, QuestID, Field_12_0_7_67808_003 FROM house_level_data WHERE (`VerifiedBuild` > 0) = ?", CONNECTION_SYNCH);
+    PREPARE_MAX_ID_STMT(HOTFIX_SEL_HOUSE_LEVEL_DATA, "SELECT MAX(ID) + 1 FROM house_level_data", CONNECTION_SYNCH);
+
     // ImportPriceArmor.db2
     PrepareStatement(HOTFIX_SEL_IMPORT_PRICE_ARMOR, "SELECT ID, ClothModifier, LeatherModifier, ChainModifier, PlateModifier FROM import_price_armor"
         " WHERE (`VerifiedBuild` > 0) = ?", CONNECTION_SYNCH);
@@ -1292,6 +1296,14 @@ void HotfixDatabaseConnection::DoPrepareStatements()
     // NamesReservedLocale.db2
     PrepareStatement(HOTFIX_SEL_NAMES_RESERVED_LOCALE, "SELECT ID, Name, LocaleMask FROM names_reserved_locale WHERE (`VerifiedBuild` > 0) = ?", CONNECTION_SYNCH);
     PREPARE_MAX_ID_STMT(HOTFIX_SEL_NAMES_RESERVED_LOCALE, "SELECT MAX(ID) + 1 FROM names_reserved_locale", CONNECTION_SYNCH);
+
+    // NeighborhoodMap.db2
+    PrepareStatement(HOTFIX_SEL_NEIGHBORHOOD_MAP, "SELECT EntryPositionX, EntryPositionY, EntryPositionZ, ID, MapID, EntryRotation, UiTextureKitID, Flags FROM neighborhood_map WHERE (`VerifiedBuild` > 0) = ?", CONNECTION_SYNCH);
+    PREPARE_MAX_ID_STMT(HOTFIX_SEL_NEIGHBORHOOD_MAP, "SELECT MAX(ID) + 1 FROM neighborhood_map", CONNECTION_SYNCH);
+
+    // NeighborhoodPlot.db2
+    PrepareStatement(HOTFIX_SEL_NEIGHBORHOOD_PLOT, "SELECT Cost, Name, Field_12_0_0_63534_004X, Field_12_0_0_63534_004Y, Field_12_0_0_63534_004Z, Field_12_0_0_63534_005X, Field_12_0_0_63534_005Y, Field_12_0_0_63534_005Z, CornerstonePositionX, CornerstonePositionY, CornerstonePositionZ, CornerstoneRotationX, CornerstoneRotationY, CornerstoneRotationZ, TeleportPositionX, TeleportPositionY, TeleportPositionZ, ID, NeighborhoodMapID, Field_12_0_0_63534_010, CornerstoneGameObjectID, PlotIndex, WorldState, PlotGameObjectID, Field_12_0_0_65028_014, Field_12_0_0_64741_016 FROM neighborhood_plot WHERE (`VerifiedBuild` > 0) = ?", CONNECTION_SYNCH);
+    PREPARE_MAX_ID_STMT(HOTFIX_SEL_NEIGHBORHOOD_PLOT, "SELECT MAX(ID) + 1 FROM neighborhood_plot", CONNECTION_SYNCH);
 
     // NumTalentsAtLevel.db2
     PrepareStatement(HOTFIX_SEL_NUM_TALENTS_AT_LEVEL, "SELECT ID, NumTalents, NumTalentsDeathKnight, NumTalentsDemonHunter, Unknown1115"

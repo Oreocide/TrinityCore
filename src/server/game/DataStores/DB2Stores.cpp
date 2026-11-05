@@ -174,6 +174,7 @@ DB2Storage<GuildColorEmblemEntry>               sGuildColorEmblemStore("GuildCol
 DB2Storage<GuildPerkSpellsEntry>                sGuildPerkSpellsStore("GuildPerkSpells.db2", &GuildPerkSpellsLoadInfo::Instance);
 DB2Storage<HeirloomEntry>                       sHeirloomStore("Heirloom.db2", &HeirloomLoadInfo::Instance);
 DB2Storage<HolidaysEntry>                       sHolidaysStore("Holidays.db2", &HolidaysLoadInfo::Instance);
+DB2Storage<HouseLevelDataEntry>                 sHouseLevelDataStore("HouseLevelData.db2", &HouseLevelDataLoadInfo::Instance);
 DB2Storage<ImportPriceArmorEntry>               sImportPriceArmorStore("ImportPriceArmor.db2", &ImportPriceArmorLoadInfo::Instance);
 DB2Storage<ImportPriceQualityEntry>             sImportPriceQualityStore("ImportPriceQuality.db2", &ImportPriceQualityLoadInfo::Instance);
 DB2Storage<ImportPriceShieldEntry>              sImportPriceShieldStore("ImportPriceShield.db2", &ImportPriceShieldLoadInfo::Instance);
@@ -254,6 +255,8 @@ DB2Storage<NameGenEntry>                        sNameGenStore("NameGen.db2", &Na
 DB2Storage<NamesProfanityEntry>                 sNamesProfanityStore("NamesProfanity.db2", &NamesProfanityLoadInfo::Instance);
 DB2Storage<NamesReservedEntry>                  sNamesReservedStore("NamesReserved.db2", &NamesReservedLoadInfo::Instance);
 DB2Storage<NamesReservedLocaleEntry>            sNamesReservedLocaleStore("NamesReservedLocale.db2", &NamesReservedLocaleLoadInfo::Instance);
+DB2Storage<NeighborhoodMapEntry>                sNeighborhoodMapStore("NeighborhoodMap.db2", &NeighborhoodMapLoadInfo::Instance);
+DB2Storage<NeighborhoodPlotEntry>               sNeighborhoodPlotStore("NeighborhoodPlot.db2", &NeighborhoodPlotLoadInfo::Instance);
 DB2Storage<NumTalentsAtLevelEntry>              sNumTalentsAtLevelStore("NumTalentsAtLevel.db2", &NumTalentsAtLevelLoadInfo::Instance);
 DB2Storage<OverrideSpellDataEntry>              sOverrideSpellDataStore("OverrideSpellData.db2", &OverrideSpellDataLoadInfo::Instance);
 DB2Storage<ParagonReputationEntry>              sParagonReputationStore("ParagonReputation.db2", &ParagonReputationLoadInfo::Instance);
@@ -817,6 +820,7 @@ uint32 DB2Manager::LoadStores(std::string const& dataPath, LocaleConstant defaul
     LOAD_DB2(sGuildPerkSpellsStore);
     LOAD_DB2(sHeirloomStore);
     LOAD_DB2(sHolidaysStore);
+    LOAD_DB2(sHouseLevelDataStore);
     LOAD_DB2(sImportPriceArmorStore);
     LOAD_DB2(sImportPriceQualityStore);
     LOAD_DB2(sImportPriceShieldStore);
@@ -897,6 +901,8 @@ uint32 DB2Manager::LoadStores(std::string const& dataPath, LocaleConstant defaul
     LOAD_DB2(sNamesProfanityStore);
     LOAD_DB2(sNamesReservedStore);
     LOAD_DB2(sNamesReservedLocaleStore);
+    LOAD_DB2(sNeighborhoodMapStore);
+    LOAD_DB2(sNeighborhoodPlotStore);
     LOAD_DB2(sNumTalentsAtLevelStore);
     LOAD_DB2(sOverrideSpellDataStore);
     LOAD_DB2(sParagonReputationStore);
@@ -1053,6 +1059,14 @@ uint32 DB2Manager::LoadStores(std::string const& dataPath, LocaleConstant defaul
     LOAD_DB2(sWorldStateExpressionStore);
 
     // error checks
+
+    {
+        NeighborhoodPlotEntry const* firstPlot = sNeighborhoodPlotStore.GetNumRows() ? *sNeighborhoodPlotStore.begin() : nullptr;
+        TC_LOG_INFO("server.loading", ">> Housing DB2: {} neighborhood plots, {} neighborhood maps, {} house levels (first plot: id {}, map {}, cost {}, cornerstone gameobject {})",
+            sNeighborhoodPlotStore.GetNumRows(), sNeighborhoodMapStore.GetNumRows(), sHouseLevelDataStore.GetNumRows(),
+            firstPlot ? firstPlot->ID : 0, firstPlot ? firstPlot->NeighborhoodMapID : 0, firstPlot ? firstPlot->Cost : 0,
+            firstPlot ? firstPlot->CornerstoneGameObjectID : 0);
+    }
 
     // Check loaded DB2 files proper version
     for (uint32 criticalItemId : { ITEM_ACCOUNT_BANK_TAB_BAG, ITEM_CHARACTER_BANK_TAB_BAG })

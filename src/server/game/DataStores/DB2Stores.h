@@ -133,6 +133,7 @@ TC_GAME_API extern DB2Storage<GuildColorBorderEntry>                sGuildColorB
 TC_GAME_API extern DB2Storage<GuildColorEmblemEntry>                sGuildColorEmblemStore;
 TC_GAME_API extern DB2Storage<GuildPerkSpellsEntry>                 sGuildPerkSpellsStore;
 TC_GAME_API extern DB2Storage<HolidaysEntry>                        sHolidaysStore;
+TC_GAME_API extern DB2Storage<HouseLevelDataEntry>                  sHouseLevelDataStore;
 TC_GAME_API extern DB2Storage<ImportPriceArmorEntry>                sImportPriceArmorStore;
 TC_GAME_API extern DB2Storage<ImportPriceQualityEntry>              sImportPriceQualityStore;
 TC_GAME_API extern DB2Storage<ImportPriceShieldEntry>               sImportPriceShieldStore;
@@ -200,6 +201,8 @@ TC_GAME_API extern DB2Storage<MountEntry>                           sMountStore;
 TC_GAME_API extern DB2Storage<MountEquipmentEntry>                  sMountEquipmentStore;
 TC_GAME_API extern DB2Storage<MovieEntry>                           sMovieStore;
 TC_GAME_API extern DB2Storage<MythicPlusSeasonEntry>                sMythicPlusSeasonStore;
+TC_GAME_API extern DB2Storage<NeighborhoodMapEntry>                 sNeighborhoodMapStore;
+TC_GAME_API extern DB2Storage<NeighborhoodPlotEntry>                sNeighborhoodPlotStore;
 TC_GAME_API extern DB2Storage<OverrideSpellDataEntry>               sOverrideSpellDataStore;
 TC_GAME_API extern DB2Storage<ParagonReputationEntry>               sParagonReputationStore;
 TC_GAME_API extern DB2Storage<PerksActivityEntry>                   sPerksActivityStore;
