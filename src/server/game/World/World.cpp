@@ -85,6 +85,7 @@
 #include "QuestMgr.h"
 #include "QuestPools.h"
 #include "RealmList.h"
+#include "ResetClock.h"
 #include "ScenarioMgr.h"
 #include "ScenarioEventMgr.h"
 #include "ScriptMgr.h"
@@ -1197,6 +1198,24 @@ void World::LoadConfigSettings(bool reload)
 
     if (m_bool_configs[CONFIG_START_ALL_SPELLS])
         TC_LOG_WARN("server.loading", "PlayerStart.AllSpells enabled - may not function as intended!");
+
+    if (!reload)
+    {
+        bool realmClock = sConfigMgr->GetBoolDefault("Reset.RealmClock"sv, false);
+        int64 resetEpoch = sConfigMgr->GetInt64Default("Reset.Epoch"sv, Trinity::ResetClock::DefaultEpoch);
+        Trinity::ResetClock::Configure(realmClock, resetEpoch);
+        if (realmClock)
+        {
+            time_t epochTime = time_t(resetEpoch);
+            tm epochTm;
+            gmtime_r(&epochTime, &epochTm);
+            TC_LOG_INFO("server.loading", "Reset clock: realm clock, epoch {}, daily reset {:02}:{:02} UTC, weekly reset on weekday {}",
+                resetEpoch, epochTm.tm_hour, epochTm.tm_min, epochTm.tm_wday);
+        }
+    }
+    else if (sConfigMgr->GetBoolDefault("Reset.RealmClock"sv, false) != Trinity::ResetClock::IsRealmClock()
+        || sConfigMgr->GetInt64Default("Reset.Epoch"sv, Trinity::ResetClock::DefaultEpoch) != Trinity::ResetClock::GetEpoch())
+        TC_LOG_ERROR("server.loading", "Reset.RealmClock and Reset.Epoch option can't be changed at worldserver.conf reload, using current values.");
 
     //packet spoof punishment
     if (m_int_configs[CONFIG_PACKET_SPOOF_BANMODE] == BAN_CHARACTER)
@@ -3057,15 +3076,40 @@ void World::_UpdateRealmCharCount(PreparedQueryResult resultCharCount)
     }
 }
 
+static time_t GetNextDailyResetTime(time_t t);
+static time_t GetNextWeeklyResetTime(time_t t);
+static time_t GetNextMonthlyResetTime(time_t t);
+
 void World::InitQuestResetTimes()
 {
     m_NextDailyQuestReset = GetPersistentWorldVariable(NextDailyQuestResetTimeVarId);
     m_NextWeeklyQuestReset = GetPersistentWorldVariable(NextWeeklyQuestResetTimeVarId);
     m_NextMonthlyQuestReset = GetPersistentWorldVariable(NextMonthlyQuestResetTimeVarId);
+
+    if (!Trinity::ResetClock::IsRealmClock())
+        return;
+
+    // a stored future reset may still be on the old local-hour schedule; an overdue one is kept so the missed reset runs now
+    time_t const now = GameTime::GetGameTime();
+    auto realign = [this, now](time_t& next, time_t aligned, PersistentWorldVariable const& var)
+    {
+        if (next > now && next != aligned)
+        {
+            next = aligned;
+            SetPersistentWorldVariable(var, uint64(next));
+        }
+    };
+
+    realign(m_NextDailyQuestReset, GetNextDailyResetTime(now), NextDailyQuestResetTimeVarId);
+    realign(m_NextWeeklyQuestReset, GetNextWeeklyResetTime(now), NextWeeklyQuestResetTimeVarId);
+    realign(m_NextMonthlyQuestReset, GetNextMonthlyResetTime(now), NextMonthlyQuestResetTimeVarId);
 }
 
 static time_t GetNextDailyResetTime(time_t t)
 {
+    if (Trinity::ResetClock::IsRealmClock())
+        return Trinity::ResetClock::NextDaily(t);
+
     return GetLocalHourTimestamp(t, sWorld->getIntConfig(CONFIG_DAILY_QUEST_RESET_TIME_HOUR), true);
 }
 
@@ -3100,6 +3144,9 @@ void World::DailyReset()
 
 static time_t GetNextWeeklyResetTime(time_t t)
 {
+    if (Trinity::ResetClock::IsRealmClock())
+        return Trinity::ResetClock::NextWeekly(t);
+
     t = GetNextDailyResetTime(t);
     tm time = TimeBreakdown(t);
     int wday = time.tm_wday;
@@ -3139,6 +3186,9 @@ void World::ResetWeeklyQuests()
 
 static time_t GetNextMonthlyResetTime(time_t t)
 {
+    if (Trinity::ResetClock::IsRealmClock())
+        return Trinity::ResetClock::NextMonthly(t);
+
     t = GetNextDailyResetTime(t);
     tm time = TimeBreakdown(t);
     if (time.tm_mday == 1)
@@ -3192,18 +3242,24 @@ void World::InitRandomBGResetTime()
 
     // generate time by config
     time_t curTime = GameTime::GetGameTime();
-    tm localTm;
-    localtime_r(&curTime, &localTm);
-    localTm.tm_hour = getIntConfig(CONFIG_RANDOM_BG_RESET_HOUR);
-    localTm.tm_min = 0;
-    localTm.tm_sec = 0;
+    time_t nextDayResetTime;
+    if (Trinity::ResetClock::IsRealmClock())
+        nextDayResetTime = Trinity::ResetClock::NextDaily(curTime);
+    else
+    {
+        tm localTm;
+        localtime_r(&curTime, &localTm);
+        localTm.tm_hour = getIntConfig(CONFIG_RANDOM_BG_RESET_HOUR);
+        localTm.tm_min = 0;
+        localTm.tm_sec = 0;
 
-    // current day reset time
-    time_t nextDayResetTime = mktime(&localTm);
+        // current day reset time
+        nextDayResetTime = mktime(&localTm);
 
-    // next reset time before current moment
-    if (curTime >= nextDayResetTime)
-        nextDayResetTime += DAY;
+        // next reset time before current moment
+        if (curTime >= nextDayResetTime)
+            nextDayResetTime += DAY;
+    }
 
     // normalize reset time
     m_NextRandomBGReset = bgtime < curTime ? nextDayResetTime - DAY : nextDayResetTime;
@@ -3237,18 +3293,24 @@ void World::InitGuildResetTime()
 
     // generate time by config
     time_t curTime = GameTime::GetGameTime();
-    tm localTm;
-    localtime_r(&curTime, &localTm);
-    localTm.tm_hour = getIntConfig(CONFIG_GUILD_RESET_HOUR);
-    localTm.tm_min = 0;
-    localTm.tm_sec = 0;
+    time_t nextDayResetTime;
+    if (Trinity::ResetClock::IsRealmClock())
+        nextDayResetTime = Trinity::ResetClock::NextDaily(curTime);
+    else
+    {
+        tm localTm;
+        localtime_r(&curTime, &localTm);
+        localTm.tm_hour = getIntConfig(CONFIG_GUILD_RESET_HOUR);
+        localTm.tm_min = 0;
+        localTm.tm_sec = 0;
 
-    // current day reset time
-    time_t nextDayResetTime = mktime(&localTm);
+        // current day reset time
+        nextDayResetTime = mktime(&localTm);
 
-    // next reset time before current moment
-    if (curTime >= nextDayResetTime)
-        nextDayResetTime += DAY;
+        // next reset time before current moment
+        if (curTime >= nextDayResetTime)
+            nextDayResetTime += DAY;
+    }
 
     // normalize reset time
     m_NextGuildReset = gtime < curTime ? nextDayResetTime - DAY : nextDayResetTime;
@@ -3265,20 +3327,26 @@ void World::InitCurrencyResetTime()
 
     // generate time by config
     time_t curTime = GameTime::GetGameTime();
-    tm localTm;
-    localtime_r(&curTime, &localTm);
+    time_t nextWeekResetTime;
+    if (Trinity::ResetClock::IsRealmClock())
+        nextWeekResetTime = Trinity::ResetClock::NextBoundary(curTime, getIntConfig(CONFIG_CURRENCY_RESET_INTERVAL) * DAY);
+    else
+    {
+        tm localTm;
+        localtime_r(&curTime, &localTm);
 
-    localTm.tm_wday = getIntConfig(CONFIG_CURRENCY_RESET_DAY);
-    localTm.tm_hour = getIntConfig(CONFIG_CURRENCY_RESET_HOUR);
-    localTm.tm_min = 0;
-    localTm.tm_sec = 0;
+        localTm.tm_wday = getIntConfig(CONFIG_CURRENCY_RESET_DAY);
+        localTm.tm_hour = getIntConfig(CONFIG_CURRENCY_RESET_HOUR);
+        localTm.tm_min = 0;
+        localTm.tm_sec = 0;
 
-    // current week reset time
-    time_t nextWeekResetTime = mktime(&localTm);
+        // current week reset time
+        nextWeekResetTime = mktime(&localTm);
 
-    // next reset time before current moment
-    if (curTime >= nextWeekResetTime)
-        nextWeekResetTime += getIntConfig(CONFIG_CURRENCY_RESET_INTERVAL) * DAY;
+        // next reset time before current moment
+        if (curTime >= nextWeekResetTime)
+            nextWeekResetTime += getIntConfig(CONFIG_CURRENCY_RESET_INTERVAL) * DAY;
+    }
 
     // normalize reset time
     m_NextCurrencyReset = currencytime < curTime ? nextWeekResetTime - getIntConfig(CONFIG_CURRENCY_RESET_INTERVAL) * DAY : nextWeekResetTime;

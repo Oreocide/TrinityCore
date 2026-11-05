@@ -23,6 +23,7 @@
 #include "Log.h"
 #include "Map.h" // for TransferAbortReason
 #include "MapManager.h"
+#include "ResetClock.h"
 #include "World.h"
 
 InstanceLockData::InstanceLockData() = default;
@@ -533,6 +534,19 @@ InstanceLocksStatistics InstanceLockMgr::GetStatistics() const
 
 InstanceResetTimePoint InstanceLockMgr::GetNextResetTime(MapDb2Entries const& entries)
 {
+    if (Trinity::ResetClock::IsRealmClock())
+    {
+        switch (entries.MapDifficulty->ResetInterval)
+        {
+            case MAP_DIFFICULTY_RESET_DAILY:
+                return std::chrono::system_clock::from_time_t(Trinity::ResetClock::NextDaily(GameTime::GetGameTime()));
+            case MAP_DIFFICULTY_RESET_WEEKLY:
+                return std::chrono::system_clock::from_time_t(Trinity::ResetClock::NextWeekly(GameTime::GetGameTime()));
+            default:
+                break;
+        }
+    }
+
     tm dateTime = *GameTime::GetDateAndTime();
     dateTime.tm_sec = 0;
     dateTime.tm_min = 0;
