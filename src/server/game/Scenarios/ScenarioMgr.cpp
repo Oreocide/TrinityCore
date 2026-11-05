@@ -38,7 +38,15 @@ InstanceScenario* ScenarioMgr::CreateInstanceScenarioForTeam(InstanceMap* map, T
     auto dbDataItr = _scenarioDBData.find(std::make_pair(map->GetId(), map->GetDifficultyID()));
     // No scenario registered for this map and difficulty in the database
     if (dbDataItr == _scenarioDBData.end())
+    {
+        // Several dungeons can share a map and difficulty, each with its own scenario (Torghast wings and layers)
+        if (Optional<uint32> lfgDungeonsId = map->GetLfgDungeonsId())
+            if (LFGDungeonsEntry const* dungeon = sLFGDungeonsStore.LookupEntry(*lfgDungeonsId))
+                if (dungeon->ScenarioID)
+                    return CreateInstanceScenario(map, dungeon->ScenarioID);
+
         return nullptr;
+    }
 
     uint32 scenarioID = 0;
     switch (team)
