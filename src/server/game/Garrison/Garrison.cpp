@@ -30,6 +30,7 @@
 #include "Player.h"
 #include "VehicleDefines.h"
 #include "advstd.h"
+#include <G3D/Quat.h>
 
 Garrison::Garrison(Player* owner) : _owner(owner), _siteLevel(nullptr), _followerActivationsRemainingToday(1)
 {
@@ -272,7 +273,7 @@ void Garrison::InitializePlots()
 
             Plot& plotInfo = _plots[garrPlotInstanceId];
             plotInfo.PacketInfo.GarrPlotInstanceID = garrPlotInstanceId;
-            plotInfo.PacketInfo.PlotPos = Position(gameObject->Pos.X, gameObject->Pos.Y, gameObject->Pos.Z, 2 * std::acos(gameObject->Rot[3]));
+            plotInfo.PacketInfo.PlotPos = Position(gameObject->Pos.X, gameObject->Pos.Y, gameObject->Pos.Z, 2 * std::atan2(gameObject->Rot[2], gameObject->Rot[3]));
             plotInfo.PacketInfo.PlotType = plot->PlotType;
             plotInfo.Rotation = QuaternionData(gameObject->Rot[0], gameObject->Rot[1], gameObject->Rot[2], gameObject->Rot[3]);
             plotInfo.EmptyGameObjectId = gameObject->ID;
@@ -678,6 +679,15 @@ T* BuildingSpawnHelper(GameObject* building, ObjectGuid::LowType spawnId, Map* m
     spawn->Relocate(globalPosition);
     (spawn->*SecondaryRelocate)(globalPosition);
 
+    // spawn map rows store their rotation relative to the building, rotate it by the building yaw
+    if constexpr (std::is_same_v<T, GameObject>)
+    {
+        QuaternionData const& localRotation = spawn->GetLocalRotation();
+        G3D::Quat rotation = G3D::Quat(building->GetLocalRotation().x, building->GetLocalRotation().y, building->GetLocalRotation().z, building->GetLocalRotation().w)
+            * G3D::Quat(localRotation.x, localRotation.y, localRotation.z, localRotation.w);
+        spawn->SetLocalRotation(rotation.x, rotation.y, rotation.z, rotation.w);
+    }
+
     if (!spawn->IsPositionValid())
     {
         delete spawn;
@@ -689,6 +699,10 @@ T* BuildingSpawnHelper(GameObject* building, ObjectGuid::LowType spawnId, Map* m
         delete spawn;
         return nullptr;
     }
+
+    // collision model was built at the unrotated spawn map position
+    if constexpr (std::is_same_v<T, GameObject>)
+        spawn->UpdateModelPosition();
 
     return spawn;
 }
