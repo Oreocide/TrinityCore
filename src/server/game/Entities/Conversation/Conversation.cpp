@@ -145,7 +145,15 @@ struct ConversationActorFillVisitor
 
     void operator()(ConversationActorNoObjectTemplate const& noObject) const
     {
-        _conversation->AddActor(_actor.Id, _actor.Index, ConversationActorType::WorldObject, noObject.CreatureId, noObject.CreatureDisplayInfoId);
+        // A speaker summoned for this player has no spawn id to bind, and the client needs the object to show its speech bubble
+        FindCreatureOptions options;
+        options.CreatureId = noObject.CreatureId;
+        options.PrivateObjectOwnerGuid = _creator->GetGUID();
+
+        if (Creature const* creature = _creator->FindNearestCreatureWithOptions(_map->GetVisibilityRange(), options))
+            _conversation->AddActor(_actor.Id, _actor.Index, creature->GetGUID());
+        else
+            _conversation->AddActor(_actor.Id, _actor.Index, ConversationActorType::WorldObject, noObject.CreatureId, noObject.CreatureDisplayInfoId);
     }
 
     void operator()([[maybe_unused]] ConversationActorActivePlayerTemplate const& activePlayer) const
