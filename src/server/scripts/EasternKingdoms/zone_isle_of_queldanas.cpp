@@ -21,6 +21,7 @@
 #include "MotionMaster.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
+#include "SpellScript.h"
 #include "TemporarySummon.h"
 
 enum ThalorienDawnseekerTexts
@@ -416,7 +417,31 @@ private:
     ObjectGuid _morlenGUID;
 };
 
+// 1254519 - Mark Survivor (Wake of the Darkwell, quest 92520)
+// The click spell's only effect is a dummy. Marking a survivor counts as killing it for the player: its own entry,
+// its KillCredit entries and its creature labels (label 5590 "Other survivors recovered") give credit. The mages then
+// take the survivor away, so it leaves shortly after.
+class spell_isle_of_queldanas_mark_survivor : public SpellScript
+{
+    void HandleDummy(SpellEffIndex /*effIndex*/)
+    {
+        Player* player = Object::ToPlayer(GetCaster());
+        Creature* survivor = GetHitCreature();
+        if (!player || !survivor)
+            return;
+
+        player->KilledMonster(survivor);
+        survivor->DespawnOrUnsummon(2s);
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_isle_of_queldanas_mark_survivor::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
+    }
+};
+
 void AddSC_isle_of_queldanas()
 {
     RegisterCreatureAI(npc_thalorien_dawnseeker);
+    RegisterSpellScript(spell_isle_of_queldanas_mark_survivor);
 }
