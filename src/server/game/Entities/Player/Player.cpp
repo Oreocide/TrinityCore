@@ -16032,6 +16032,11 @@ void Player::SetQuestStatus(uint32 questId, QuestStatus status, bool update /*= 
         if (!quest->IsTurnIn())
             m_QuestStatusSave[questId] = QUEST_DEFAULT_SAVE_TYPE;
 
+        // Phases before the hooks, anything a script summons inherits them. Visibility waits for the next notify, this can run inside the objective loop
+        if (IsInWorld() && oldStatus != status && quest->HasFlag(QUEST_FLAGS_UPDATE_PHASESHIFT))
+            if (PhasingHandler::OnConditionChange(this, false))
+                UpdateObjectVisibility(false);
+
         sScriptMgr->OnQuestStatusChange(this, questId);
         sScriptMgr->OnQuestStatusChange(this, quest, oldStatus, status);
     }
@@ -16955,6 +16960,10 @@ void Player::UpdateQuestObjectiveProgress(QuestObjectiveType objectiveType, int3
 
         if (objectiveWasComplete != objectiveIsNowComplete)
             anyObjectiveChangedCompletionState = true;
+
+        // Any progress, phase conditions can ask for a partial count
+        if (IsInWorld() && quest->HasFlag(QUEST_FLAGS_UPDATE_PHASESHIFT))
+            updatePhaseShift = true;
 
         if (objectiveIsNowComplete && objective->CompletionEffect)
         {
