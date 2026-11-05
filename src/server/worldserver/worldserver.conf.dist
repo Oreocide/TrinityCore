@@ -1163,6 +1163,14 @@ WorldStateScheduler.Enable = 1
 WorldStateScheduler.Seed = 0
 
 #
+#    WorldStates.MaxBroadcastPerTick
+#        Description: Maximum number of changed realm world states sent to players per world
+#                     update. Larger batches are spread over the following updates.
+#        Default:     0 - (No limit)
+
+WorldStates.MaxBroadcastPerTick = 0
+
+#
 #    Quests.EnableQuestTracker
 #        Description: Store data in the database about quest completion and abandonment to help finding bugged quests.
 #        Default:     0  - (Disabled)

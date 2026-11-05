@@ -198,17 +198,18 @@ void WorldStateMgr::Update()
         for (auto const& [worldStateId, value] : data.RealmWorldStateValues)
             data.RealmWorldStatePacketCache.emplace_back(worldStateId, value);
 
-        // Broadcast update to all players on the server
-        for (WorldStateValueContainer::value_type const* changedRealmWorldState : data.ChangedRealmWorldStates)
+        // Broadcast update to all players on the server, a large batch (scheduled rotations) is spread over several ticks
+        uint32 maxBroadcasts = sWorld->getIntConfig(CONFIG_WORLD_STATE_MAX_BROADCAST_PER_TICK);
+        uint32 broadcasts = 0;
+        for (auto itr = data.ChangedRealmWorldStates.begin(); itr != data.ChangedRealmWorldStates.end() && (!maxBroadcasts || broadcasts < maxBroadcasts); ++broadcasts)
         {
             WorldPackets::WorldState::UpdateWorldState updateWorldState;
-            updateWorldState.VariableID = changedRealmWorldState->first;
-            updateWorldState.Value = changedRealmWorldState->second;
+            updateWorldState.VariableID = (*itr)->first;
+            updateWorldState.Value = (*itr)->second;
             updateWorldState.Hidden = false;
             sWorld->SendGlobalMessage(updateWorldState.Write());
+            itr = data.ChangedRealmWorldStates.erase(itr);
         }
-
-        data.ChangedRealmWorldStates.clear();
     }
 }
 

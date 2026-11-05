@@ -767,6 +767,7 @@ void World::LoadConfigSettings(bool reload)
         { .Name = "Instance.UnloadDelay"sv, .DefaultValue = 30 * MINUTE * IN_MILLISECONDS, .Index = CONFIG_INSTANCE_UNLOAD_DELAY },
         { .Name = "Quests.DailyResetTime"sv, .DefaultValue = 3, .Index = CONFIG_DAILY_QUEST_RESET_TIME_HOUR, .Min = 0, .Max = 23 },
         { .Name = "Quests.WeeklyResetWDay"sv, .DefaultValue = 3, .Index = CONFIG_WEEKLY_QUEST_RESET_TIME_WDAY, .Min = 0, .Max = 6 },
+        { .Name = "WorldStates.MaxBroadcastPerTick"sv, .DefaultValue = 0, .Index = CONFIG_WORLD_STATE_MAX_BROADCAST_PER_TICK },
         { .Name = "MaxPrimaryTradeSkill"sv, .DefaultValue = 2, .Index = CONFIG_MAX_PRIMARY_TRADE_SKILL },
         { .Name = "MinPetitionSigns"sv, .DefaultValue = 4, .Index = CONFIG_MIN_PETITION_SIGNS, .Max = 4 },
         { .Name = "GM.LoginState"sv, .DefaultValue = 2, .Index = CONFIG_GM_LOGIN_STATE },
