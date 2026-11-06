@@ -585,8 +585,9 @@ bool AuctionBotSeller::GetItemsToSell(SellerConfiguration& config, ItemsToSellAr
     return found;
 }
 
-// Set items price. All important value are passed by address.
-void AuctionBotSeller::SetPricesOfItem(ItemTemplate const* itemProto, SellerConfiguration& config, uint32& buyout, uint32& bid, uint32 stackCount)
+// Set the price of one unit of the item. All important value are passed by address.
+// Commodity auctions store the price per unit and other items are always listed one at a time.
+void AuctionBotSeller::SetPricesOfItem(ItemTemplate const* itemProto, SellerConfiguration& config, uint32& buyout, uint32& bid)
 {
     uint32 classRatio = config.GetPriceRatioPerClass(ItemClass(itemProto->GetClass()));
     uint32 qualityRatio = config.GetPriceRatioPerQuality(AuctionQuality(itemProto->GetQuality()));
@@ -615,7 +616,7 @@ void AuctionBotSeller::SetPricesOfItem(ItemTemplate const* itemProto, SellerConf
     if (sAuctionBotConfig->GetConfig(CONFIG_AHBOT_BUYPRICE_SELLER))
         buyPrice = sellPrice;
 
-    float basePriceFloat = buyPrice * stackCount / (itemProto->GetClass() == 6 ? 200.0f : static_cast<float>(itemProto->GetBuyCount()));
+    float basePriceFloat = buyPrice / (itemProto->GetClass() == 6 ? 200.0f : static_cast<float>(itemProto->GetBuyCount()));
     basePriceFloat *= priceRatio;
 
     float range = basePriceFloat * 0.04f;
@@ -873,7 +874,7 @@ void AuctionBotSeller::AddNewAuctions(SellerConfiguration& config)
         uint32 bidPrice = 0;
 
         // Price of items are set here
-        SetPricesOfItem(prototype, config, buyoutPrice, bidPrice, stackCount);
+        SetPricesOfItem(prototype, config, buyoutPrice, bidPrice);
 
         // Deposit time
         uint32 etime = urand(1, 3);
