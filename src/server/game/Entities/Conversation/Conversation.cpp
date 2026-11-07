@@ -27,6 +27,7 @@
 #include "Map.h"
 #include "MapUtils.h"
 #include "ObjectAccessor.h"
+#include "ObjectMgr.h"
 #include "PhasingHandler.h"
 #include "Player.h"
 #include "UpdateData.h"
@@ -137,6 +138,18 @@ struct ConversationActorFillVisitor
             // If creature is in a personal phase then we pick that one specifically
             if (creature->GetPhaseShift().GetPersonalGuid() == _creator->GetGUID())
                 break;
+        }
+
+        // The spawn is not on this map (or not loaded): an NPC with copies on several maps is bound to the one copy a sniff saw.
+        // The speaker is then the nearest creature of that entry the creator can see, the copy the player is talking to
+        if (!bestFit)
+        {
+            if (CreatureData const* data = sObjectMgr->GetCreatureData(worldObject.SpawnId))
+            {
+                FindCreatureOptions options;
+                options.CreatureId = data->id;
+                bestFit = _creator->FindNearestCreatureWithOptions(_map->GetVisibilityRange(), options);
+            }
         }
 
         if (bestFit)
