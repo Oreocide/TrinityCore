@@ -25,7 +25,8 @@
  * The arena, from the 2026-11-06 capture:
  * - Four pillars. A Stomp destroys the pillars its 16 yd dummy effect reaches (it hits the Pillar Stalker at each pillar centre).
  *   The charge runs at 20 yd/s along the line to the marked player and stops at the first standing pillar on that line (the
- *   pillar is a 3.15 yd half-extent square turned 45 degrees) or at the wall (navmesh edge). Only a charge stuns him.
+ *   pillar is a 3.15 yd half-extent square turned 45 degrees), at a closed arena door, or at the wall (navmesh edge); it tramples
+ *   the players in front of him on the way. Only a charge stuns him. Pillars not spawned on a difficulty count as down.
  * - A destroyed pillar: its object opens, a rubble pile appears at its centre, two fixed Collapse Stalkers get that pillar's
  *   Structural Collapse, rim rubble falls at fixed points and piles appear there 3.75 s later. Until the first wall hit every
  *   player gets a stack of Crumbling Foundation; a wall hit replaces it with Collapsing Foundation for the rest of the fight.
@@ -43,6 +44,7 @@
 #include "Containers.h"
 #include "GameObject.h"
 #include "InstanceScript.h"
+#include "Log.h"
 #include "Map.h"
 #include "MotionMaster.h"
 #include "ObjectAccessor.h"
@@ -284,11 +286,24 @@ static SludgefistPillar const* GetPillarByCollapseSpell(uint32 spellId)
     return nullptr;
 }
 
-// distance along a ray (unit direction dx, dy) to where it enters a pillar's square, or a negative value when it misses
-static float PillarRayEntry(float startX, float startY, float dx, float dy, Position const& centre)
+struct RayBox
 {
-    float c = std::cos(-PillarOrientation);
-    float s = std::sin(-PillarOrientation);
+    float Min[2];   // local x, y
+    float Max[2];
+};
+
+static constexpr RayBox PillarBox = { { -PillarHalfExtent, -PillarHalfExtent }, { PillarHalfExtent, PillarHalfExtent } };
+
+// the doors in the arena walls (closed during the fight); the navmesh runs on through their doorways, so the charge is clipped
+// against them. Model bounds from GameObjectModels.dtree (display 61497).
+static constexpr uint32 ArenaDoors[] = { 349100, 349101, 349102 };
+static constexpr RayBox ArenaDoorBox = { { -7.93f, -12.10f }, { 1.42f, 11.95f } };
+
+// distance along a ray (unit direction dx, dy) to where it enters a box turned by orientation, or a negative value when it misses
+static float RayBoxEntry(float startX, float startY, float dx, float dy, Position const& centre, float orientation, RayBox const& box, float scale = 1.0f)
+{
+    float c = std::cos(-orientation);
+    float s = std::sin(-orientation);
     float px = startX - centre.GetPositionX();
     float py = startY - centre.GetPositionY();
     float const local[2] = { px * c - py * s, px * s + py * c };
@@ -298,15 +313,17 @@ static float PillarRayEntry(float startX, float startY, float dx, float dy, Posi
     float tMax = std::numeric_limits<float>::max();
     for (uint8 axis = 0; axis < 2; ++axis)
     {
+        float lo = box.Min[axis] * scale;
+        float hi = box.Max[axis] * scale;
         if (std::abs(dir[axis]) < 1e-6f)
         {
-            if (std::abs(local[axis]) > PillarHalfExtent)
+            if (local[axis] < lo || local[axis] > hi)
                 return -1.0f;
             continue;
         }
 
-        float t1 = (-PillarHalfExtent - local[axis]) / dir[axis];
-        float t2 = (PillarHalfExtent - local[axis]) / dir[axis];
+        float t1 = (lo - local[axis]) / dir[axis];
+        float t2 = (hi - local[axis]) / dir[axis];
         if (t1 > t2)
             std::swap(t1, t2);
         tMin = std::max(tMin, t1);
@@ -346,6 +363,9 @@ struct boss_sludgefist : public BossAI
         Talk(SAY_AGGRO);
         DoCastSelf(SPELL_SEISMIC_SHIFT, true);
         events.ScheduleEvent(EVENT_GIANT_FISTS, GiantFistsDelay);
+        // a pillar whose object is not spawned on this difficulty is treated as already down
+        for (size_t i = 0; i < PillarCount; ++i)
+            _pillarDown[i] = !GetPillarObject(Pillars[i]);
         StartCycle();
     }
 
@@ -598,15 +618,34 @@ struct boss_sludgefist : public BossAI
             return;
 
         float angle = me->GetAbsoluteAngle(target);
+        _chargeDirX = std::cos(angle);
+        _chargeDirY = std::sin(angle);
         Position dest = ChargeWallPoint(angle);
-        float stopDist = me->GetExactDist2d(dest);
+        float wallDist = me->GetExactDist2d(dest);
+        float stopDist = wallDist;
+        bool clipped = false;
+
+        for (uint32 doorEntry : ArenaDoors)
+        {
+            GameObject* door = me->FindNearestGameObject(doorEntry, 300.0f);
+            if (!door || door->GetGoState() != GO_STATE_READY)
+                continue;
+
+            float entry = RayBoxEntry(me->GetPositionX(), me->GetPositionY(), _chargeDirX, _chargeDirY, door->GetPosition(), door->GetOrientation(), ArenaDoorBox, door->GetObjectScale());
+            if (entry >= 0.0f && entry < stopDist)
+            {
+                stopDist = entry;
+                clipped = true;
+            }
+        }
+
         _chargePillar.reset();
         for (size_t i = 0; i < PillarCount; ++i)
         {
             if (_pillarDown[i])
                 continue;
 
-            float entry = PillarRayEntry(me->GetPositionX(), me->GetPositionY(), std::cos(angle), std::sin(angle), Pillars[i].Centre);
+            float entry = RayBoxEntry(me->GetPositionX(), me->GetPositionY(), _chargeDirX, _chargeDirY, Pillars[i].Centre, PillarOrientation, PillarBox);
             if (entry >= 0.0f && entry < stopDist)
             {
                 stopDist = entry;
@@ -614,13 +653,16 @@ struct boss_sludgefist : public BossAI
             }
         }
 
-        if (_chargePillar)
+        if (_chargePillar || clipped)
         {
-            dest.Relocate(me->GetPositionX() + std::cos(angle) * stopDist, me->GetPositionY() + std::sin(angle) * stopDist, me->GetPositionZ());
+            dest.Relocate(me->GetPositionX() + _chargeDirX * stopDist, me->GetPositionY() + _chargeDirY * stopDist, me->GetPositionZ());
             float groundZ = me->GetMapHeight(dest.GetPositionX(), dest.GetPositionY(), dest.GetPositionZ());
             if (groundZ > INVALID_HEIGHT)
                 dest.m_positionZ = groundZ;
         }
+
+        TC_LOG_DEBUG("scripts", "Sludgefist charge: start {} angle {:.3f} wall point {:.2f} yd, stop {:.2f} yd at {} ({})", me->GetPosition().ToString(),
+            angle, wallDist, stopDist, _chargePillar ? Pillars[*_chargePillar].GameObjectEntry : 0, _chargePillar ? "pillar" : clipped ? "door" : "wall");
 
         _trampled.clear();
         _charging = true;
@@ -628,12 +670,19 @@ struct boss_sludgefist : public BossAI
         events.ScheduleEvent(EVENT_CHARGE_TRAMPLE, 0ms);
     }
 
+    // only players in his path: the front half of a 4 yd circle around him, checked every 0.1 s (2 yd of travel)
     void Trample()
     {
         for (MapReference const& ref : me->GetMap()->GetPlayers())
-            if (Player* player = ref.GetSource())
-                if (player->IsAlive() && !player->IsGameMaster() && me->GetExactDist2d(player) <= ChargeHitHalfWidth && _trampled.insert(player->GetGUID()).second)
-                    DoCast(player, SPELL_HEEDLESS_CHARGE_HIT, true);
+        {
+            Player* player = ref.GetSource();
+            if (!player || !player->IsAlive() || player->IsGameMaster() || me->GetExactDist2d(player) > ChargeHitHalfWidth)
+                continue;
+
+            float along = (player->GetPositionX() - me->GetPositionX()) * _chargeDirX + (player->GetPositionY() - me->GetPositionY()) * _chargeDirY;
+            if (along >= 0.0f && _trampled.insert(player->GetGUID()).second)
+                DoCast(player, SPELL_HEEDLESS_CHARGE_HIT, true);
+        }
     }
 
     void MovementInform(uint32 /*type*/, uint32 id) override
@@ -837,6 +886,8 @@ private:
     bool _gruesomeRage = false;
     bool _wallHit = false;
     bool _charging = false;
+    float _chargeDirX = 1.0f;
+    float _chargeDirY = 0.0f;
     std::array<bool, PillarCount> _pillarDown = { };
     Optional<size_t> _chargePillar;
     ObjectGuid _gazeTarget;
