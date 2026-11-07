@@ -21,19 +21,29 @@
  * loop on the boss aura 330287 (24 s period, first tick on apply). Offsets are the medians of 30 Normal and 16 Heroic Warcraft Logs
  * kills and agree with DBM, BigWigs and a retail capture (trinitycore-tracking/castle-nathria/bosses/hungering-destroyer.md).
  *
- * Not done: Growing Hunger 332295 is applied as retail does, but its aura (SPELL_AURA_MOD_DAMAGE_DONE_FOR_MECHANIC, 276) has no
- * handler in this core; Expunge damages only the marked player (retail's radius grows with missing health); Consume's drain does
- * not fall off with distance; the Power Tracker energy bar and the 600 s berserk (spell unknown) are not modelled.
+ * Growing Hunger (capture and 60 Normal / 20 Heroic Warcraft Logs pulls): each Hungering Strikes proc on the same target as the
+ * last one adds a stack (18 s, refreshed by every stack), the first proc on another target removes the aura and adds none. The
+ * core applies the aura (SPELL_AURA_MOD_DAMAGE_DONE_FOR_MECHANIC, mechanic 35) to the leech at the spell's 7.5% per stack; retail
+ * measures about 8.1%. Expunge: when the 6 s mark expires every player inside that player's circle takes the eruption at full
+ * damage; the circle is 5 yd while the marked player is at full health and 6 yd with any health missing (larger losses were never
+ * captured). Berserk: Mythic only, at 420 s (Warcraft Logs, DBM, BigWigs); Normal and Heroic pulls never reached a berserk.
+ *
+ * Not researched yet: Consume's drain falloff with distance and the Power Tracker energy bar.
  */
 
+#include "AreaTrigger.h"
+#include "AreaTriggerAI.h"
 #include "CellImpl.h"
 #include "Containers.h"
 #include "GridNotifiersImpl.h"
 #include "InstanceScript.h"
 #include "Map.h"
+#include "ObjectAccessor.h"
+#include "Player.h"
 #include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "SpellAuraEffects.h"
+#include "SpellAuras.h"
 #include "SpellScript.h"
 #include "castle_nathria.h"
 
@@ -54,7 +64,8 @@ enum HungeringDestroyerSpells
     SPELL_EXPUNGE_SELECTOR          = 329719,   // every player casts Expunge on itself
     SPELL_EXPUNGE                   = 329725,
     SPELL_EXPUNGE_DAMAGE            = 329742,
-    SPELL_CONSUME                   = 334522
+    SPELL_CONSUME                   = 334522,
+    SPELL_BERSERK                   = 26662
 };
 
 enum HungeringDestroyerEvents
@@ -66,7 +77,8 @@ enum HungeringDestroyerEvents
     EVENT_EXPUNGE,
     EVENT_CONSUME,
     EVENT_POWER_TRACKER,
-    EVENT_MIASMA_AURA
+    EVENT_MIASMA_AURA,
+    EVENT_BERSERK
 };
 
 enum HungeringDestroyerTexts
@@ -108,6 +120,10 @@ static constexpr HungeringDestroyerLoop HeroicLoop =
 static constexpr Milliseconds MiasmaAuraDelay = 3s;
 static constexpr Milliseconds PowerTrackerDelay = 3s + 150ms;
 static constexpr Milliseconds PowerTrackerAfterConsume = 10s + 500ms;   // 4 s cast + 6 s channel + 0.5 s (retail 93.7 -> 104.2)
+static constexpr Milliseconds MythicBerserk = 420s;
+static constexpr Milliseconds ExpungeScaleStep = 500ms;                 // retail re-aims the circle every 0.5 s
+static constexpr float ExpungeScaleFullHealth = 5.0f;
+static constexpr float ExpungeScaleMissingHealth = 6.0f;
 
 // 164261 - Hungering Destroyer
 struct boss_hungering_destroyer : public BossAI
@@ -122,11 +138,13 @@ struct boss_hungering_destroyer : public BossAI
     void JustEngagedWith(Unit* who) override
     {
         BossAI::JustEngagedWith(who);
+        // Growing Hunger comes with the first Hungering Strikes proc (capture: 0.031 s)
         DoCastSelf(SPELL_HUNGERING_STRIKES_AURA, true);
-        DoCastSelf(SPELL_GROWING_HUNGER, true);
         events.ScheduleEvent(EVENT_POWER_TRACKER, PowerTrackerDelay);
         events.ScheduleEvent(EVENT_MIASMA_AURA, MiasmaAuraDelay);
         events.ScheduleEvent(EVENT_LOOP, 0ms);
+        if (me->GetMap()->IsMythic())
+            events.ScheduleEvent(EVENT_BERSERK, MythicBerserk);
     }
 
     void ScheduleLoop()
@@ -178,30 +196,46 @@ struct boss_hungering_destroyer : public BossAI
                 Talk(SAY_EMOTE_CONSUME);
                 events.ScheduleEvent(EVENT_POWER_TRACKER, PowerTrackerAfterConsume);
                 break;
+            case EVENT_BERSERK:
+                DoCastSelf(SPELL_BERSERK, true);
+                break;
             default:
                 break;
         }
     }
 };
 
-// 332294 - Hungering Strikes: the melee swing or ability that procs it leeches the target
+// 332294 - Hungering Strikes: the melee swing or ability that procs it (0.5 s proc cooldown) leeches the target; Growing Hunger
+// gains a stack before the leech when the target is the same as last time, and is removed when it is not
 class spell_hungering_destroyer_hungering_strikes : public AuraScript
 {
     bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        return ValidateSpellInfo({ SPELL_HUNGERING_STRIKES });
+        return ValidateSpellInfo({ SPELL_HUNGERING_STRIKES, SPELL_GROWING_HUNGER });
     }
 
-    void HandleProc(AuraEffect const* /*aurEff*/, ProcEventInfo& eventInfo)
+    void HandleProc(AuraEffect const* aurEff, ProcEventInfo& eventInfo)
     {
-        if (Unit* target = eventInfo.GetActionTarget())
-            GetTarget()->CastSpell(target, SPELL_HUNGERING_STRIKES, CastSpellExtraArgs(TRIGGERED_FULL_MASK).SetTriggeringAura(GetEffect(EFFECT_0)));
+        Unit* boss = GetTarget();
+        Unit* target = eventInfo.GetActionTarget();
+        if (!target)
+            return;
+
+        if (!_lastTarget.IsEmpty() && _lastTarget != target->GetGUID())
+            boss->RemoveAurasDueToSpell(SPELL_GROWING_HUNGER);
+        else
+            boss->CastSpell(boss, SPELL_GROWING_HUNGER, CastSpellExtraArgs(aurEff));
+        _lastTarget = target->GetGUID();
+
+        boss->CastSpell(target, SPELL_HUNGERING_STRIKES, CastSpellExtraArgs(aurEff));
     }
 
     void Register() override
     {
         OnEffectProc += AuraEffectProcFn(spell_hungering_destroyer_hungering_strikes::HandleProc, EFFECT_0, SPELL_AURA_DUMMY);
     }
+
+    ObjectGuid _lastTarget;
 };
 
 // 329295 - Gluttonous Miasma (selector): random players other than the current tank; 2 below 15 players, 3 from 15, 4 from 23 on
@@ -313,7 +347,8 @@ class spell_hungering_destroyer_expunge_selector : public SpellScript
     }
 };
 
-// 329725 - Expunge: when the 6 s aura expires, the boss strikes the marked player
+// 329725 - Expunge: when the 6 s aura expires, every player inside the marked player's circle (the marked player too) takes a full
+// eruption; overlapping circles hit a player once per circle (Warcraft Logs: no split, hits per detonation grow with raid size)
 class spell_hungering_destroyer_expunge : public AuraScript
 {
     bool Validate(SpellInfo const* /*spellInfo*/) override
@@ -321,19 +356,79 @@ class spell_hungering_destroyer_expunge : public AuraScript
         return ValidateSpellInfo({ SPELL_EXPUNGE_DAMAGE });
     }
 
-    void AfterRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    // runs before the default handler removes the areatrigger, so its inside list is still there
+    void HandleRemove(AuraEffect const* aurEff, AuraEffectHandleModes /*mode*/)
     {
         if (GetTargetApplication()->GetRemoveMode() != AURA_REMOVE_BY_EXPIRE)
             return;
 
-        if (Unit* boss = GetCaster())
-            boss->CastSpell(GetTarget(), SPELL_EXPUNGE_DAMAGE, true);
+        Unit* boss = GetCaster();
+        if (!boss)
+            return;
+
+        Unit* owner = GetTarget();
+        std::vector<Unit*> victims = { owner };
+        for (AreaTrigger const* at : boss->GetAreaTriggers(SPELL_EXPUNGE))
+        {
+            if (at->GetAuraEffect() != aurEff)
+                continue;
+
+            for (ObjectGuid const& guid : at->GetInsideUnits())
+                if (Player* player = ObjectAccessor::GetPlayer(*owner, guid))
+                    if (player != owner && player->IsAlive())
+                        victims.push_back(player);
+        }
+
+        for (Unit* victim : victims)
+            boss->CastSpell(victim, SPELL_EXPUNGE_DAMAGE, true);
     }
 
     void Register() override
     {
-        AfterEffectRemove += AuraEffectRemoveFn(spell_hungering_destroyer_expunge::AfterRemove, EFFECT_0, SPELL_AURA_AREA_TRIGGER, AURA_EFFECT_HANDLE_REAL);
+        OnEffectRemove += AuraEffectRemoveFn(spell_hungering_destroyer_expunge::HandleRemove, EFFECT_0, SPELL_AURA_AREA_TRIGGER, AURA_EFFECT_HANDLE_REAL);
     }
+};
+
+// 329725 - Expunge (areatrigger create properties 20517): every 0.5 s, and when the marked player's health crosses full, retail
+// re-aims the circle's scale from its current value to 5 (full health) or 6 (any health missing) over 0.5 s
+struct at_hungering_destroyer_expunge : AreaTriggerAI
+{
+    using AreaTriggerAI::AreaTriggerAI;
+
+    void OnCreate(Spell const* /*creatingSpell*/) override
+    {
+        at->SetTimeToTargetScale(ExpungeScaleStep.count());
+        UpdateScale();
+    }
+
+    void OnUpdate(uint32 diff) override
+    {
+        _sinceUpdate += Milliseconds(diff);
+        if (_sinceUpdate >= ExpungeScaleStep || IsOwnerAtFullHealth() != _fullHealth)
+            UpdateScale();
+    }
+
+    bool IsOwnerAtFullHealth() const
+    {
+        Unit* owner = at->GetTarget();
+        return !owner || owner->IsFullHealth();
+    }
+
+    void UpdateScale()
+    {
+        _sinceUpdate = 0ms;
+        _fullHealth = IsOwnerAtFullHealth();
+        std::array<DBCPosition2D, 2> points =
+        { {
+            { 0.0f, at->CalcCurrentScale() },
+            { 1.0f, _fullHealth ? ExpungeScaleFullHealth : ExpungeScaleMissingHealth }
+        } };
+        at->SetOverrideScaleCurve(points);
+    }
+
+private:
+    Milliseconds _sinceUpdate = 0ms;
+    bool _fullHealth = true;
 };
 
 void AddSC_boss_hungering_destroyer()
@@ -345,4 +440,5 @@ void AddSC_boss_hungering_destroyer()
     RegisterSpellScript(spell_hungering_destroyer_volatile_ejection);
     RegisterSpellScript(spell_hungering_destroyer_expunge_selector);
     RegisterSpellScript(spell_hungering_destroyer_expunge);
+    RegisterAreaTriggerAI(at_hungering_destroyer_expunge);
 }
