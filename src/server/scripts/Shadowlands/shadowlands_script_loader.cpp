@@ -24,6 +24,7 @@ void AddSC_theater_of_pain_arena();
 
 void AddSC_instance_castle_nathria();
 void AddSC_boss_hungering_destroyer();
+void AddSC_boss_sludgefist();
 
 void AddSC_boss_eye_of_the_jailer_sod();
 void AddSC_boss_the_tarragrue_sod();
@@ -50,6 +51,7 @@ void AddShadowlandsScripts()
     // Castle Nathria
     AddSC_instance_castle_nathria();
     AddSC_boss_hungering_destroyer();
+    AddSC_boss_sludgefist();
 
     // Sanctum of Domination
     AddSC_boss_eye_of_the_jailer_sod();
