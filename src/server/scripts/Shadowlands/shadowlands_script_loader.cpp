@@ -22,6 +22,8 @@ void AddSC_torghast_spell_scripts();
 void AddSC_instance_torghast();
 void AddSC_theater_of_pain_arena();
 
+void AddSC_instance_castle_nathria();
+
 void AddSC_boss_eye_of_the_jailer_sod();
 void AddSC_boss_the_tarragrue_sod();
 void AddSC_boss_kelthuzad_sod();
@@ -43,6 +45,9 @@ void AddShadowlandsScripts()
 
     // Maldraxxus
     AddSC_theater_of_pain_arena();
+
+    // Castle Nathria
+    AddSC_instance_castle_nathria();
 
     // Sanctum of Domination
     AddSC_boss_eye_of_the_jailer_sod();
