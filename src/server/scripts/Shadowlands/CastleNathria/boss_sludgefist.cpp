@@ -36,7 +36,9 @@
  * Not settled (one solo Normal capture): how retail picks the missile counts and spots, whether the aimed Falling Rubble marks one
  * player or every player in a raid (one is used here), which player Giant Fists measures its 5 yd from (the primary target here),
  * the meaning of [DNT] Pillar Counter 335376 (not cast), and the double Impact with an 11 ms stun seen at the third charge.
- * The Heroic Chain Slam is not cast.
+ * Chain Slam (Heroic, Mythic; Warcraft Logs): one non-tank marked and rooted at 28.8 s, a 1.5 s cast 2.5 s later, damage shared
+ * within 7 yd; on Mythic fewer than four hit fill his rage. Not settled: its pull to the boss (jump parameters 482 never captured),
+ * the mark's areatrigger 21147 and the bleed 339189.
  */
 
 #include "AreaTrigger.h"
@@ -81,6 +83,10 @@ enum SludgefistSpells
     SPELL_DESTRUCTIVE_IMPACT            = 332969,
     SPELL_DESTRUCTIVE_IMPACT_STUN       = 331314,
     SPELL_GRUESOME_RAGE                 = 341250,
+    SPELL_CHAIN_SLAM_MARK               = 335470,   // Heroic and Mythic, 4 s
+    SPELL_CHAIN_SLAM_ROOT               = 339181,   // 4 s root ("immobilizes a player")
+    SPELL_CHAIN_SLAM                    = 335473,   // 1.5 s cast, split between the marked player and everyone within 7 yd
+    SPELL_CHAIN_SLAM_RAGE               = 346269,   // Mythic: +100% energy when fewer than four players were hit
 
     // arena
     SPELL_PILLAR_DESTRUCTION_FX         = 339072,   // cast by the Pillar Stalker
@@ -131,7 +137,9 @@ enum SludgefistEvents
     EVENT_STUN_END,
     EVENT_GIANT_FISTS,
     EVENT_FALLING_RUBBLE_AIMED,
-    EVENT_FALLING_RUBBLE_RANDOM
+    EVENT_FALLING_RUBBLE_RANDOM,
+    EVENT_CHAIN_SLAM_MARK,
+    EVENT_CHAIN_SLAM
 };
 
 enum SludgefistTexts
@@ -152,6 +160,11 @@ static constexpr Milliseconds GazeOffset = 51200ms;
 // the timed Falling Rubble casts (capture): 13.0 / 34.9 s on the pull, 12.5 / 34.5 s after a stun; the two on the pull do nothing
 static constexpr Milliseconds AimedRubbleOffset[] = { 13000ms, 12500ms };
 static constexpr Milliseconds RandomRubbleOffset[] = { 34900ms, 34500ms };
+// Chain Slam, Warcraft Logs Heroic (16 pulls) and Mythic (3): the mark at 28.8 s, the 1.5 s cast 2.5 s later
+static constexpr Milliseconds ChainSlamOffset = 28800ms;
+static constexpr Milliseconds ChainSlamCastDelay = 2500ms;
+static constexpr Milliseconds MythicGazeAfterSlam = 2050ms;
+static constexpr size_t ChainSlamMythicMinHits = 4;
 static constexpr Milliseconds ChargeAfterGaze = 6s;
 static constexpr Milliseconds RoarDamageDelay = 750ms;      // the roar damage lands 0.75 s after the aura
 static constexpr Milliseconds ChainThemDuration = 6s;
@@ -380,7 +393,22 @@ struct boss_sludgefist : public BossAI
             events.ScheduleEvent(EVENT_DESTRUCTIVE_STOMP, offset);
         events.ScheduleEvent(EVENT_FALLING_RUBBLE_AIMED, AimedRubbleOffset[_loop > 1 ? 1 : 0]);
         events.ScheduleEvent(EVENT_FALLING_RUBBLE_RANDOM, RandomRubbleOffset[_loop > 1 ? 1 : 0]);
+        if (me->GetMap()->IsHeroicOrHigher())
+            events.ScheduleEvent(EVENT_CHAIN_SLAM_MARK, ChainSlamOffset);
         events.ScheduleEvent(EVENT_HATEFUL_GAZE, GazeOffset);
+    }
+
+    // Mythic: a Chain Slam that hits fewer than four players fills his rage at once; the Roar still due is skipped and the Gaze
+    // starts 2.05 s later (Warcraft Logs, Journal)
+    void OnChainSlamHits(size_t hits)
+    {
+        if (!me->GetMap()->IsMythic() || hits >= ChainSlamMythicMinHits)
+            return;
+
+        DoCastSelf(SPELL_CHAIN_SLAM_RAGE, true);
+        events.CancelEvent(EVENT_COLOSSAL_ROAR);
+        events.CancelEvent(EVENT_DESTRUCTIVE_STOMP);
+        events.RescheduleEvent(EVENT_HATEFUL_GAZE, MythicGazeAfterSlam);
     }
 
     void DamageTaken(Unit* /*attacker*/, uint32& damage, DamageEffectType /*damageType*/, SpellInfo const* /*spellInfo*/) override
@@ -785,6 +813,25 @@ struct boss_sludgefist : public BossAI
             case EVENT_FALLING_RUBBLE_RANDOM:
                 DoCastAOE(SPELL_FALLING_RUBBLE_RANDOM, true);
                 break;
+            case EVENT_CHAIN_SLAM_MARK:
+            {
+                // one player per cast, never the tank in 46 Warcraft Logs marks; the same player can be marked again
+                Unit* victim = me->GetVictim();
+                _slamTarget.Clear();
+                if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, [victim](Unit* unit) { return unit->IsPlayer() && unit != victim; }))
+                {
+                    _slamTarget = target->GetGUID();
+                    DoCast(target, SPELL_CHAIN_SLAM_MARK, true);
+                    DoCast(target, SPELL_CHAIN_SLAM_ROOT, true);
+                    events.ScheduleEvent(EVENT_CHAIN_SLAM, ChainSlamCastDelay);
+                }
+                break;
+            }
+            case EVENT_CHAIN_SLAM:
+                if (Unit* target = ObjectAccessor::GetUnit(*me, _slamTarget))
+                    if (target->IsAlive())
+                        DoCast(target, SPELL_CHAIN_SLAM);
+                break;
             case EVENT_HATEFUL_GAZE:
                 me->RemoveAurasDueToSpell(SPELL_RAGE_GAIN);
                 _gazeTarget.Clear();
@@ -819,7 +866,7 @@ struct boss_sludgefist : public BossAI
     void RemovePlayerAuras()
     {
         for (uint32 spellId : { SPELL_CRUMBLING_FOUNDATION, SPELL_COLLAPSING_FOUNDATION, SPELL_CHAIN_LINK_AURA, SPELL_CHAIN_THEM,
-            SPELL_HATEFUL_GAZE_MARK, SPELL_FALLING_RUBBLE_MARK, SPELL_STONEQUAKE })
+            SPELL_HATEFUL_GAZE_MARK, SPELL_FALLING_RUBBLE_MARK, SPELL_STONEQUAKE, SPELL_CHAIN_SLAM_MARK, SPELL_CHAIN_SLAM_ROOT })
             instance->DoRemoveAurasDueToSpellOnPlayers(spellId);
     }
 
@@ -833,6 +880,7 @@ struct boss_sludgefist : public BossAI
         _charging = false;
         _chargePillar.reset();
         _gazeTarget.Clear();
+        _slamTarget.Clear();
         _pairs.clear();
         _trampled.clear();
         EndStun();
@@ -891,6 +939,7 @@ private:
     std::array<bool, PillarCount> _pillarDown = { };
     Optional<size_t> _chargePillar;
     ObjectGuid _gazeTarget;
+    ObjectGuid _slamTarget;
     GuidSet _trampled;
     GuidVector _rubble;
     std::vector<std::pair<ObjectGuid, ObjectGuid>> _pairs;
@@ -1118,6 +1167,34 @@ class spell_sludgefist_stonequake_missile : public SpellScript
     }
 };
 
+// 335473 - Chain Slam: the cast ends the mark and the root; the damage is shared (spell_custom_attr) by the marked player and
+// everyone within 7 yards. Retail then pulls the hit players to the boss with 335472, whose jump parameters (482) are server data
+// no capture has shown, so the pull is not cast.
+class spell_sludgefist_chain_slam : public SpellScript
+{
+    void CountTargets(std::list<WorldObject*>& targets)
+    {
+        size_t hits = std::count_if(targets.begin(), targets.end(), [](WorldObject const* target) { return target->IsPlayer(); });
+        if (boss_sludgefist* ai = CAST_AI(boss_sludgefist, GetCaster()->GetAI()))
+            ai->OnChainSlamHits(hits);
+    }
+
+    void HandleCast()
+    {
+        if (Unit* target = GetExplTargetUnit())
+        {
+            target->RemoveAurasDueToSpell(SPELL_CHAIN_SLAM_MARK, GetCaster()->GetGUID());
+            target->RemoveAurasDueToSpell(SPELL_CHAIN_SLAM_ROOT, GetCaster()->GetGUID());
+        }
+    }
+
+    void Register() override
+    {
+        OnObjectAreaTargetSelect += SpellObjectAreaTargetSelectFn(spell_sludgefist_chain_slam::CountTargets, EFFECT_0, TARGET_UNIT_DEST_AREA_ENEMY);
+        OnCast += SpellCastFn(spell_sludgefist_chain_slam::HandleCast);
+    }
+};
+
 // 335297 - Giant Fists: each swing also strikes the closest other player within 5 yards of the target, or the target again
 class spell_sludgefist_giant_fists : public AuraScript
 {
@@ -1198,6 +1275,7 @@ void AddSC_boss_sludgefist()
     RegisterSpellScript(spell_sludgefist_falling_rubble_aimed);
     RegisterSpellScript(spell_sludgefist_falling_rubble_random);
     RegisterSpellScript(spell_sludgefist_stonequake_missile);
+    RegisterSpellScript(spell_sludgefist_chain_slam);
     RegisterSpellScript(spell_sludgefist_giant_fists);
     RegisterAreaTriggerAI(at_sludgefist_stonequake);
 }
