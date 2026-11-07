@@ -28,7 +28,12 @@
  * damage; the circle is 5 yd while the marked player is at full health and 6 yd with any health missing (larger losses were never
  * captured). Berserk: Mythic only, at 420 s (Warcraft Logs, DBM, BigWigs); Normal and Heroic pulls never reached a berserk.
  *
- * Not researched yet: Consume's drain falloff with distance and the Power Tracker energy bar.
+ * Energy bar (capture): the Power Tracker aura's 1 s tick adds 1.0435 energy (2020 Heroic logs: 1.166), shown rounded down; Consume
+ * empties it and keeps the fraction. The bar follows the loop and triggers nothing. Consume (capture): from 0.5 s after the cast
+ * starts, a gravity force of 0.5 toward the boss is added every 2 s, five in all, and every one ends with the channel.
+ *
+ * Not settled: Consume's drain falloff with distance (the capture and Warcraft Logs disagree by about 2x at 12-28 yd, so the
+ * drain stays flat) and the Heroic Obliterating Rift (not cast).
  */
 
 #include "AreaTrigger.h"
@@ -78,7 +83,9 @@ enum HungeringDestroyerEvents
     EVENT_CONSUME,
     EVENT_POWER_TRACKER,
     EVENT_MIASMA_AURA,
-    EVENT_BERSERK
+    EVENT_BERSERK,
+    EVENT_CONSUME_PULL,
+    EVENT_CONSUME_PULL_END
 };
 
 enum HungeringDestroyerTexts
@@ -121,6 +128,14 @@ static constexpr Milliseconds MiasmaAuraDelay = 3s;
 static constexpr Milliseconds PowerTrackerDelay = 3s + 150ms;
 static constexpr Milliseconds PowerTrackerAfterConsume = 10s + 500ms;   // 4 s cast + 6 s channel + 0.5 s (retail 93.7 -> 104.2)
 static constexpr Milliseconds MythicBerserk = 420s;
+static constexpr float PowerPerTickNormal = 1.0435f;                    // capture (12.1)
+static constexpr float PowerPerTickHeroic = 1.166f;                     // Warcraft Logs Heroic (2020), no 12.1 capture
+static constexpr Milliseconds ConsumePullStart = 500ms;
+static constexpr Milliseconds ConsumePullInterval = 2s;
+static constexpr uint8 ConsumePullCount = 5;
+static constexpr Milliseconds ConsumeEnd = 10s;                         // 4 s cast + 6 s channel
+static constexpr float ConsumePullMagnitude = 0.5f;
+static constexpr uint32 AreaTriggerConsumePull = 25367;                 // the capture's force ids are areatriggers of this entry
 static constexpr Milliseconds ExpungeScaleStep = 500ms;                 // retail re-aims the circle every 0.5 s
 static constexpr float ExpungeScaleFullHealth = 5.0f;
 static constexpr float ExpungeScaleMissingHealth = 6.0f;
@@ -140,6 +155,8 @@ struct boss_hungering_destroyer : public BossAI
         BossAI::JustEngagedWith(who);
         // Growing Hunger comes with the first Hungering Strikes proc (capture: 0.031 s)
         DoCastSelf(SPELL_HUNGERING_STRIKES_AURA, true);
+        _power = 0.0f;
+        me->SetPower(POWER_ENERGY, 0);
         events.ScheduleEvent(EVENT_POWER_TRACKER, PowerTrackerDelay);
         events.ScheduleEvent(EVENT_MIASMA_AURA, MiasmaAuraDelay);
         events.ScheduleEvent(EVENT_LOOP, 0ms);
@@ -192,9 +209,27 @@ struct boss_hungering_destroyer : public BossAI
                 break;
             case EVENT_CONSUME:
                 me->RemoveAurasDueToSpell(SPELL_POWER_TRACKER);
+                me->SetPower(POWER_ENERGY, 0);
+                _power -= std::floor(_power);
                 DoCastSelf(SPELL_CONSUME);
                 Talk(SAY_EMOTE_CONSUME);
                 events.ScheduleEvent(EVENT_POWER_TRACKER, PowerTrackerAfterConsume);
+                for (uint8 i = 0; i < ConsumePullCount; ++i)
+                    events.ScheduleEvent(EVENT_CONSUME_PULL, ConsumePullStart + ConsumePullInterval * i);
+                events.ScheduleEvent(EVENT_CONSUME_PULL_END, ConsumeEnd);
+                break;
+            case EVENT_CONSUME_PULL:
+            {
+                ObjectGuid force = ObjectGuid::Create<HighGuid::AreaTrigger>(me->GetMapId(), AreaTriggerConsumePull, me->GetMap()->GenerateLowGuid<HighGuid::AreaTrigger>());
+                _pullForces.push_back(force);
+                for (MapReference const& ref : me->GetMap()->GetPlayers())
+                    if (Player* player = ref.GetSource())
+                        if (player->IsAlive() && !player->IsGameMaster())
+                            player->ApplyMovementForce(force, me->GetPosition(), ConsumePullMagnitude, MovementForceType::Gravity);
+                break;
+            }
+            case EVENT_CONSUME_PULL_END:
+                RemovePullForces();
                 break;
             case EVENT_BERSERK:
                 DoCastSelf(SPELL_BERSERK, true);
@@ -202,6 +237,53 @@ struct boss_hungering_destroyer : public BossAI
             default:
                 break;
         }
+    }
+
+    // the Power Tracker's 1 s tick
+    void TickPower()
+    {
+        _power += me->GetMap()->IsHeroicOrHigher() ? PowerPerTickHeroic : PowerPerTickNormal;
+        me->SetPower(POWER_ENERGY, std::min<int32>(int32(_power), me->GetMaxPower(POWER_ENERGY)));
+    }
+
+    void RemovePullForces()
+    {
+        for (MapReference const& ref : me->GetMap()->GetPlayers())
+            if (Player* player = ref.GetSource())
+                for (ObjectGuid const& force : _pullForces)
+                    player->RemoveMovementForce(force);
+        _pullForces.clear();
+    }
+
+    void JustDied(Unit* killer) override
+    {
+        RemovePullForces();
+        BossAI::JustDied(killer);
+    }
+
+    void EnterEvadeMode(EvadeReason why) override
+    {
+        RemovePullForces();
+        BossAI::EnterEvadeMode(why);
+    }
+
+private:
+    float _power = 0.0f;
+    GuidVector _pullForces;
+};
+
+// 331565 - Power Tracker
+class spell_hungering_destroyer_power_tracker : public AuraScript
+{
+    void HandlePeriodic(AuraEffect const* /*aurEff*/)
+    {
+        if (boss_hungering_destroyer* ai = CAST_AI(boss_hungering_destroyer, GetTarget()->GetAI()))
+            ai->TickPower();
+    }
+
+    void Register() override
+    {
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_hungering_destroyer_power_tracker::HandlePeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
     }
 };
 
@@ -434,6 +516,7 @@ private:
 void AddSC_boss_hungering_destroyer()
 {
     RegisterCastleNathriaCreatureAI(boss_hungering_destroyer);
+    RegisterSpellScript(spell_hungering_destroyer_power_tracker);
     RegisterSpellScript(spell_hungering_destroyer_hungering_strikes);
     RegisterSpellScript(spell_hungering_destroyer_gluttonous_miasma_selector);
     RegisterSpellScript(spell_hungering_destroyer_gluttonous_miasma);
