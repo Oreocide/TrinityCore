@@ -7699,6 +7699,8 @@ private:
     InstanceScript* _instance;
 };
 
+static constexpr uint32 MAP_SANCTUM_OF_DOMINATION = 2450;
+
 // 5428 - Frozen Bridge, 5428 - Earthen Bridge
 struct at_sylvanas_windrunner_bridges : AreaTriggerAI
 {
@@ -7707,7 +7709,8 @@ struct at_sylvanas_windrunner_bridges : AreaTriggerAI
 
     void OnCreate(Spell const* /*creatingSpell*/) override
     {
-        if (!_instance)
+        // create properties 5428 are shared with other spells (Castle Nathria's relic visuals), which keep their own duration
+        if (!_instance || at->GetMapId() != MAP_SANCTUM_OF_DOMINATION)
             return;
 
         // Note: we modify the duration as it lasts for the rest of the encounter.
