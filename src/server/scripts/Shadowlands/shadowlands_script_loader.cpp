@@ -28,6 +28,7 @@ void AddSC_boss_huntsman_altimor();
 void AddSC_boss_sludgefist();
 void AddSC_boss_artificer_xymox();
 void AddSC_boss_stone_legion_generals();
+void AddSC_boss_council_of_blood();
 void AddSC_boss_lady_inerva_darkvein();
 
 void AddSC_boss_eye_of_the_jailer_sod();
@@ -59,6 +60,7 @@ void AddShadowlandsScripts()
     AddSC_boss_sludgefist();
     AddSC_boss_artificer_xymox();
     AddSC_boss_stone_legion_generals();
+    AddSC_boss_council_of_blood();
     AddSC_boss_lady_inerva_darkvein();
 
     // Sanctum of Domination
