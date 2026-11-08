@@ -252,6 +252,17 @@ static HoundRelease const Releases[] =
     { 3800ms, 3040ms, 4170ms, 6300ms, 6650ms, { -1657.40f, 6683.60f, 4279.00f } }     // Hecutis
 };
 
+// Margore's place on the floor before the pull: the pre-fight RP (conversation 16280, gate 353140) lets him out there
+// about 113 s before the pull. That RP is not scripted yet, so he still spawns in his kennel.
+static Position const MargoreFloorHome = { -1653.80f, 6696.90f, 4279.04f };
+
+// The three kennels are one navmesh island (x > -1644.5, y 6676 to 6724) with no link to the arena floor. A path from
+// inside ends at the kennel mouth, so a hound must leave the kennels on a straight line, as the retail splines do.
+static bool IsInKennelStrip(Position const& pos)
+{
+    return pos.GetPositionX() > -1645.0f && pos.GetPositionY() > 6673.0f && pos.GetPositionY() < 6727.0f;
+}
+
 static constexpr Milliseconds CorpseDespawn = 11s;
 
 // Margore
@@ -778,6 +789,48 @@ struct npc_altimor_hound_base : public ScriptedAI
 
     virtual void OnAction(int32 /*action*/) { }
 
+    Position const& ReleasePoint() const
+    {
+        return _index == 0 ? MargoreFloorHome : Releases[_index - 1].FirstSpline;
+    }
+
+    // A chase from the kennel strip to a target on the floor stops at the strip's edge and is not recalculated until the
+    // target moves. A hound on the strip with a target off it (a late run-out at the Bond, Margore pulled in his kennel)
+    // runs straight out to its release point first and starts the chase from there.
+    bool MustLeaveKennel(Unit const* target) const
+    {
+        return target && IsInKennelStrip(me->GetPosition()) && !IsInKennelStrip(target->GetPosition());
+    }
+
+    void LeaveKennel()
+    {
+        if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != POINT_MOTION_TYPE)
+            me->GetMotionMaster()->MovePoint(POINT_RUN_OUT, ReleasePoint(), false);
+    }
+
+    void AttackStart(Unit* who) override
+    {
+        if (!MustLeaveKennel(who))
+        {
+            ScriptedAI::AttackStart(who);
+            return;
+        }
+
+        me->Attack(who, true);
+        if (me->GetVictim() == who)
+            LeaveKennel();
+    }
+
+    void MovementInform(uint32 type, uint32 id) override
+    {
+        if (type != POINT_MOTION_TYPE || id != POINT_RUN_OUT)
+            return;
+
+        // before the Bond the hound waits at its release point; with a target it chases from here
+        if (Unit* victim = me->GetVictim())
+            me->GetMotionMaster()->MoveChase(victim);
+    }
+
     void Engage()
     {
         me->SetImmuneToAll(false);
@@ -816,7 +869,10 @@ struct npc_altimor_hound_base : public ScriptedAI
         me->RemoveAurasDueToSpell(SPELL_HUNTSMANS_BOND);
         me->RemoveAurasDueToSpell(SPELL_CRUSHING_STONE);
         me->SetFullHealth();
-        me->NearTeleportTo(me->GetHomePosition());
+        // an engage during the run-out moves the home position to where the hound stood, so use the spawn point
+        Position const kennel = me->GetRespawnPosition();
+        me->SetHomePosition(kennel);
+        me->NearTeleportTo(kennel);
         EnterKennel();
     }
 
@@ -854,6 +910,10 @@ struct npc_altimor_hound_base : public ScriptedAI
     {
         if (!UpdateVictim())
             return;
+
+        // the target walked off the strip while the hound chased it inside
+        if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE && MustLeaveKennel(me->GetVictim()))
+            LeaveKennel();
 
         _events.Update(diff);
         if (me->HasUnitState(UNIT_STATE_CASTING))
