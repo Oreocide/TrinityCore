@@ -30,6 +30,7 @@ void AddSC_boss_artificer_xymox();
 void AddSC_boss_stone_legion_generals();
 void AddSC_boss_council_of_blood();
 void AddSC_boss_lady_inerva_darkvein();
+void AddSC_boss_sun_kings_salvation();
 
 void AddSC_boss_eye_of_the_jailer_sod();
 void AddSC_boss_the_tarragrue_sod();
@@ -62,6 +63,7 @@ void AddShadowlandsScripts()
     AddSC_boss_stone_legion_generals();
     AddSC_boss_council_of_blood();
     AddSC_boss_lady_inerva_darkvein();
+    AddSC_boss_sun_kings_salvation();
 
     // Sanctum of Domination
     AddSC_boss_eye_of_the_jailer_sod();
