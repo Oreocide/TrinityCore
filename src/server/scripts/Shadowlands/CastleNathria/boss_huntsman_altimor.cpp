@@ -865,6 +865,10 @@ struct npc_altimor_hound_base : public ScriptedAI
 
         me->InterruptNonMeleeSpells(true);
         me->CombatStop(true);
+        // without this the AI stays engaged: UpdateVictim then evades the passive hound every tick, and each evade
+        // teleports it home again and clears its next run-out
+        if (IsEngaged())
+            EngagementOver();
         me->GetMotionMaster()->Clear();
         me->RemoveAurasDueToSpell(SPELL_HUNTSMANS_BOND);
         me->RemoveAurasDueToSpell(SPELL_CRUSHING_STONE);
