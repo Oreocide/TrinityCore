@@ -27,6 +27,7 @@ void AddSC_boss_hungering_destroyer();
 void AddSC_boss_huntsman_altimor();
 void AddSC_boss_sludgefist();
 void AddSC_boss_artificer_xymox();
+void AddSC_boss_stone_legion_generals();
 
 void AddSC_boss_eye_of_the_jailer_sod();
 void AddSC_boss_the_tarragrue_sod();
@@ -56,6 +57,7 @@ void AddShadowlandsScripts()
     AddSC_boss_huntsman_altimor();
     AddSC_boss_sludgefist();
     AddSC_boss_artificer_xymox();
+    AddSC_boss_stone_legion_generals();
 
     // Sanctum of Domination
     AddSC_boss_eye_of_the_jailer_sod();
