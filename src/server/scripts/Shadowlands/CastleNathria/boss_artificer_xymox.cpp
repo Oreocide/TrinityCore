@@ -46,8 +46,9 @@
  *   the Crystal cast starts.
  * - Phase 2 Withering Touch: one random non-tank at +25.0 s, then every 15.3 s.
  * - Defeat: lethal damage leaves him at 1 health. The Stone Husk appears with "Marvelous!", 3 s later Shatter and Stasis
- *   Shield, 0.8 s after that the second line, and 8.8 s after the shield he dies (capture: 166.74 / 167.0 / 169.72 / 170.5 /
- *   178.52 s).
+ *   Shield, 0.8 s after that the second line, and 8.8 s after the shield he teleports out (capture: 166.74 / 167.0 / 169.72 /
+ *   170.5 / 178.52 s). He does not die: Broker Curator Teleport Impact (348641), the encounter ends 259 ms later together with
+ *   the Spoils of Sin (357751, his loot) and he despawns 960 ms after that.
  * No berserk is scripted: the capture shows Berserk (26662) already on him but WCL shows it absent for the first 208 s.
  *
  * Not settled: the Root of Extinction relic (Seeds of Extinction 329770 / 329834 and the Extinction explosion 329107) is not
@@ -121,7 +122,8 @@ enum XymoxSpells
     SPELL_ROOT_COSMETIC             = 329828,   // the Root goes back at the second
     SPELL_SERVICE_IN_STONE          = 340217,   // summons the Stone Husk
     SPELL_SHATTER                   = 340473,
-    SPELL_STASIS_SHIELD             = 342874
+    SPELL_STASIS_SHIELD             = 342874,
+    SPELL_BROKER_TELEPORT_IMPACT    = 348641    // the teleport out at the end (he despawns, he does not die)
 };
 
 enum XymoxCreatures
@@ -152,7 +154,8 @@ enum XymoxEvents
     EVENT_ROTATOR,
     EVENT_DEFEAT_SHIELD,
     EVENT_DEFEAT_SECOND_LINE,
-    EVENT_DEFEAT_END
+    EVENT_DEFEAT_END,
+    EVENT_DEFEAT_TELEPORT_OUT
 };
 
 enum XymoxTexts
@@ -220,6 +223,14 @@ static constexpr float PossessionRange = 2.5f;
 static constexpr Milliseconds DefeatShieldDelay = 3s;
 static constexpr Milliseconds DefeatSecondLineDelay = 780ms;
 static constexpr Milliseconds DefeatEndDelay = 8800ms;
+static constexpr Milliseconds TeleportOutDelay = 259ms;           // capture: 348641 259 ms before the encounter end
+static constexpr Milliseconds TeleportOutDespawn = 960ms;         // and the despawn 960 ms after it
+
+// Spoils of Sin: his loot (the template's table 105690 is the Normal one), spawned at the encounter end (capture position)
+static constexpr uint32 GO_SPOILS_OF_SIN = 357751;
+static constexpr uint32 DUNGEON_ENCOUNTER_XYMOX = 2405;
+static constexpr Position SpoilsOfSinPos = { -1847.3351f, 6403.257f, 4331.5884f, 0.0f };
+static constexpr CastleNathriaCacheLoot SpoilsOfSinLoot = { 1003577511, 1003577513, 1003577514 };
 
 // Worldbreaking pull: five forces, magnitude 2.75 each, at the capture's offsets from the cast start
 static constexpr Milliseconds WorldbreakingPulls[] = { 40ms, 2000ms, 4000ms, 6000ms, 8000ms };
@@ -461,7 +472,15 @@ struct boss_artificer_xymox : public BossAI
                 break;
             case EVENT_DEFEAT_END:
                 me->RemoveAurasDueToSpell(SPELL_STASIS_SHIELD);
-                me->KillSelf();
+                DoCastSelf(SPELL_BROKER_TELEPORT_IMPACT, true);
+                events.ScheduleEvent(EVENT_DEFEAT_TELEPORT_OUT, TeleportOutDelay);
+                break;
+            case EVENT_DEFEAT_TELEPORT_OUT:
+                // retail: he teleports out and despawns, and the loot is in the Spoils of Sin, made before DONE locks the players
+                SummonCastleNathriaCache(me, GO_SPOILS_OF_SIN, SpoilsOfSinPos, DUNGEON_ENCOUNTER_XYMOX, SpoilsOfSinLoot);
+                RemoveFightAuras();
+                _JustDied();
+                me->DespawnOrUnsummon(TeleportOutDespawn);
                 break;
             default:
                 break;
