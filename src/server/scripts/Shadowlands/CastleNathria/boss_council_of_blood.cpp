@@ -65,7 +65,7 @@
  *   aura goes on the players, but the careening Waltzing Venthyr (AreaTrigger create properties 20309 is missing, the carrying entry is
  *   unknown) are not scripted: no stun and no damage. Dancing Fools 330964 / 346826 have no combat-log cast; only the Violent Uproar that
  *   follows at d+29.74 (not paused by the dance, Normal n = 8) is scripted, cast by the 41 pre-placed 176026 (15.0 s cast, 11 yd). Those sit
- *   at z 4323-4330, so a 3-dimensional 11 yd radius may never reach the floor (the PENDING file adds their riders). No repeats are scripted
+ *   at z 4323-4330, so a 3-dimensional 11 yd radius may never reach the floor (npc_council_waltz_vehicle seats their riders). No repeats are scripted
  *   for any of the three. The real (killable) Fool is unknown. Stavros' alone timers Recital 9.5 / 22.9 and Lunge 15.2 / 11.4 are Warcraft
  *   Logs Normal (n = 8 to 17), the Uproar +7 s on Heroic is unexplained.
  * - Who leads the dance when Niklaus is dead and Stavros alive (Frieda is used) and when Stavros is alone (no yell). Frieda's Boogie down and
@@ -104,6 +104,7 @@
 #include "SpellMgr.h"
 #include "SpellScript.h"
 #include "TemporarySummon.h"
+#include "Vehicle.h"
 #include "ThreatManager.h"
 #include "castle_nathria.h"
 #include <any>
@@ -2179,6 +2180,26 @@ class spell_council_dance_window : public AuraScript
     }
 };
 
+// 176026 - Dancing Fools and 176017 - Waltzing Venthyr: each audience vehicle carries a Waltzing Venthyr 176017, which carries a rider
+// 169727 (capture: seat 0 both times, 41 of 41, present before the pull). vehicle_template_accessory needs a spellclick row on the vehicle,
+// which would make the audience clickable, so the vehicles install their passenger themselves with the hardcoded ride spell.
+struct npc_council_waltz_vehicle : public ScriptedAI
+{
+    npc_council_waltz_vehicle(Creature* creature) : ScriptedAI(creature) { }
+
+    void JustAppeared() override
+    {
+        Vehicle* kit = me->GetVehicleKit();
+        if (!kit || kit->GetPassenger(0))
+            return;
+
+        uint32 const passenger = me->GetEntry() == NPC_DANCING_FOOL ? NPC_FOOL_CARRIER : NPC_FOOL_RIDER;
+        kit->InstallAccessory(passenger, 0, true, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 30000, VEHICLE_SPELL_RIDE_HARDCODED);
+    }
+
+    void UpdateAI(uint32 /*diff*/) override { }
+};
+
 // 345368 - Serve Drinks: the 60 s tick (retail triggers 345370, a SEND_EVENT nothing in the core listens to) spawns the clickable waiter
 class spell_council_serve_drinks : public AuraScript
 {
@@ -2238,6 +2259,7 @@ struct at_council_dance_box : AreaTriggerAI
 void AddSC_boss_council_of_blood()
 {
     RegisterCastleNathriaCreatureAI(boss_baroness_frieda);
+    RegisterCastleNathriaCreatureAI(npc_council_waltz_vehicle);
     RegisterCastleNathriaCreatureAI(boss_lord_stavros);
     RegisterCastleNathriaCreatureAI(boss_castellan_niklaus);
     RegisterCastleNathriaCreatureAI(npc_council_dance_controller);
