@@ -53,6 +53,7 @@ public:
 private:
     Result ParseHeader();
     Result ParseBossStates();
+    Result ParseBossState(uint32 bossId, rapidjson::Value const& bossState);
     Result ParseAdditionalData();
 
     // logging helpers

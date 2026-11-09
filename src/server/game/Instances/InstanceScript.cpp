@@ -500,7 +500,17 @@ void InstanceScript::Load(char const* data)
     OUT_LOAD_INST_DATA(data);
 
     InstanceScriptDataReader reader(*this);
-    if (reader.Load(data) == InstanceScriptDataReader::Result::Ok)
+    bool const loaded = reader.Load(data) == InstanceScriptDataReader::Result::Ok;
+    if (!loaded)
+        OUT_LOAD_INST_DATA_FAIL;
+
+    // bosses the data does not list (or all of them, when it cannot be read) start as in a new instance
+    // left at TO_BE_DECIDED, their first SetBossState call would only initialize the state and skip the encounter start or end
+    for (BossInfo& bossInfo : bosses)
+        if (bossInfo.state == TO_BE_DECIDED)
+            bossInfo.state = NOT_STARTED;
+
+    if (loaded)
     {
         // in loot-based lockouts instance can be loaded with later boss marked as killed without preceding bosses
         // but we still need to have them alive
@@ -518,7 +528,7 @@ void InstanceScript::Load(char const* data)
         AfterDataLoad();
     }
     else
-        OUT_LOAD_INST_DATA_FAIL;
+        UpdateSpawnGroups();
 
     OUT_LOAD_INST_DATA_COMPLETE;
 }

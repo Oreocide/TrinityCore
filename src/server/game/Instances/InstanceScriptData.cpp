@@ -20,6 +20,7 @@
 #include "InstanceScript.h"
 #include "Log.h"
 #include "Map.h"
+#include "StringConvert.h"
 #include "World.h"
 #include <rapidjson/pointer.h>
 #include <rapidjson/stringbuffer.h>
@@ -110,37 +111,67 @@ InstanceScriptDataReader::Result InstanceScriptDataReader::ParseBossStates()
         return Result::MissingBossStates;
     }
 
-    if (!bossStatesItr->value.IsArray())
+    rapidjson::Value const& bossStates = bossStatesItr->value;
+    if (bossStates.IsArray())
     {
-        TC_LOG_ERROR("scripts.data.load", "Boss states is not an array for instance {} [{}-{} | {}-{}]",
-            GetInstanceId(), GetMapId(), GetMapName(), GetDifficultyId(), GetDifficultyName());
-        return Result::BossStatesIsNotAnObject;
-    }
-
-    for (uint32 bossId = 0; bossId < bossStatesItr->value.Size(); ++bossId)
-    {
-        if (bossId >= _instance.GetEncounterCount())
+        for (uint32 bossId = 0; bossId < bossStates.Size(); ++bossId)
         {
-            TC_LOG_ERROR("scripts.data.load", "Boss states has entry for boss with higher id ({}) than number of bosses ({}) for instance {} [{}-{} | {}-{}]",
-                bossId, _instance.GetEncounterCount(), GetInstanceId(), GetMapId(), GetMapName(), GetDifficultyId(), GetDifficultyName());
-            return Result::UnknownBoss;
+            Result result = ParseBossState(bossId, bossStates[bossId]);
+            if (result != Result::Ok)
+                return result;
         }
 
-        auto& bossState = bossStatesItr->value[bossId];
-        if (!bossState.IsNumber())
+        return Result::Ok;
+    }
+
+    // encounter lock data saved by older revisions of InstanceScriptDataWriter::SetBossState holds the states as {"BossId": state} members
+    if (bossStates.IsObject())
+    {
+        for (auto const& member : bossStates.GetObject())
         {
-            TC_LOG_ERROR("scripts.data.load", "Boss state for boss ({}) is not a number for instance {} [{}-{} | {}-{}]",
-                bossId, GetInstanceId(), GetMapId(), GetMapName(), GetDifficultyId(), GetDifficultyName());
-            return Result::BossStateIsNotAnObject;
+            Optional<uint32> bossId = Trinity::StringTo<uint32>(std::string_view(member.name.GetString(), member.name.GetStringLength()));
+            if (!bossId)
+            {
+                TC_LOG_ERROR("scripts.data.load", "Boss states has entry with non-numeric boss id \"{}\" for instance {} [{}-{} | {}-{}]",
+                    member.name.GetString(), GetInstanceId(), GetMapId(), GetMapName(), GetDifficultyId(), GetDifficultyName());
+                return Result::UnknownBoss;
+            }
+
+            Result result = ParseBossState(*bossId, member.value);
+            if (result != Result::Ok)
+                return result;
         }
 
-        EncounterState state = EncounterState(bossState.GetInt());
-        if (state == IN_PROGRESS || state == FAIL || state == SPECIAL)
-            state = NOT_STARTED;
-
-        if (state < TO_BE_DECIDED)
-            _instance.SetBossState(bossId, state);
+        return Result::Ok;
     }
+
+    TC_LOG_ERROR("scripts.data.load", "Boss states is not an array for instance {} [{}-{} | {}-{}]",
+        GetInstanceId(), GetMapId(), GetMapName(), GetDifficultyId(), GetDifficultyName());
+    return Result::BossStatesIsNotAnObject;
+}
+
+InstanceScriptDataReader::Result InstanceScriptDataReader::ParseBossState(uint32 bossId, rapidjson::Value const& bossState)
+{
+    if (bossId >= _instance.GetEncounterCount())
+    {
+        TC_LOG_ERROR("scripts.data.load", "Boss states has entry for boss with higher id ({}) than number of bosses ({}) for instance {} [{}-{} | {}-{}]",
+            bossId, _instance.GetEncounterCount(), GetInstanceId(), GetMapId(), GetMapName(), GetDifficultyId(), GetDifficultyName());
+        return Result::UnknownBoss;
+    }
+
+    if (!bossState.IsNumber())
+    {
+        TC_LOG_ERROR("scripts.data.load", "Boss state for boss ({}) is not a number for instance {} [{}-{} | {}-{}]",
+            bossId, GetInstanceId(), GetMapId(), GetMapName(), GetDifficultyId(), GetDifficultyName());
+        return Result::BossStateIsNotAnObject;
+    }
+
+    EncounterState state = EncounterState(bossState.GetInt());
+    if (state == IN_PROGRESS || state == FAIL || state == SPECIAL)
+        state = NOT_STARTED;
+
+    if (state < TO_BE_DECIDED)
+        _instance.SetBossState(bossId, state);
 
     return Result::Ok;
 }
@@ -232,25 +263,43 @@ void InstanceScriptDataWriter::FillData(bool withValues)
 
 void InstanceScriptDataWriter::FillDataFrom(std::string const& data)
 {
-    if (_doc.Parse(data).HasParseError())
+    if (_doc.Parse(data).HasParseError() || !_doc.IsObject())
         FillData(false);
 }
 
 void InstanceScriptDataWriter::SetBossState(UpdateBossStateSaveDataEvent const& data)
 {
-    std::string bossIdKey = Trinity::StringFormat("{}", data.BossId);
+    rapidjson::Document::AllocatorType& allocator = _doc.GetAllocator();
 
-    rapidjson::Pointer::Token tokens[] =
+    auto bossStatesItr = _doc.FindMember(BossStatesSaveDataKey);
+    if (bossStatesItr == _doc.MemberEnd())
     {
-        { BossStatesSaveDataKey.c_str(), uint32(BossStatesSaveDataKey.length()), rapidjson::kPointerInvalidIndex },
-        { bossIdKey.c_str(), uint32(bossIdKey.length()), rapidjson::kPointerInvalidIndex }
-    };
-    rapidjson::Pointer ptr(tokens, std::size(tokens));
+        _doc.AddMember(rapidjson::StringRef(BossStatesSaveDataKey), rapidjson::Value(rapidjson::kArrayType), allocator);
+        bossStatesItr = _doc.FindMember(BossStatesSaveDataKey);
+    }
 
-    // jsonptr("/BossStates/BossId")
-    rapidjson::Value stateValue(rapidjson::kNumberType);
-    stateValue.SetInt(data.NewState);
-    rapidjson::SetValueByPointer(_doc, ptr, stateValue.Move());
+    // a json pointer with an object member token ("/BossStates/BossId") would turn the array into an object, which the reader rejects
+    rapidjson::Value& bossStates = bossStatesItr->value;
+    if (!bossStates.IsArray())
+    {
+        // data saved before this fix holds the states as {"BossId": state} members
+        rapidjson::Value converted(rapidjson::kArrayType);
+        for (uint32 bossId = 0; bossId < _instance.GetEncounterCount(); ++bossId)
+            converted.PushBack(int32(NOT_STARTED), allocator);
+
+        if (bossStates.IsObject())
+            for (auto const& member : bossStates.GetObject())
+                if (Optional<uint32> bossId = Trinity::StringTo<uint32>(std::string_view(member.name.GetString(), member.name.GetStringLength())))
+                    if (*bossId < converted.Size() && member.value.IsNumber())
+                        converted[*bossId].SetInt(member.value.GetInt());
+
+        bossStates = converted.Move();
+    }
+
+    while (bossStates.Size() <= data.BossId)
+        bossStates.PushBack(int32(NOT_STARTED), allocator);
+
+    bossStates[data.BossId].SetInt(data.NewState);
 }
 
 void InstanceScriptDataWriter::SetAdditionalData(UpdateAdditionalSaveDataEvent const& data)
