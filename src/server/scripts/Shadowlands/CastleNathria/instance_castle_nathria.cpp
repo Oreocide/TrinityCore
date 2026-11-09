@@ -16,8 +16,13 @@
  */
 
 #include "Creature.h"
+#include "GameObject.h"
+#include "GameObjectAI.h"
 #include "InstanceScript.h"
+#include "Loot.h"
+#include "LootMgr.h"
 #include "Map.h"
+#include "Player.h"
 #include "ScriptMgr.h"
 #include "castle_nathria.h"
 
@@ -162,7 +167,65 @@ public:
     }
 };
 
+GameObject* SummonCastleNathriaCache(Creature* boss, uint32 cacheEntry, Position const& pos, uint32 dungeonEncounterId, CastleNathriaCacheLoot const& loot)
+{
+    GameObject* cache = boss->SummonGameObject(cacheEntry, pos, QuaternionData::fromEulerAnglesZYX(pos.GetOrientation(), 0.0f, 0.0f), 7_days, GO_SUMMON_TIMED_DESPAWN);
+    if (!cache)
+        return nullptr;
+
+    // A summoned chest starts GO_NOT_READY, and its first update to GO_READY calls ClearLoot(), which would drop the loot made
+    // here; the core's own generation at the first use comes after DONE and skips every locked player. Make it ready now.
+    cache->SetLootState(GO_READY);
+
+    GuidUnorderedSet tapList;
+    std::vector<Player*> tappers;
+    for (MapReference const& ref : boss->GetMap()->GetPlayers())
+    {
+        if (Player* player = ref.GetSource())
+        {
+            tapList.insert(player->GetGUID());
+            tappers.push_back(player);
+        }
+    }
+    cache->SetTapList(tapList);
+
+    GameObjectTemplate const* goInfo = cache->GetGOInfo();
+    if (goInfo->type != GAMEOBJECT_TYPE_CHEST || !goInfo->chest.chestPersonalLoot || tappers.empty())
+        return cache;
+
+    // the template holds the Normal table; a difficulty without its own table falls back to it
+    uint32 lootId = goInfo->chest.chestPersonalLoot;
+    switch (boss->GetMap()->GetDifficultyID())
+    {
+        case DIFFICULTY_LFR_NEW:     lootId = loot.Lfr; break;
+        case DIFFICULTY_HEROIC_RAID: lootId = loot.Heroic; break;
+        case DIFFICULTY_MYTHIC_RAID: lootId = loot.Mythic; break;
+        default: break;
+    }
+    if (!LootTemplates_Gameobject.HaveLootFor(lootId))
+        lootId = goInfo->chest.chestPersonalLoot;
+
+    GameObjectTemplateAddon const* addon = cache->GetTemplateAddon();
+    cache->m_personalLoot = GenerateDungeonEncounterPersonalLoot(dungeonEncounterId, lootId, LootTemplates_Gameobject, LOOT_CHEST, cache,
+        addon ? addon->Mingold : 0, addon ? addon->Maxgold : 0, cache->GetLootMode(), boss->GetMap()->GetMapDifficulty(), tappers);
+    return cache;
+}
+
+// 357751 - Spoils of Sin, 357752 - Cache of the Sun King: the loot is made at the win; a player without his own loot may not open
+// it (the core would regenerate the loot map for him after DONE and empty everyone's)
+struct go_castle_nathria_boss_cache : public GameObjectAI
+{
+    using GameObjectAI::GameObjectAI;
+
+    bool OnGossipHello(Player* player) override
+    {
+        return !me->m_personalLoot.contains(player->GetGUID());
+    }
+};
+
 void AddSC_instance_castle_nathria()
 {
     new instance_castle_nathria();
+    RegisterGameObjectAI(go_castle_nathria_boss_cache);
+    new GenericGameObjectScript<go_castle_nathria_boss_cache>("go_sun_king_cache"); // 357752's ScriptName
 }

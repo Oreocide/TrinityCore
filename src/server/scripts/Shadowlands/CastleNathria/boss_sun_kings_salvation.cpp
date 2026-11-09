@@ -59,7 +59,7 @@
  *
  * Not settled (left out or estimates): Door of Shadows 328248 (n=0), Occultist behaviour at 0 power, Pestering Fiend waves (not in
  * the 12.x capture), Heroic and Mythic differences beyond the spell data (Cloak of Flames is Mythic only), the group behaviour of the
- * Gift (CN8), the chest loot rates (Wowhead estimates: 105689 Normal, GetCacheLootId picks the other difficulties' tables).
+ * Gift (CN8), the chest loot rates (Wowhead estimates: 105689 Normal, SummonCastleNathriaCache picks the other difficulties' tables).
  * No berserk: DBM has none (BigWigs shows 840 s).
  */
 
@@ -306,20 +306,8 @@ enum SunKingEvents
 
 static constexpr uint32 DUNGEON_ENCOUNTER_SUN_KING = 2402;
 
-// The chest template has one personal loot table (Data30, the Normal rates); the other difficulties have their own
-// gameobject_loot_template tables. A missing table falls back to the template's.
-static uint32 GetCacheLootId(Difficulty difficulty, uint32 templateLootId)
-{
-    uint32 lootId = templateLootId;
-    switch (difficulty)
-    {
-        case DIFFICULTY_LFR_NEW:     lootId = 1003577521; break;
-        case DIFFICULTY_HEROIC_RAID: lootId = 1003577523; break;
-        case DIFFICULTY_MYTHIC_RAID: lootId = 1003577524; break;
-        default: break;
-    }
-    return LootTemplates_Gameobject.HaveLootFor(lootId) ? lootId : templateLootId;
-}
+// Cache of the Sun King per-difficulty personal loot (the template's table 105689 is the Normal one)
+static constexpr CastleNathriaCacheLoot CacheLoot = { 1003577521, 1003577523, 1003577524 };
 static constexpr uint32 CONVERSATION_SUN_KING_END = 16098;
 
 // health model
@@ -727,31 +715,7 @@ struct boss_kaelthas_sun_king : public ScriptedAI
     // the loot is made for everyone present before DONE locks them to the encounter
     void EndEncounter()
     {
-        if (GameObject* chest = me->SummonGameObject(GO_CACHE_OF_THE_SUN_KING, CachePos, QuaternionData::fromEulerAnglesZYX(CachePos.GetOrientation(), 0.0f, 0.0f), 7_days, GO_SUMMON_TIMED_DESPAWN))
-        {
-            GuidUnorderedSet tapList;
-            std::vector<Player*> tappers;
-            for (MapReference const& ref : me->GetMap()->GetPlayers())
-            {
-                if (Player* player = ref.GetSource())
-                {
-                    tapList.insert(player->GetGUID());
-                    tappers.push_back(player);
-                }
-            }
-
-            // A summoned chest starts GO_NOT_READY, and its first update to GO_READY calls ClearLoot(), which would drop the loot made
-            // here; the core's own generation at the first use comes after DONE and skips every locked player. Make it ready now.
-            chest->SetLootState(GO_READY);
-            chest->SetTapList(tapList);
-            GameObjectTemplate const* goInfo = chest->GetGOInfo();
-            GameObjectTemplateAddon const* addon = chest->GetTemplateAddon();
-            if (goInfo->type == GAMEOBJECT_TYPE_CHEST && goInfo->chest.chestPersonalLoot && !tappers.empty())
-                chest->m_personalLoot = GenerateDungeonEncounterPersonalLoot(DUNGEON_ENCOUNTER_SUN_KING,
-                    GetCacheLootId(me->GetMap()->GetDifficultyID(), goInfo->chest.chestPersonalLoot),
-                    LootTemplates_Gameobject, LOOT_CHEST, chest, addon ? addon->Mingold : 0, addon ? addon->Maxgold : 0,
-                    chest->GetLootMode(), me->GetMap()->GetMapDifficulty(), tappers);
-        }
+        SummonCastleNathriaCache(me, GO_CACHE_OF_THE_SUN_KING, CachePos, DUNGEON_ENCOUNTER_SUN_KING, CacheLoot);
 
         if (_instance)
         {
@@ -2037,18 +2001,6 @@ struct at_sun_king_smoldering_remnants : AreaTriggerAI
     }
 };
 
-// 357752 - Cache of the Sun King: the loot is made at the win; a player without his own loot may not open it (the core would
-// regenerate the loot map for him and empty everyone's)
-struct go_sun_king_cache : public GameObjectAI
-{
-    using GameObjectAI::GameObjectAI;
-
-    bool OnGossipHello(Player* player) override
-    {
-        return !me->m_personalLoot.contains(player->GetGUID());
-    }
-};
-
 void AddSC_boss_sun_kings_salvation()
 {
     RegisterCastleNathriaCreatureAI(boss_kaelthas_sun_king);
@@ -2077,5 +2029,4 @@ void AddSC_boss_sun_kings_salvation()
     RegisterSpellScript(spell_sun_king_cracked_reservoir);
 
     RegisterAreaTriggerAI(at_sun_king_smoldering_remnants);
-    RegisterGameObjectAI(go_sun_king_cache);
 }

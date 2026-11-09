@@ -107,6 +107,22 @@ enum CastleNathriaMisc
     WORLD_SAFE_LOC_CN_ENTRANCE      = 9400401   // release / spirit-heal point in the entrance hall (sniffed SMSG_DEATH_RELEASE_LOC)
 };
 
+class Creature;
+class GameObject;
+struct Position;
+
+// Personal loot tables of a boss cache for the difficulties other than Normal (the template's chestPersonalLoot)
+struct CastleNathriaCacheLoot
+{
+    uint32 Lfr;
+    uint32 Heroic;
+    uint32 Mythic;
+};
+
+// Summons a boss cache (Sun King's Salvation, Artificer Xy'mox) with the personal loot of every player present; call it BEFORE
+// SetBossState(DONE), which locks them to the encounter. The cache needs the go_castle_nathria_boss_cache AI.
+GameObject* SummonCastleNathriaCache(Creature* boss, uint32 cacheEntry, Position const& pos, uint32 dungeonEncounterId, CastleNathriaCacheLoot const& loot);
+
 template <class AI, class T>
 inline AI* GetCastleNathriaAI(T* obj)
 {
