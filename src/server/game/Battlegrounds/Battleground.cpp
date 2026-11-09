@@ -613,6 +613,10 @@ void Battleground::UpdateWorldState(int32 worldStateId, int32 value, bool hidden
 
 void Battleground::EndBattleground(Team winner)
 {
+    // a match ends once: a script that reacts to a kill after the end (a score already at 0) must not reward the winners again
+    if (GetStatus() == STATUS_WAIT_LEAVE)
+        return;
+
     RemoveFromBGFreeSlotQueue();
 
     bool guildAwarded = false;

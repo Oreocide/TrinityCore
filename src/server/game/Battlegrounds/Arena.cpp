@@ -144,6 +144,10 @@ void Arena::CheckWinConditions()
 
 void Arena::EndBattleground(Team winner)
 {
+    // a match ends once: a death or a leave after the end runs CheckWinConditions again, which must not rate the match twice
+    if (GetStatus() == STATUS_WAIT_LEAVE)
+        return;
+
     // arena rating calculation
     if (isRated())
     {

@@ -641,11 +641,18 @@ struct battleground_alterac_valley : BattlegroundScript
 
     void OnPlayerKilled(Player* victim, Player* /*killer*/) override
     {
+        // after the end a death no longer counts: at 0 reinforcements it would end the match again (as Isle of Conquest guards it)
+        if (battleground->GetStatus() != STATUS_IN_PROGRESS)
+            return;
+
         UpdateScore(battleground->GetPlayerTeam(victim->GetGUID()), -1);
     }
 
     void OnUnitKilled(Creature* victim, Unit* killer) override
     {
+        if (battleground->GetStatus() != STATUS_IN_PROGRESS)
+            return;
+
         switch (victim->GetEntry())
         {
             case BG_AV_CREATURE_VANNDAR:
