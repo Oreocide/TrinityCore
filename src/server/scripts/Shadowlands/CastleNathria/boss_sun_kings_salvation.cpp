@@ -500,12 +500,13 @@ struct boss_kaelthas_sun_king : public ScriptedAI
         if (_stage != STAGE_IDLE || !_instance || !who)
             return;
 
-        EncounterState const state = _instance->GetBossState(DATA_SUN_KINGS_SALVATION);
-        if (state == DONE || state == IN_PROGRESS)
+        if (_instance->GetBossState(DATA_SUN_KINGS_SALVATION) == DONE)
             return;
 
-        if (!_instance->SetBossState(DATA_SUN_KINGS_SALVATION, IN_PROGRESS))
-            return;
+        // _stage already guards a second start. SetBossState returns false while the boss is still
+        // TO_BE_DECIDED (instance data not loaded), and BossAI ignores that too: giving up here would
+        // leave the state IN_PROGRESS with Kael idle for the rest of the instance.
+        _instance->SetBossState(DATA_SUN_KINGS_SALVATION, IN_PROGRESS);
 
         _stage = STAGE_ONE;
         _said50 = false;
@@ -863,8 +864,8 @@ struct boss_kaelthas_sun_king : public ScriptedAI
         {
             _instance->SendEncounterUnit(ENCOUNTER_FRAME_DISENGAGE, me);
             _instance->SetBossState(DATA_SUN_KINGS_SALVATION, FAIL);
-        me->setActive(false);
         }
+        me->setActive(false);
     }
 
 private:
