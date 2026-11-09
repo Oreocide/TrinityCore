@@ -1628,9 +1628,12 @@ private:
                 DoCastSelf(SPELL_OPPRESSIVE_ATMOSPHERE, true);
                 break;
             case EVENT_DANCE_OFF:
-                // 331006 / 347218: the markers and Wrong Moves go for everyone; the leader says the end line, the members jump back
+                // 331006 / 347218: the markers and Wrong Moves go for everyone; the leader says the end line, the members jump back.
+                // A step window still running (the last one ends 0.1 s before this, later after a slow tick) goes too, before its
+                // expiry can give Wrong Moves after the dance.
+                events.CancelEvent(EVENT_DANCE_STEP);
                 for (Player* player : CouncilLivingPlayers(me))
-                    for (uint32 spellId : { SPELL_DANCE_MARKER, SPELL_TAKEN_POSITION, SPELL_WRONG_MOVES_DRIVER, SPELL_WRONG_MOVES })
+                    for (uint32 spellId : { SPELL_DANCE_WINDOW, SPELL_DANCE_MARKER, SPELL_TAKEN_POSITION, SPELL_WRONG_MOVES_DRIVER, SPELL_WRONG_MOVES })
                         player->RemoveAurasDueToSpell(spellId);
                 if (CouncilMemberAI* leader = GetLeader())
                     leader->Talk(leader->GetMember() == MEMBER_NIKLAUS ? SAY_NIKLAUS_DANCE_END : SAY_FRIEDA_DANCE_END);
