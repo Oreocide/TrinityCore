@@ -740,6 +740,9 @@ struct boss_kaelthas_sun_king : public ScriptedAI
                 }
             }
 
+            // A summoned chest starts GO_NOT_READY, and its first update to GO_READY calls ClearLoot(), which would drop the loot made
+            // here; the core's own generation at the first use comes after DONE and skips every locked player. Make it ready now.
+            chest->SetLootState(GO_READY);
             chest->SetTapList(tapList);
             GameObjectTemplate const* goInfo = chest->GetGOInfo();
             GameObjectTemplateAddon const* addon = chest->GetTemplateAddon();
