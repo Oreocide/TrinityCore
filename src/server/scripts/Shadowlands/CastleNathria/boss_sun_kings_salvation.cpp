@@ -39,7 +39,8 @@
  * - The Shade is summoned at the sniffed point instead of through Release Sin 323381 (its destination is an entry target that no
  *   creature in the data provides). Shade Teleport to Arena 328333 has the same problem; the Shade is moved to the sniffed arena
  *   point (-2260.4, 6384.3) instead.
- * - The encounter starts when any pre-placed add within 100 yd of Kael is engaged; the other pre-placed adds are pulled at once
+ * - The encounter starts when any pre-placed add within 100 yd of Kael is engaged (Kael is kept active for the fight, so the
+ *   watcher runs with nobody near); the other pre-placed adds are pulled at once
  *   (in the capture they are all active from the pull). It fails when no living player is within 100 yd of Kael (checked each
  *   second). Retail wipe handling is not evidenced; the pre-placed adds are respawned and Kael goes back to 10%.
  * - Ember Blast's damage is split by the script between the players hit, with the 6 Lingering Embers applications split the same
@@ -284,6 +285,7 @@ enum SunKingEvents
 
     // Infuser
     EVENT_INFUSER_TELEPORT,
+    EVENT_INFUSER_TELEPORT_LAND,
     EVENT_INFUSER_FLY,
 
     // Occultist
@@ -356,6 +358,7 @@ static constexpr Milliseconds ConcussiveSmashRepeat = 19500ms;     // DBM 19.5, 
 
 // Infusers (from their spawn)
 static constexpr Milliseconds InfuserTeleportCast = 4100ms;
+static constexpr Milliseconds InfuserTeleportCastTime = 1500ms;    // 325950 cast 130.77 -> teleport 132.27
 static constexpr Milliseconds InfuserFlyDelay = 900ms;
 static constexpr float InfuserFlightSpeed = 9.5f;                  // 83-85 yd in 8.7-9.0 s
 
@@ -520,6 +523,8 @@ struct boss_kaelthas_sun_king : public ScriptedAI
                     itr->second->EngageWithTarget(who);
         }
 
+        // a cell with no player in visibility range is not updated: keep Kael's (and his wipe check) running for the fight
+        me->setActive(true);
         _events.ScheduleEvent(EVENT_WIPE_CHECK, 1s);
     }
 
@@ -722,6 +727,7 @@ struct boss_kaelthas_sun_king : public ScriptedAI
             _instance->SendEncounterUnit(ENCOUNTER_FRAME_DISENGAGE, me);
             _instance->SetBossState(DATA_SUN_KINGS_SALVATION, DONE);
         }
+        me->setActive(false);
 
         if (Creature* controller = me->FindNearestCreature(NPC_FIGHT_CONTROLLER, 100.0f))
             controller->CastSpell(controller, SPELL_FIGHT_CONTROLLER_END, true);
@@ -745,11 +751,22 @@ struct boss_kaelthas_sun_king : public ScriptedAI
         _events.ScheduleEvent(EVENT_DONE_CLEANUP, 1s);
     }
 
+    // other scenes keep static Renathal / Accuser spawns nearby, so only a creature at the end position counts
+    bool HasCreatureAt(uint32 entry, Position const& pos) const
+    {
+        std::list<Creature*> creatures;
+        me->GetCreatureListWithEntryInGrid(creatures, entry, 250.0f);
+        for (Creature* creature : creatures)
+            if (creature->IsAlive() && creature->GetExactDist2d(pos) < 5.0f)
+                return true;
+        return false;
+    }
+
     void SummonEndScene()
     {
-        if (!me->FindNearestCreature(NPC_PRINCE_RENATHAL_END, 200.0f))
+        if (!HasCreatureAt(NPC_PRINCE_RENATHAL_END, RenathalEndPos))
             me->SummonCreature(NPC_PRINCE_RENATHAL_END, RenathalEndPos, TEMPSUMMON_MANUAL_DESPAWN);
-        if (!me->FindNearestCreature(NPC_THE_ACCUSER_END, 200.0f))
+        if (!HasCreatureAt(NPC_THE_ACCUSER_END, AccuserEndPos))
             me->SummonCreature(NPC_THE_ACCUSER_END, AccuserEndPos, TEMPSUMMON_MANUAL_DESPAWN);
     }
 
@@ -846,6 +863,7 @@ struct boss_kaelthas_sun_king : public ScriptedAI
         {
             _instance->SendEncounterUnit(ENCOUNTER_FRAME_DISENGAGE, me);
             _instance->SetBossState(DATA_SUN_KINGS_SALVATION, FAIL);
+        me->setActive(false);
         }
     }
 
@@ -1327,15 +1345,6 @@ struct npc_sun_king_soul_infuser : public ScriptedAI
         }
     }
 
-    void OnSpellCast(SpellInfo const* spellInfo) override
-    {
-        if (spellInfo->Id != SPELL_INFUSER_TELEPORT)
-            return;
-
-        me->NearTeleportTo(InfuserTeleportPos[_index]);
-        _events.ScheduleEvent(EVENT_INFUSER_FLY, InfuserFlyDelay);
-    }
-
     void JustDied(Unit* /*killer*/) override
     {
         DoCastSelf(SPELL_INFUSERS_ORB, true);
@@ -1354,10 +1363,16 @@ struct npc_sun_king_soul_infuser : public ScriptedAI
             switch (eventId)
             {
                 case EVENT_INFUSER_TELEPORT:
+                    // the 1.5 s cast shows the teleport; the move itself does not wait on the spell's success
                     me->GetMotionMaster()->Clear();
                     DoCastSelf(SPELL_INFUSER_TELEPORT_PREP, true);
                     me->CastSpell(InfuserTeleportPos[_index], SPELL_INFUSER_TELEPORT, false);
+                    _events.ScheduleEvent(EVENT_INFUSER_TELEPORT_LAND, InfuserTeleportCastTime);
                     return;
+                case EVENT_INFUSER_TELEPORT_LAND:
+                    me->NearTeleportTo(InfuserTeleportPos[_index]);
+                    _events.ScheduleEvent(EVENT_INFUSER_FLY, InfuserFlyDelay);
+                    break;
                 case EVENT_INFUSER_FLY:
                     me->GetMotionMaster()->MovePoint(POINT_INFUSER_HOVER, InfuserHoverPos[_index], false, {}, InfuserFlightSpeed);
                     break;
