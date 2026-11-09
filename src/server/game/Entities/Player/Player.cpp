@@ -17175,6 +17175,11 @@ void Player::SetQuestObjectiveData(QuestObjective const& objective, int32 data)
 
     if (Quest const* quest = sObjectMgr->GetQuestTemplate(objective.QuestID))
         sScriptMgr->OnQuestObjectiveChange(this, quest, objective, oldData, data);
+
+    // What this player sees can depend on the objective (visibility conditions, CONDITION_QUEST_OBJECTIVE_PROGRESS): re-check now,
+    // visibility is otherwise only re-evaluated when the player moves, teleports or changes quest status
+    if (IsInWorld() && sConditionMgr->IsObjectiveUsedInVisibilityConditions(objective.ID))
+        UpdateVisibilityForPlayer();
 }
 
 bool Player::IsQuestObjectiveCompletable(uint16 slot, Quest const* quest, QuestObjective const& objective) const

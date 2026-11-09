@@ -351,6 +351,8 @@ class TC_GAME_API ConditionMgr
         ConditionContainer const* GetConditionsForAreaTrigger(uint32 areaTriggerId, bool isServerSide) const;
         bool IsObjectMeetingTrainerSpellConditions(uint32 trainerId, uint32 spellId, Player* player) const;
         bool IsObjectMeetingVisibilityByObjectIdConditions(WorldObject const* obj, WorldObject const* seer) const;
+        // true if a CONDITION_SOURCE_TYPE_OBJECT_ID_VISIBILITY condition reads the objective (CONDITION_QUEST_OBJECTIVE_PROGRESS)
+        bool IsObjectiveUsedInVisibilityConditions(uint32 objectiveId) const { return ObjectivesUsedInVisibilityConditions.contains(objectiveId); }
 
         static uint32 GetPlayerConditionLfgValue(Player const* player, PlayerConditionLfgStatus status);
         static bool IsPlayerMeetingCondition(Player const* player, uint32 conditionId);
@@ -387,6 +389,7 @@ class TC_GAME_API ConditionMgr
         ConditionEntriesByTypeArray     ConditionStore;
 
         std::unordered_set<uint32> SpellsUsedInSpellClickConditions;
+        std::unordered_set<uint32> ObjectivesUsedInVisibilityConditions;
 };
 
 #define sConditionMgr ConditionMgr::instance()

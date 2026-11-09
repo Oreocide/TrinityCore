@@ -1322,6 +1322,28 @@ ConditionMgr* ConditionMgr::instance()
     return &instance;
 }
 
+namespace
+{
+// Collects the quest objectives read by CONDITION_QUEST_OBJECTIVE_PROGRESS, following reference templates
+void CollectQuestObjectivesFromConditions(ConditionContainer const& conditions, ConditionEntriesByTypeArray const& store, std::unordered_set<uint32>& objectives, uint32 depth = 0)
+{
+    for (Condition const& condition : conditions)
+    {
+        if (condition.ReferenceId)
+        {
+            if (depth >= 8)
+                continue;
+
+            auto ref = store[CONDITION_SOURCE_TYPE_REFERENCE_CONDITION].find({ condition.ReferenceId, 0, 0 });
+            if (ref != store[CONDITION_SOURCE_TYPE_REFERENCE_CONDITION].end())
+                CollectQuestObjectivesFromConditions(*ref->second, store, objectives, depth + 1);
+        }
+        else if (condition.ConditionType == CONDITION_QUEST_OBJECTIVE_PROGRESS)
+            objectives.insert(condition.ConditionValue1);
+    }
+}
+}
+
 void ConditionMgr::LoadConditions(bool isReload)
 {
     uint32 oldMSTime = getMSTime();
@@ -1500,6 +1522,10 @@ void ConditionMgr::LoadConditions(bool isReload)
         for (Condition const& condition : *conditions)
             if (condition.ConditionType == CONDITION_AURA)
                 SpellsUsedInSpellClickConditions.insert(condition.ConditionValue1);
+
+    ObjectivesUsedInVisibilityConditions.clear();
+    for (auto&& [id, conditions] : ConditionStore[CONDITION_SOURCE_TYPE_OBJECT_ID_VISIBILITY])
+        CollectQuestObjectivesFromConditions(*conditions, ConditionStore, ObjectivesUsedInVisibilityConditions);
 
     for (auto&& [id, conditions] : ConditionStore[CONDITION_SOURCE_TYPE_SPELL_IMPLICIT_TARGET])
         for (Condition const& condition : *conditions)
@@ -2793,6 +2819,7 @@ void ConditionMgr::Clean()
         conditionsMap.clear();
 
     SpellsUsedInSpellClickConditions.clear();
+    ObjectivesUsedInVisibilityConditions.clear();
 }
 
 inline bool PlayerConditionCompare(int32 comparisonType, int32 value1, int32 value2)
