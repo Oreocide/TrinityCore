@@ -500,6 +500,11 @@ struct boss_kaelthas_sun_king : public ScriptedAI
         return ObjectAccessor::GetCreature(*me, _shadeGuid);
     }
 
+    bool IsFightActive() const
+    {
+        return _stage != STAGE_IDLE && _stage != STAGE_WON;
+    }
+
     void JustSummoned(Creature* summon) override
     {
         _summons.Summon(summon);
@@ -641,6 +646,11 @@ struct boss_kaelthas_sun_king : public ScriptedAI
         EndMirror(shade);
         _stage = STAGE_WON;
         me->SetFullHealth();
+
+        // Infusers still alive at the win stop feeding their pedestals: Soul Infusion would keep hurting Kael until the end
+        for (ObjectGuid const& guid : GuidVector(_summons.begin(), _summons.end()))
+            if (Creature* infuser = ObjectAccessor::GetCreature(*me, guid); infuser && infuser->GetEntry() == NPC_SOUL_INFUSER)
+                infuser->InterruptNonMeleeSpells(true);
 
         _events.Reset();
         _events.ScheduleEvent(EVENT_WIN_AURAS, WinAuras);
@@ -1840,7 +1850,7 @@ class spell_sun_king_soul_infusion : public AuraScript
         Unit* pedestal = GetTarget();
         boss_kaelthas_sun_king* kaelAI = GetKaelthasAI(pedestal);
         Creature* kael = GetKaelthas(pedestal);
-        if (!kaelAI || !kael)
+        if (!kaelAI || !kael || !kaelAI->IsFightActive())
             return;
 
         if (kaelAI->GetData(DATA_HEALS_BLOCKED))
