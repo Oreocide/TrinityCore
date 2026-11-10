@@ -37,10 +37,12 @@ static constexpr DoorData doorData[] =
     { GO_SUN_KING_DOOR_1,           DATA_SUN_KINGS_SALVATION,      EncounterDoorBehavior::OpenWhenNotInProgress },
     { GO_SUN_KING_DOOR_2,           DATA_SUN_KINGS_SALVATION,      EncounterDoorBehavior::OpenWhenNotInProgress },
 
-    // Retail also keeps these closed until Sun King's Salvation is done. That encounter is won by healing Kael'thas to full,
-    // which needs a boss script, so the OpenWhenDone(DATA_SUN_KINGS_SALVATION) rows wait for it.
+    // Retail keeps these closed until Sun King's Salvation is done (story doors, open 109-132 s after its end in the capture)
+    { GO_COUNCIL_DOOR_1,            DATA_SUN_KINGS_SALVATION,      EncounterDoorBehavior::OpenWhenDone },
     { GO_COUNCIL_DOOR_1,            DATA_COUNCIL_OF_BLOOD,         EncounterDoorBehavior::OpenWhenNotInProgress },
+    { GO_COUNCIL_DOOR_2,            DATA_SUN_KINGS_SALVATION,      EncounterDoorBehavior::OpenWhenDone },
     { GO_COUNCIL_DOOR_2,            DATA_COUNCIL_OF_BLOOD,         EncounterDoorBehavior::OpenWhenNotInProgress },
+    { GO_COUNCIL_DOOR_3,            DATA_SUN_KINGS_SALVATION,      EncounterDoorBehavior::OpenWhenDone },
     { GO_COUNCIL_DOOR_3,            DATA_COUNCIL_OF_BLOOD,         EncounterDoorBehavior::OpenWhenNotInProgress },
 
     { GO_ALTIMOR_DOOR,              DATA_COUNCIL_OF_BLOOD,         EncounterDoorBehavior::OpenWhenDone },
