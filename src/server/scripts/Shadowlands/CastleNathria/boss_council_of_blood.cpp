@@ -80,8 +80,6 @@
  * - Serve Drinks: the waiter 175474 appears every 60 s from 60 s; clicking it (Throw Wine 345304) has no script and no npc_spellclick_spells
  *   row, its purpose is unknown. Prince Renathal's line after the kill (a fresh 172652 spawns, line 6 s later) is not scripted, its spawn
  *   point is not in the evidence.
- * - Lord Stavros' live template carries the flags of his feigned state (see PENDING); until it is applied the script clears
- *   UNINTERACTIBLE and STUNNED at reset.
  */
 
 #include "AreaTrigger.h"
@@ -776,8 +774,6 @@ protected:
         for (uint32 spellId : { SPELL_PERMANENT_FEIGN_DEATH, SPELL_DANCE_PROTECTION, SPELL_INFUSED, SPELL_EMPOWERED, SPELL_SOUL_SPIKES_LISTENER })
             me->RemoveAurasDueToSpell(spellId);
 
-        // the live template of Lord Stavros carries the flags of his feigned state until the PENDING file is applied
-        me->RemoveUnitFlag(UnitFlags(UNIT_FLAG_UNINTERACTIBLE | UNIT_FLAG_STUNNED));
         me->SetReactState(REACT_AGGRESSIVE);
         me->SetCanMelee(true);
 
