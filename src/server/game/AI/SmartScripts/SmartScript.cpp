@@ -947,7 +947,10 @@ void SmartScript::ProcessAction(SmartScriptHolder& e, Unit* unit, uint32 var0, u
                 {
                     if (Player* playerTarget = target->ToPlayer())
                     {
-                        playerTarget->KilledMonsterCredit(e.action.killedMonster.creature);
+                        // A creature crediting its own entry (a quest NPC that was clicked or talked to) names itself,
+                        // so spawn tracking can record which spawn the player used. Criteria use the same entry either way.
+                        ObjectGuid creditedSpawn = (me && me->GetEntry() == e.action.killedMonster.creature) ? me->GetGUID() : ObjectGuid::Empty;
+                        playerTarget->KilledMonsterCredit(e.action.killedMonster.creature, creditedSpawn);
                         TC_LOG_DEBUG("scripts.ai", "SmartScript::ProcessAction: SMART_ACTION_CALL_KILLEDMONSTER: Player {}, Killcredit: {}",
                             target->GetGUID(), e.action.killedMonster.creature);
                     }
