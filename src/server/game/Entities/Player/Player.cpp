@@ -16995,7 +16995,13 @@ void Player::UpdateQuestObjectiveProgress(QuestObjectiveType objectiveType, int3
     }
 
     if (anyObjectiveChangedCompletionState || anyObjectiveChangedSpawnTrackingState)
+    {
         UpdateVisibleObjectInteractions(true, false, false, true);
+
+        // A tracked spawn whose state just turned Complete can be hidden from this player now (spawn_tracking_state.Visible),
+        // remove it with the credit instead of at the next relocation
+        UpdateObjectVisibility(false);
+    }
 
     if (updatePhaseShift)
         PhasingHandler::OnConditionChange(this);
