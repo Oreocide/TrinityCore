@@ -15,6 +15,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "ChatPackets.h"
 #include "Player.h"
 #include "ScriptMgr.h"
 #include "Spell.h"
@@ -68,6 +69,33 @@ class spell_silvermoon_portal_to_voidstorm : public SpellScript
     }
 };
 
+// 1226971 - Out of Bounds (Alliance in the guarded sections: Walk of Elders, Royal Exchange, Court of Blood, Court of the Sun)
+// Applied by spell_area on entry. Effect 0 is a script effect: retail sends the warning as a raid boss whisper from the player to themself
+// (SMSG_CHAT type 42 with both names and chat flags 0, every application in the captures), which the client shows mid-screen.
+// Player::Whisper ignores isBossWhisper and Chat::SetSender names only creatures, so the packet is built here.
+// Effect 1 ticks once after 10 s into 1226974, which forces faction 2720 hostile, so the guards attack.
+class spell_silvermoon_out_of_bounds_warning : public SpellScript
+{
+    void HandleScript(SpellEffIndex /*effIndex*/)
+    {
+        Player* player = Object::ToPlayer(GetHitUnit());
+        if (!player)
+            return;
+
+        WorldPackets::Chat::Chat packet;
+        packet.Initialize(CHAT_MSG_RAID_BOSS_WHISPER, LANG_UNIVERSAL, player, player, "The guards' eyes are on you. Return to neutral territory.");
+        packet.SenderName = player->GetName();
+        packet.TargetName = player->GetName();
+        packet._ChatFlags = CHAT_FLAG_NONE;
+        player->SendDirectMessage(packet.Write());
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_silvermoon_out_of_bounds_warning::HandleScript, EFFECT_0, SPELL_EFFECT_SCRIPT_EFFECT);
+    }
+};
+
 // 1278767 - [DNT] Skip Midnight Intro - Flag Campaign
 class spell_silvermoon_skip_midnight_intro : public SpellScript
 {
@@ -92,4 +120,5 @@ void AddSC_silvermoon_city_midnight()
     // Spells
     RegisterSpellScript(spell_silvermoon_skip_midnight_intro);
     RegisterSpellScript(spell_silvermoon_portal_to_voidstorm);
+    RegisterSpellScript(spell_silvermoon_out_of_bounds_warning);
 }
