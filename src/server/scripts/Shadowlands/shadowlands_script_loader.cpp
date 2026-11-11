@@ -38,6 +38,8 @@ void AddSC_boss_echelon();
 void AddSC_boss_high_adjudicator_aleez();
 void AddSC_boss_lord_chamberlain();
 
+void AddSC_instance_sanguine_depths();
+
 void AddSC_boss_eye_of_the_jailer_sod();
 void AddSC_boss_the_tarragrue_sod();
 void AddSC_boss_kelthuzad_sod();
@@ -77,6 +79,9 @@ void AddShadowlandsScripts()
     AddSC_boss_echelon();
     AddSC_boss_high_adjudicator_aleez();
     AddSC_boss_lord_chamberlain();
+
+    // Sanguine Depths
+    AddSC_instance_sanguine_depths();
 
     // Sanctum of Domination
     AddSC_boss_eye_of_the_jailer_sod();
