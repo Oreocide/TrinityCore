@@ -167,6 +167,7 @@ static Position const KaalEndPos = { -1289.05f, 6520.75f, 4083.13f, 3.826f };
 static Position const DravenPos = { -1304.32f, 6508.51f, 4083.22f, 0.6109f };
 static Position const ChestPos = { -1289.05f, 6520.75f, 4083.13f, 4.0014f };
 static constexpr float TakeoffHeight = 5.0f;
+static constexpr Milliseconds RendSoulsStunWindow = 200ms;          // her immunity waits for the deferred stun to pick its targets
 static constexpr Milliseconds DravenArrives = 7s;
 static constexpr Milliseconds DravenConversation = 9s;
 static constexpr Milliseconds StunRemoved = 10s;
@@ -386,18 +387,23 @@ struct boss_general_kaal_sd : public BossAI
         scheduler.ClearValidator();
         me->CastSpell(me, SPELL_REND_SOULS, CastSpellExtraArgs(TRIGGERED_FULL_MASK));
 
-        me->SetImmuneToAll(true);
-        me->SetUnitFlag2(UNIT_FLAG2_CANNOT_TURN);
-        me->NearTeleportTo(KaalEndPos);
+        // Rend Souls' stun 336749 (area enemies, 100 yd) comes from a TRIGGER_SPELL effect, which the core casts on her next event
+        // update: she must still be able to target players then, so the immunity and the rest wait a moment
+        me->m_Events.AddEventAtOffset([this]()
+        {
+            me->SetImmuneToAll(true);
+            me->SetUnitFlag2(UNIT_FLAG2_CANNOT_TURN);
+            me->NearTeleportTo(KaalEndPos);
 
-        // DONE: ENCOUNTER_END, boss kill credit, the complete world state and her door. She is out of combat for good afterwards.
-        if (instance)
-            instance->SetBossState(DATA_GENERAL_KAAL, DONE);
-        me->CombatStop(false);
-        EngagementOver();
+            // DONE: ENCOUNTER_END, boss kill credit, the complete world state and her door. She is out of combat for good afterwards.
+            if (instance)
+                instance->SetBossState(DATA_GENERAL_KAAL, DONE);
+            me->CombatStop(false);
+            EngagementOver();
 
-        summons.DespawnAll();
-        Conversation::CreateConversation(CONVERSATION_KAAL_END, me, me->GetPosition(), ObjectGuid::Empty);
+            summons.DespawnAll();
+            Conversation::CreateConversation(CONVERSATION_KAAL_END, me, me->GetPosition(), ObjectGuid::Empty);
+        }, RendSoulsStunWindow);
 
         scheduler.Schedule(DravenArrives, [this](TaskContext)
         {
