@@ -3911,8 +3911,12 @@ class spell_pri_holy_10_1_class_set_4pc : public SpellScript
 
     void HandleEffectDummy(SpellEffIndex /*effIndex*/) const
     {
-        if (GetOriginalCaster()->HasAura(SPELL_PRIEST_HOLY_10_1_CLASS_SET_4P))
-            GetOriginalCaster()->CastSpell(GetOriginalCaster(), SPELL_PRIEST_HOLY_10_1_CLASS_SET_4P_EFFECT, TRIGGERED_IGNORE_GCD);
+        Unit* originalCaster = GetOriginalCaster();
+        if (!originalCaster)
+            return;
+
+        if (originalCaster->HasAura(SPELL_PRIEST_HOLY_10_1_CLASS_SET_4P))
+            originalCaster->CastSpell(originalCaster, SPELL_PRIEST_HOLY_10_1_CLASS_SET_4P_EFFECT, TRIGGERED_IGNORE_GCD);
     }
 
     void Register() override
@@ -3934,8 +3938,12 @@ class spell_pri_holy_10_1_class_set_4pc_aura : public AuraScript
         if (GetTargetApplication()->GetRemoveMode() != AURA_REMOVE_BY_EXPIRE)
             return;
 
-        if (GetCaster()->HasAura(SPELL_PRIEST_HOLY_10_1_CLASS_SET_4P))
-            GetCaster()->CastSpell(GetCaster(), SPELL_PRIEST_HOLY_10_1_CLASS_SET_4P_EFFECT, CastSpellExtraArgs(TRIGGERED_IGNORE_GCD).SetTriggeringAura(aurEff));
+        Unit* caster = GetCaster();
+        if (!caster)
+            return;
+
+        if (caster->HasAura(SPELL_PRIEST_HOLY_10_1_CLASS_SET_4P))
+            caster->CastSpell(caster, SPELL_PRIEST_HOLY_10_1_CLASS_SET_4P_EFFECT, CastSpellExtraArgs(TRIGGERED_IGNORE_GCD).SetTriggeringAura(aurEff));
     }
 
     void Register() override
