@@ -418,7 +418,11 @@ struct boss_general_kaal_sd : public BossAI
 
         scheduler.Schedule(StunRemoved, [this](TaskContext)
         {
+            // 304150 (REMOVE_AURA on area enemies) finds no target now that she is immune to players: it stays for its cast
+            // packet, and the stun comes off the players here
             DoCastSelf(SPELL_REVENDRETH_STUN_REMOVAL, CastSpellExtraArgs(TRIGGERED_FULL_MASK));
+            if (instance)
+                instance->DoRemoveAurasDueToSpellOnPlayers(SPELL_REND_SOULS_STUN);
             me->InterruptNonMeleeSpells(true, SPELL_REND_SOULS);
             me->RemoveAurasDueToSpell(SPELL_REND_SOULS);
             me->RemoveUnitFlag2(UNIT_FLAG2_CANNOT_TURN);
