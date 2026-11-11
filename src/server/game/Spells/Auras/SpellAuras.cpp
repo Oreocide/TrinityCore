@@ -874,7 +874,9 @@ void Aura::Update(uint32 diff, Unit* caster)
             auto itr = m_stackDropTimes.begin();
             while (itr != m_stackDropTimes.end() && itr->DropTime <= now)
             {
-                ModStackAmount(-itr->StackAmount, AURA_REMOVE_BY_EXPIRE); // erases from m_stackDropTimes
+                // erases from m_stackDropTimes, except when the last stacks drop: then the aura is removed and the entry stays
+                if (ModStackAmount(-itr->StackAmount, AURA_REMOVE_BY_EXPIRE) || IsRemoved())
+                    break;
                 itr = m_stackDropTimes.begin();
             }
         }
