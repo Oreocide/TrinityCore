@@ -77,8 +77,7 @@ public:
             return true;
         }
 
-        // Skeleton: no boss has a script yet, so an encounter is done when its boss dies. Retail ends General Kaal's fight at 50%
-        // health without a death; that needs her boss script.
+        // General Kaal never dies: her script sets DONE at 50% health.
         void OnUnitDeath(Unit* unit) override
         {
             Creature* creature = unit->ToCreature();
@@ -90,7 +89,6 @@ public:
                 case BOSS_KRYXIS_THE_VORACIOUS:     SetBossState(DATA_KRYXIS_THE_VORACIOUS, DONE); break;
                 case BOSS_EXECUTOR_TARVOLD:         SetBossState(DATA_EXECUTOR_TARVOLD, DONE); break;
                 case BOSS_GRAND_PROCTOR_BERYLLIA:   SetBossState(DATA_GRAND_PROCTOR_BERYLLIA, DONE); break;
-                case BOSS_GENERAL_KAAL:             SetBossState(DATA_GENERAL_KAAL, DONE); break;
                 default:
                     break;
             }

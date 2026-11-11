@@ -39,6 +39,10 @@ void AddSC_boss_high_adjudicator_aleez();
 void AddSC_boss_lord_chamberlain();
 
 void AddSC_instance_sanguine_depths();
+void AddSC_boss_kryxis_the_voracious();
+void AddSC_boss_executor_tarvold();
+void AddSC_boss_grand_proctor_beryllia();
+void AddSC_boss_general_kaal();
 
 void AddSC_instance_de_other_side();
 
@@ -86,6 +90,10 @@ void AddShadowlandsScripts()
 
     // Sanguine Depths
     AddSC_instance_sanguine_depths();
+    AddSC_boss_kryxis_the_voracious();
+    AddSC_boss_executor_tarvold();
+    AddSC_boss_grand_proctor_beryllia();
+    AddSC_boss_general_kaal();
 
     // De Other Side
     AddSC_instance_de_other_side();
