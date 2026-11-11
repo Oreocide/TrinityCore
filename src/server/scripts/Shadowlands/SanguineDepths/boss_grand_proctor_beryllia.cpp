@@ -33,7 +33,9 @@
 #include "AreaTrigger.h"
 #include "AreaTriggerAI.h"
 #include "InstanceScript.h"
+#include "Map.h"
 #include "ObjectAccessor.h"
+#include "Player.h"
 #include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "Spell.h"
@@ -99,6 +101,7 @@ static constexpr Milliseconds TormentFirst = 24300ms;
 static constexpr Milliseconds TormentAfterSpikes = 27900ms;
 static constexpr Milliseconds AggroYellDelay = 1s;
 static constexpr Milliseconds RiteCastDelay = 0ms;
+static constexpr float RiteRadius = 300.0f;                         // 325360's radius (SpellRadius 88)
 static constexpr Milliseconds RadianceDelay = 2s;                   // capture: the Rite yell, then Z'rali's yell and missile 2 s later
 static constexpr int32 StartEnergy = 60;                            // capture: 64 after the first Power Tracker tick
 static constexpr int32 EnergyPerTick = 4;
@@ -217,10 +220,12 @@ private:
         {
             DoCastSelf(SPELL_RITE_OF_SUPREMACY);
         });
-        scheduler.Schedule(RadianceDelay, [this](TaskContext)
+        // Not on the BossAI scheduler: its validator would hold the throw until the 10 s Rite cast ends
+        me->m_Events.AddEventAtOffset([this]()
         {
-            ThrowShiningRadiance();
-        });
+            if (me->IsAlive() && me->IsEngaged())
+                ThrowShiningRadiance();
+        }, RadianceDelay);
     }
 
     void StartTorment()
@@ -320,8 +325,9 @@ class spell_sd_beryllia_power_tracker : public AuraScript
     }
 };
 
-// 325360 - Rite of Supremacy: every player the raid damage hits gets Agonize, unless a Shining Radiance protects it (capture: no
-// Agonize at the completion that found the player inside the area)
+// 325360 - Rite of Supremacy: as the cast completes, every player in the room gets Agonize unless a Shining Radiance protects it.
+// Capture: each Agonize SPELL_GO comes one packet before the Rite's (154537/154538, 155960/155961), none at the completion that
+// found the player inside the area.
 class spell_sd_beryllia_rite_of_supremacy : public SpellScript
 {
     bool Validate(SpellInfo const* /*spellInfo*/) override
@@ -329,18 +335,23 @@ class spell_sd_beryllia_rite_of_supremacy : public SpellScript
         return ValidateSpellInfo({ SPELL_AGONIZE, SPELL_SHINING_RADIANCE_PROTECTION });
     }
 
-    void HandleHit(SpellEffIndex /*effIndex*/)
+    void HandleBeforeCast()
     {
-        Unit* target = GetHitUnit();
-        if (!target || target->HasAura(SPELL_SHINING_RADIANCE_PROTECTION))
-            return;
+        Unit* caster = GetCaster();
+        for (MapReference const& ref : caster->GetMap()->GetPlayers())
+        {
+            Player* player = ref.GetSource();
+            if (!player || !player->IsAlive() || player->IsGameMaster() || !caster->IsWithinDist(player, RiteRadius)
+                || player->HasAura(SPELL_SHINING_RADIANCE_PROTECTION))
+                continue;
 
-        GetCaster()->CastSpell(target, SPELL_AGONIZE, CastSpellExtraArgs(GetSpell()));
+            caster->CastSpell(player, SPELL_AGONIZE, CastSpellExtraArgs(TRIGGERED_FULL_MASK));
+        }
     }
 
     void Register() override
     {
-        OnEffectHitTarget += SpellEffectFn(spell_sd_beryllia_rite_of_supremacy::HandleHit, EFFECT_0, SPELL_EFFECT_SCHOOL_DAMAGE);
+        BeforeCast += SpellCastFn(spell_sd_beryllia_rite_of_supremacy::HandleBeforeCast);
     }
 };
 

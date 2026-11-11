@@ -97,8 +97,9 @@ static constexpr float RushStopDistance = 5.0f;
 static constexpr float RushMinCharge = 0.5f;
 
 static constexpr Milliseconds OrbArmDelay = 1500ms;     // Medium: inferred, see the header
+static constexpr Milliseconds OrbRestTime = 2s;         // capture: the orb stays at the player's spot for 2.0 s, then its first spline
 static constexpr Milliseconds OrbRepathInterval = 250ms;
-static constexpr float OrbMinReach = 3.0f;
+static constexpr float OrbAbsorbReach = 2.5f;           // the orb's sphere; capture: absorbed about 1.6 yd from Kryxis, 4.0 s after creation
 
 // 162100 - Kryxis the Voracious
 struct boss_kryxis_the_voracious : public BossAI
@@ -323,7 +324,9 @@ class spell_sd_kryxis_juggernaut_rush_damage : public SpellScript
     }
 };
 
-// 319684 areatrigger (create properties 19353, areatrigger 23347, sphere 2.5, speed 3 yd/s): homes on Kryxis
+// 319684 areatrigger (create properties 19353, areatrigger 23347, sphere 2.5, speed 3 yd/s). Capture (the one Heroic orb): it rests
+// at the player's spot for 2.0 s, then homes on Kryxis (OrbitPathTarget) at 3.0 yd/s, re-aiming as he moves, and is absorbed at
+// +4.0 s about 1.6 yd from him. The player standing next to it at creation did not take it.
 struct at_sd_kryxis_living_essence : AreaTriggerAI
 {
     using AreaTriggerAI::AreaTriggerAI;
@@ -331,10 +334,18 @@ struct at_sd_kryxis_living_essence : AreaTriggerAI
     void OnCreate(Spell const* /*creatingSpell*/) override
     {
         if (Unit* caster = at->GetCaster())
-        {
             at->SetPathTarget(caster->GetGUID());
-            UpdateMovement(caster);
-        }
+    }
+
+    // A player who steps into an armed orb takes it; players already inside when it appeared do not
+    void OnUnitEnter(Unit* unit) override
+    {
+        if (_done || _armTimer > 0 || !unit->IsPlayer() || !unit->IsAlive())
+            return;
+
+        if (Unit* caster = at->GetCaster())
+            caster->CastSpell(unit, SPELL_ESSENCE_REABSORBED, CastSpellExtraArgs(TRIGGERED_FULL_MASK));
+        Finish();
     }
 
     void OnUpdate(uint32 diff) override
@@ -349,28 +360,26 @@ struct at_sd_kryxis_living_essence : AreaTriggerAI
             return;
         }
 
-        if (at->GetExactDist(caster) <= std::max(OrbMinReach, caster->GetCombatReach()))
+        if (_armTimer > 0)
+            _armTimer = diff >= _armTimer ? 0 : _armTimer - diff;
+
+        if (_restTimer > 0)
+        {
+            _restTimer = diff >= _restTimer ? 0 : _restTimer - diff;
+            if (_restTimer > 0)
+                return;
+
+            UpdateMovement(caster);
+            _repathTimer = uint32(OrbRepathInterval.count());
+            return;
+        }
+
+        if (at->GetExactDist2d(caster) <= OrbAbsorbReach)
         {
             caster->CastSpell(caster, SPELL_ESSENCE_ABSORPTION, CastSpellExtraArgs(TRIGGERED_FULL_MASK));
             caster->CastSpell(caster, SPELL_ESSENCE_SURGE, CastSpellExtraArgs(TRIGGERED_FULL_MASK));
             Finish();
             return;
-        }
-
-        if (_armTimer > 0)
-            _armTimer = diff >= _armTimer ? 0 : _armTimer - diff;
-        else
-        {
-            for (ObjectGuid const& guid : at->GetInsideUnits())
-            {
-                Unit* unit = ObjectAccessor::GetUnit(*at, guid);
-                if (unit && unit->IsPlayer() && unit->IsAlive())
-                {
-                    caster->CastSpell(unit, SPELL_ESSENCE_REABSORBED, CastSpellExtraArgs(TRIGGERED_FULL_MASK));
-                    Finish();
-                    return;
-                }
-            }
         }
 
         if (_repathTimer > diff)
@@ -398,6 +407,7 @@ private:
     }
 
     uint32 _armTimer = uint32(OrbArmDelay.count());
+    uint32 _restTimer = uint32(OrbRestTime.count());
     uint32 _repathTimer = uint32(OrbRepathInterval.count());
     bool _done = false;
 };

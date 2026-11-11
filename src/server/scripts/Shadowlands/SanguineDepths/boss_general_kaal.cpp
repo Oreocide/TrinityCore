@@ -276,13 +276,14 @@ struct boss_general_kaal_sd : public BossAI
         if (!damageEnd || !jumpEnd)
             return;
 
-        scheduler.Schedule(AfterimageJumpDelay, [this, damageGuid = damageEnd->GetGUID(), jumpGuid = jumpEnd->GetGUID(), &lane](TaskContext)
+        // Not on the BossAI scheduler: the jump must not wait for a cast she starts in the meantime
+        me->m_Events.AddEventAtOffset([this, damageGuid = damageEnd->GetGUID(), jumpGuid = jumpEnd->GetGUID(), &lane]()
         {
             if (Creature* image = ObjectAccessor::GetCreature(*me, damageGuid))
                 image->CastSpell(lane.JumpEnd, SPELL_PIERCING_BLUR_DAMAGE);
             if (Creature* image = ObjectAccessor::GetCreature(*me, jumpGuid))
                 image->CastSpell(lane.DamageEnd, SPELL_PIERCING_BLUR_JUMP);
-        });
+        }, AfterimageJumpDelay);
     }
 
     void ExecuteEvent(uint32 eventId) override
@@ -355,11 +356,12 @@ struct boss_general_kaal_sd : public BossAI
         if (me->GetHealth() - damage > me->CountPctFromMaxHealth(EndHealthPct))
             return;
 
+        // Not on the BossAI scheduler: its validator would hold the end until a cast in progress finishes
         _ending = true;
-        scheduler.Schedule(1ms, [this](TaskContext)
+        me->m_Events.AddEventAtOffset([this]()
         {
             EndEncounter();
-        });
+        }, 1ms);
     }
 
     // Capture order at the end (all in one second): Break Player Targetting, the energy aura off, Clear Player Debuffs, Rend Souls and
@@ -379,6 +381,9 @@ struct boss_general_kaal_sd : public BossAI
         DoCastSelf(SPELL_BREAK_PLAYER_TARGETING);
         me->RemoveAurasDueToSpell(SPELL_PERIODIC_ENERGY_GAIN);
         ClearPlayerDebuffs();
+        // Rend Souls is a self channel with no duration: the outro tasks must run while she channels it, so the BossAI validator
+        // (no task while casting) goes, and nothing below may interrupt it (CombatStop(false))
+        scheduler.ClearValidator();
         me->CastSpell(me, SPELL_REND_SOULS, CastSpellExtraArgs(TRIGGERED_FULL_MASK));
 
         me->SetImmuneToAll(true);
@@ -388,7 +393,7 @@ struct boss_general_kaal_sd : public BossAI
         // DONE: ENCOUNTER_END, boss kill credit, the complete world state and her door. She is out of combat for good afterwards.
         if (instance)
             instance->SetBossState(DATA_GENERAL_KAAL, DONE);
-        me->CombatStop(true);
+        me->CombatStop(false);
         EngagementOver();
 
         summons.DespawnAll();
@@ -408,6 +413,7 @@ struct boss_general_kaal_sd : public BossAI
         scheduler.Schedule(StunRemoved, [this](TaskContext)
         {
             DoCastSelf(SPELL_REVENDRETH_STUN_REMOVAL, CastSpellExtraArgs(TRIGGERED_FULL_MASK));
+            me->InterruptNonMeleeSpells(true, SPELL_REND_SOULS);
             me->RemoveAurasDueToSpell(SPELL_REND_SOULS);
             me->RemoveUnitFlag2(UNIT_FLAG2_CANNOT_TURN);
         });
