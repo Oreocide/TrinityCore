@@ -22224,13 +22224,11 @@ Pet* Player::GetPet() const
         if (!pet_guid.IsPet())
             return nullptr;
 
-        Pet* pet = ObjectAccessor::GetPet(*this, pet_guid);
-
-        if (!pet)
+        // checked before the lookup: ObjectAccessor::GetPet calls GetMap(), which asserts on a player whose map is reset
+        if (!IsInWorld())
             return nullptr;
 
-        if (IsInWorld())
-            return pet;
+        return ObjectAccessor::GetPet(*this, pet_guid);
 
         // there may be a guardian in this slot
         //TC_LOG_ERROR("entities.player", "Player::GetPet: Pet {} does not exist.", GUID_LOPART(pet_guid));
