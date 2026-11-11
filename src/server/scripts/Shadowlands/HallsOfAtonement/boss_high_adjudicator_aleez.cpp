@@ -238,8 +238,9 @@ struct npc_hoa_ghastly_parishioner : public ScriptedAI
         // new victim when the fixated player dies
         _scheduler.Schedule(1s, [this](TaskContext task)
         {
+            // A normal cast, as on retail (SPELL_START + SPELL_GO): a triggered cast of this visual-less aura sends no cast packet
             if (!me->HasAura(SPELL_PULSE_FROM_BEYOND))
-                DoCastSelf(SPELL_PULSE_FROM_BEYOND, true);
+                DoCastSelf(SPELL_PULSE_FROM_BEYOND);
             if (!me->IsEngaged())
                 DoZoneInCombat();
             if (!me->GetThreatManager().GetFixateTarget())
