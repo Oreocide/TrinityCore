@@ -121,6 +121,9 @@ struct boss_high_adjudicator_aleez : public BossAI
         switch (summon->GetEntry())
         {
             case NPC_GHASTLY_PARISHIONER:
+                // creature_template.faction is 0 (friendly): hostile before BossAI::JustSummoned zones everyone in, or the
+                // Parishioner gets no threat list and evades
+                summon->SetFaction(me->GetFaction());
                 BossAI::JustSummoned(summon);
                 break;
             case NPC_EMPTY_ANIMA_VESSEL:
@@ -237,17 +240,12 @@ struct npc_hoa_ghastly_parishioner : public ScriptedAI
         {
             if (!me->HasAura(SPELL_PULSE_FROM_BEYOND))
                 DoCastSelf(SPELL_PULSE_FROM_BEYOND, true);
+            if (!me->IsEngaged())
+                DoZoneInCombat();
             if (!me->GetThreatManager().GetFixateTarget())
                 DoCastSelf(SPELL_HAUNTING_FIXATION_PICKER, true);
             task.Repeat(1s);
         });
-    }
-
-    void IsSummonedBy(WorldObject* summoner) override
-    {
-        // creature_template.faction of the entry is 0
-        if (Unit* owner = summoner->ToUnit())
-            me->SetFaction(owner->GetFaction());
     }
 
     void DoAction(int32 action) override
@@ -265,10 +263,9 @@ struct npc_hoa_ghastly_parishioner : public ScriptedAI
         me->DespawnOrUnsummon(ParishionerSealedDespawn);
     }
 
-    void EnterEvadeMode(EvadeReason /*why*/) override
-    {
-        me->DespawnOrUnsummon();
-    }
+    // Left empty: UpdateVictim calls it every tick while the threat list is empty (before the first fixation); the boss's
+    // reset despawns the Parishioner
+    void EnterEvadeMode(EvadeReason /*why*/) override { }
 
     void UpdateAI(uint32 diff) override
     {
