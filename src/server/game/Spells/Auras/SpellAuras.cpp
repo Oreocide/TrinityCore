@@ -33,6 +33,7 @@
 #include "ScriptMgr.h"
 #include "Spell.h"
 #include "SpellAuraEffects.h"
+#include "SpellCastLog.h"
 #include "SpellHistory.h"
 #include "SpellMgr.h"
 #include "SpellPackets.h"
@@ -876,7 +877,11 @@ void Aura::Update(uint32 diff, Unit* caster)
             {
                 // erases from m_stackDropTimes, except when the last stacks drop: then the aura is removed and the entry stays
                 if (ModStackAmount(-itr->StackAmount, AURA_REMOVE_BY_EXPIRE) || IsRemoved())
+                {
+                    if (IsRemoved() && SpellCastLog::Enabled()) // spell QA: the last stack dropped here, the path the stack-drop freeze fix (#159) guards
+                        SpellCastLog::Write(GetOwner(), "STACKDROP_LAST", GetId(), GetCasterGUID(), ObjectGuid::Empty, GetOwner()->GetGUID());
                     break;
+                }
                 itr = m_stackDropTimes.begin();
             }
         }
