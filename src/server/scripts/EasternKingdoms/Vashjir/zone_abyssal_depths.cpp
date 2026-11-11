@@ -27,6 +27,7 @@ namespace Spells
 {
     static constexpr uint32 SummonVashjirWhirlpoolVehicleTrigger = 82905;
     static constexpr uint32 RideVehicleHardcoded                 = 46598;
+    static constexpr uint32 TeleportUnderWhirlpool               = 82903;
 }
 
 namespace Creatures
@@ -37,7 +38,6 @@ namespace Creatures
 namespace Paths
 {
     static constexpr uint32 PathUnderWhirlpool = 4437300;
-    static constexpr uint32 PathUnderWhirlpoolFinalNode = 4;
 }
 
 // 6200 - Abyssal Depths Whirlpool Entrance
@@ -48,7 +48,7 @@ public:
 
     bool OnTrigger(Player* player, AreaTriggerEntry const* /*areaTrigger*/) override
     {
-        // The trigger volume stays active for the whole ride. A second summon restarts the path.
+        // The client enters the trigger again once seated; a second summon would pull the player into a new vehicle.
         if (player->GetVehicle())
             return true;
 
@@ -74,17 +74,14 @@ struct npc_abyssal_depths_whirlpool_vehicle : public ScriptedAI
             _scheduler.Schedule(3s + 500ms, [this](TaskContext const& /*task*/)
             {
                 me->SetAIAnimKitId(822);
-                // The vehicle travels the full path. Teleporting it (82903) updates the passenger on the server only.
+                // Teleports the passenger under the whirlpool when the cast ends; the vehicle sinks meanwhile and
+                // despawns after the passenger leaves (vehicle_template despawn delay).
+                me->CastSpell(nullptr, Spells::TeleportUnderWhirlpool, CastSpellExtraArgsInit{
+                    .TriggerFlags = TRIGGERED_IGNORE_SET_FACING
+                });
                 me->GetMotionMaster()->MovePath(Paths::PathUnderWhirlpool, false);
             });
         }
-    }
-
-    void MovementInform(uint32 type, uint32 id) override
-    {
-        // Last node of path 4437300. Despawning earlier leaves the passenger following a removed vehicle.
-        if (type == WAYPOINT_MOTION_TYPE && id == Paths::PathUnderWhirlpoolFinalNode)
-            me->DespawnOrUnsummon();
     }
 
     void UpdateAI(uint32 diff) override
