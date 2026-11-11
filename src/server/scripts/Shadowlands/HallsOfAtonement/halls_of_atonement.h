@@ -79,7 +79,11 @@ enum HallsOfAtonementGameObjectIds
 enum HallsOfAtonementMisc
 {
     WORLD_SAFE_LOC_HOA_ENTRANCE     = 100088,   // "9.x Dungeon - Halls of Atonement - Entrance", the sniffed arrival point
-    SHARDS_OF_HALKIAS_COUNT         = 3         // retail releases Halkias after the last of the three dies
+    SHARDS_OF_HALKIAS_COUNT         = 3,        // retail releases Halkias after the last of the three dies
+
+    WORLD_STATE_BOSSES_DEFEATED     = 29106,    // 0 at entry, 1-4 at the kills
+    WORLD_STATE_HALKIAS_IN_PROGRESS = 18998,
+    WORLD_STATE_ALEEZ_IN_PROGRESS   = 19046
 };
 
 template <class AI, class T>

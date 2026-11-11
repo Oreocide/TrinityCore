@@ -103,6 +103,44 @@ public:
             }
         }
 
+        bool SetBossState(uint32 type, EncounterState state) override
+        {
+            if (!InstanceScript::SetBossState(type, state))
+                return false;
+
+            switch (type)
+            {
+                case DATA_HALKIAS:
+                    DoUpdateWorldState(WORLD_STATE_HALKIAS_IN_PROGRESS, state == IN_PROGRESS ? 1 : 0);
+                    break;
+                case DATA_HIGH_ADJUDICATOR_ALEEZ:
+                    DoUpdateWorldState(WORLD_STATE_ALEEZ_IN_PROGRESS, state == IN_PROGRESS ? 1 : 0);
+                    break;
+                default:
+                    break;
+            }
+
+            if (state == DONE && type <= DATA_LORD_CHAMBERLAIN)
+                UpdateBossesDefeated();
+
+            return true;
+        }
+
+        void AfterDataLoad() override
+        {
+            UpdateBossesDefeated();
+        }
+
+        void UpdateBossesDefeated()
+        {
+            int32 defeated = 0;
+            for (uint32 type : { DATA_HALKIAS, DATA_ECHELON, DATA_HIGH_ADJUDICATOR_ALEEZ, DATA_LORD_CHAMBERLAIN })
+                if (GetBossState(type) == DONE)
+                    ++defeated;
+
+            DoUpdateWorldState(WORLD_STATE_BOSSES_DEFEATED, defeated);
+        }
+
         uint32 GetData(uint32 type) const override
         {
             if (type == DATA_HALKIAS_RELEASED)
