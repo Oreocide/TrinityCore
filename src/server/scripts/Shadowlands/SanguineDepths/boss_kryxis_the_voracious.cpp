@@ -49,6 +49,7 @@
 #include "ObjectAccessor.h"
 #include "ScriptMgr.h"
 #include "ScriptedCreature.h"
+#include "Spell.h"
 #include "SpellInfo.h"
 #include "SpellScript.h"
 #include "sanguine_depths.h"
@@ -256,8 +257,13 @@ class spell_sd_kryxis_severing_smash : public SpellScript
     void HandleOrb(SpellEffIndex /*effIndex*/)
     {
         Unit* target = GetHitUnit();
-        if (target && target->IsPlayer())
-            GetCaster()->CastSpell(target->GetPosition(), SPELL_LIVING_ESSENCE, CastSpellExtraArgs(TRIGGERED_FULL_MASK));
+        if (!target || !target->IsPlayer())
+            return;
+
+        // The orb knows the player it split off from: that player does not collect it (see the areatrigger)
+        CastSpellExtraArgs args(TRIGGERED_FULL_MASK);
+        args.SetCustomArg(target->GetGUID());
+        GetCaster()->CastSpell(target->GetPosition(), SPELL_LIVING_ESSENCE, args);
     }
 
     void Register() override
@@ -326,21 +332,27 @@ class spell_sd_kryxis_juggernaut_rush_damage : public SpellScript
 
 // 319684 areatrigger (create properties 19353, areatrigger 23347, sphere 2.5, speed 3 yd/s). Capture (the one Heroic orb): it rests
 // at the player's spot for 2.0 s, then homes on Kryxis (OrbitPathTarget) at 3.0 yd/s, re-aiming as he moves, and is absorbed at
-// +4.0 s about 1.6 yd from him. The player standing next to it at creation did not take it.
+// +4.0 s about 1.6 yd from him. The player it split off from stood next to it and its path and did not take it.
 struct at_sd_kryxis_living_essence : AreaTriggerAI
 {
     using AreaTriggerAI::AreaTriggerAI;
 
-    void OnCreate(Spell const* /*creatingSpell*/) override
+    void OnCreate(Spell const* creatingSpell) override
     {
         if (Unit* caster = at->GetCaster())
             at->SetPathTarget(caster->GetGUID());
+
+        if (creatingSpell)
+            if (ObjectGuid const* source = std::any_cast<ObjectGuid>(&creatingSpell->m_customArg))
+                _source = *source;
     }
 
-    // A player who steps into an armed orb takes it; players already inside when it appeared do not
+    // Journal: a player who touches the orb first collects it. Medium: the one capture is solo, and there the orb's own player
+    // (standing at its edge, then beside its path) never collected it, so that player is left out; anyone else who touches an
+    // armed orb, or whom it runs into, takes it.
     void OnUnitEnter(Unit* unit) override
     {
-        if (_done || _armTimer > 0 || !unit->IsPlayer() || !unit->IsAlive())
+        if (_done || _armTimer > 0 || !unit->IsPlayer() || !unit->IsAlive() || unit->GetGUID() == _source)
             return;
 
         if (Unit* caster = at->GetCaster())
@@ -406,6 +418,7 @@ private:
         at->Remove();
     }
 
+    ObjectGuid _source;
     uint32 _armTimer = uint32(OrbArmDelay.count());
     uint32 _restTimer = uint32(OrbRestTime.count());
     uint32 _repathTimer = uint32(OrbRepathInterval.count());
