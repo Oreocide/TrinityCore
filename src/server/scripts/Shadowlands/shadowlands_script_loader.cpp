@@ -40,6 +40,8 @@ void AddSC_boss_lord_chamberlain();
 
 void AddSC_instance_sanguine_depths();
 
+void AddSC_instance_de_other_side();
+
 void AddSC_boss_eye_of_the_jailer_sod();
 void AddSC_boss_the_tarragrue_sod();
 void AddSC_boss_kelthuzad_sod();
@@ -82,6 +84,9 @@ void AddShadowlandsScripts()
 
     // Sanguine Depths
     AddSC_instance_sanguine_depths();
+
+    // De Other Side
+    AddSC_instance_de_other_side();
 
     // Sanctum of Domination
     AddSC_boss_eye_of_the_jailer_sod();
