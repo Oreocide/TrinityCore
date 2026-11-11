@@ -1263,7 +1263,18 @@ bool Player::TeleportTo(TeleportLocation const& teleportLocation, TeleportToOpti
         TC_LOG_DEBUG("maps", "Player {} ({}) is being teleported to map (MapID: {})", GetName(), GetGUID().ToString(), teleportLocation.Location.GetMapId());
 
     if (m_vehicle)
+    {
         ExitVehicle();
+
+        // ExitVehicle queued a transport exit spline toward the vehicle. InterruptOnTeleport below only deactivates it, and a
+        // generator that never started still launches on its next update, after the teleport packet, pulling the player
+        // back to the vehicle. Retail sends no exit spline when a teleport takes a passenger out of a vehicle.
+        if (MovementGenerator* exitMovement = GetMotionMaster()->GetMovementGenerator([](MovementGenerator const* movement)
+        {
+            return movement->GetMovementGeneratorType() == EFFECT_MOTION_TYPE && movement->HasFlag(MOVEMENTGENERATOR_FLAG_INITIALIZATION_PENDING);
+        }))
+            GetMotionMaster()->Remove(exitMovement);
+    }
 
     // reset movement flags at teleport, because player will continue move with these flags after teleport
     SetUnitMovementFlags(GetUnitMovementFlags() & MOVEMENTFLAG_MASK_HAS_PLAYER_STATUS_OPCODE);
