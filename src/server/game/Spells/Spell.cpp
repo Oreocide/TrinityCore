@@ -54,6 +54,7 @@
 #include "ScenarioEventMgr.h"
 #include "SharedDefines.h"
 #include "SpellAuraEffects.h"
+#include "SpellCastLog.h"
 #include "SpellHistory.h"
 #include "SpellInfo.h"
 #include "SpellMgr.h"
@@ -4679,6 +4680,9 @@ void Spell::SendMountResult(MountResult result)
 
 void Spell::SendSpellStart()
 {
+    if (SpellCastLog::Enabled())
+        SpellCastLog::Write(m_caster, "START", m_spellInfo->Id, m_caster->GetGUID(), m_originalCasterGUID, m_targets.GetObjectTargetGUID());
+
     if (!IsNeedSendToClient())
         return;
 
@@ -4782,6 +4786,10 @@ void Spell::SendSpellStart()
 
 void Spell::SendSpellGo()
 {
+    if (SpellCastLog::Enabled())
+        SpellCastLog::Write(m_caster, "GO", m_spellInfo->Id, m_caster->GetGUID(), m_originalCasterGUID, m_targets.GetObjectTargetGUID(),
+            Trinity::StringFormat("hits={} triggered={}", m_UniqueTargetInfo.size(), IsTriggered() ? 1 : 0));
+
     // not send invisible spell casting
     if (!IsNeedSendToClient())
         return;

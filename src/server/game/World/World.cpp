@@ -94,6 +94,7 @@
 #include "SkillDiscovery.h"
 #include "SkillExtraItems.h"
 #include "SmartScriptMgr.h"
+#include "SpellCastLog.h"
 #include "SpellMgr.h"
 #include "SupportMgr.h"
 #include "TaxiPathGraph.h"
@@ -581,6 +582,8 @@ void World::LoadConfigSettings(bool reload)
         sLog->LoadFromConfig();
         sMetric->LoadFromConfigs();
     }
+
+    SpellCastLog::LoadConfig();
 
     m_defaultDbcLocale = LocaleConstant(sConfigMgr->GetIntDefault("DBC.Locale"sv, 0));
 

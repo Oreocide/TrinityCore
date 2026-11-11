@@ -4297,6 +4297,40 @@ Logger.mmaps=3,Server
 Log.Async.Enable = 0
 
 #
+#    SpellQA.CastLog.Enable
+#        Description: Write one line per spell start/go and aura apply/remove to a separate file.
+#                     Each line is one write(2) on an O_APPEND file, so it survives a crash.
+#                     Diagnostic for battleground and spell lifetime tests; read with
+#                     trinitycore-tracking/tools/qa/castlog_tail.py.
+#        Default:     0 - (Disabled)
+#                     1 - (Enabled)
+
+SpellQA.CastLog.Enable = 0
+
+#
+#    SpellQA.CastLog.Maps
+#        Description: Comma-separated map ids to log. Empty logs every map.
+#        Example:     "30,489,529"
+#        Default:     ""
+
+SpellQA.CastLog.Maps = ""
+
+#
+#    SpellQA.CastLog.File
+#        Description: File name, relative to LogsDir.
+#        Default:     "castlog.log"
+
+SpellQA.CastLog.File = "castlog.log"
+
+#
+#    SpellQA.CastLog.MaxMB
+#        Description: Size at which the file is renamed to <File>.1 and a new one is started.
+#        Default:     256
+#                     0 - (No limit)
+
+SpellQA.CastLog.MaxMB = 256
+
+#
 #    Allow.IP.Based.Action.Logging
 #        Description: Logs actions, e.g. account login and logout to name a few, based on IP of
 #                     current session.

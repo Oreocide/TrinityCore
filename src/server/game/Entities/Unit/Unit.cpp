@@ -75,6 +75,7 @@
 #include "ScheduledChangeAI.h"
 #include "SpellAuraEffects.h"
 #include "SpellAuras.h"
+#include "SpellCastLog.h"
 #include "SpellHistory.h"
 #include "SpellInfo.h"
 #include "SpellMgr.h"
@@ -3594,6 +3595,10 @@ void Unit::_ApplyAura(AuraApplication* aurApp, uint32 effMask)
     if (aurApp->GetRemoveMode())
         return;
 
+    if (SpellCastLog::Enabled())
+        SpellCastLog::Write(this, "AURA+", aura->GetId(), aura->GetCasterGUID(), ObjectGuid::Empty, GetGUID(),
+            Trinity::StringFormat("dur={} stack={}", aura->GetDuration(), aura->GetStackAmount()));
+
     // Update target aura state flag
     if (AuraStateType aState = aura->GetSpellInfo()->GetAuraState())
     {
@@ -3664,6 +3669,11 @@ void Unit::_UnapplyAura(AuraApplicationMap::iterator& i, AuraRemoveMode removeMo
     ++m_removedAurasCount;
 
     Unit* caster = aura->GetCaster();
+
+    // caster_on_map=0: the caster is no longer on this map, the case behind delayed-hook crashes
+    if (SpellCastLog::Enabled())
+        SpellCastLog::Write(this, "AURA-", aura->GetId(), aura->GetCasterGUID(), ObjectGuid::Empty, GetGUID(),
+            Trinity::StringFormat("mode={} caster_on_map={}", uint32(removeMode), caster ? 1 : 0));
 
     // Remove all pointers from lists here to prevent possible pointer invalidation on spellcast/auraapply/auraremove
     m_appliedAuras.erase(i);
