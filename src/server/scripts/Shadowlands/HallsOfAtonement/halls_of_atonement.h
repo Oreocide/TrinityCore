@@ -34,7 +34,15 @@ enum HallsOfAtonementDataTypes
     DATA_LORD_CHAMBERLAIN           = 3,
 
     // Not an encounter: his death opens the Spire Door to Lord Chamberlain
-    DATA_INQUISITOR_SIGAR           = 4
+    DATA_INQUISITOR_SIGAR           = 4,
+
+    // Set when the Shards of Halkias are dead: Halkias can be attacked
+    DATA_HALKIAS_RELEASED
+};
+
+enum HallsOfAtonementActions
+{
+    ACTION_HALKIAS_RELEASE          = 1
 };
 
 enum HallsOfAtonementCreatureIds
@@ -44,7 +52,9 @@ enum HallsOfAtonementCreatureIds
     BOSS_HIGH_ADJUDICATOR_ALEEZ     = 165410,
     BOSS_LORD_CHAMBERLAIN           = 164218,
 
-    NPC_INQUISITOR_SIGAR            = 167876
+    NPC_INQUISITOR_SIGAR            = 167876,
+    NPC_SHARD_OF_HALKIAS            = 164557,
+    NPC_DEPRAVED_COLLECTOR          = 165529
 };
 
 enum HallsOfAtonementGameObjectIds
@@ -68,7 +78,8 @@ enum HallsOfAtonementGameObjectIds
 
 enum HallsOfAtonementMisc
 {
-    WORLD_SAFE_LOC_HOA_ENTRANCE     = 100088    // "9.x Dungeon - Halls of Atonement - Entrance", the sniffed arrival point
+    WORLD_SAFE_LOC_HOA_ENTRANCE     = 100088,   // "9.x Dungeon - Halls of Atonement - Entrance", the sniffed arrival point
+    SHARDS_OF_HALKIAS_COUNT         = 3         // retail releases Halkias after the last of the three dies
 };
 
 template <class AI, class T>

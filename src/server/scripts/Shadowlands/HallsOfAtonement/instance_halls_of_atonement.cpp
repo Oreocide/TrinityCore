@@ -16,6 +16,7 @@
  */
 
 #include "Creature.h"
+#include "CreatureAI.h"
 #include "InstanceScript.h"
 #include "Map.h"
 #include "ScriptMgr.h"
@@ -68,7 +69,8 @@ public:
 
     struct instance_halls_of_atonement_InstanceMapScript : public InstanceScript
     {
-        instance_halls_of_atonement_InstanceMapScript(InstanceMap* map) : InstanceScript(map)
+        instance_halls_of_atonement_InstanceMapScript(InstanceMap* map) : InstanceScript(map),
+            _shardsOfHalkiasKilled(*this, "ShardsOfHalkiasKilled", 0)
         {
             SetHeaders(DataHeader);
             SetBossNumber(EncounterCount);
@@ -78,7 +80,7 @@ public:
             SetEntranceLocation(WORLD_SAFE_LOC_HOA_ENTRANCE);
         }
 
-        // Skeleton: no boss has a script yet, so an encounter is done when its boss dies.
+        // The bosses complete their encounters through BossAI.
         void OnUnitDeath(Unit* unit) override
         {
             Creature* creature = unit->ToCreature();
@@ -87,15 +89,30 @@ public:
 
             switch (creature->GetEntry())
             {
-                case BOSS_HALKIAS:                  SetBossState(DATA_HALKIAS, DONE); break;
-                case BOSS_ECHELON:                  SetBossState(DATA_ECHELON, DONE); break;
-                case BOSS_HIGH_ADJUDICATOR_ALEEZ:   SetBossState(DATA_HIGH_ADJUDICATOR_ALEEZ, DONE); break;
-                case BOSS_LORD_CHAMBERLAIN:         SetBossState(DATA_LORD_CHAMBERLAIN, DONE); break;
-                case NPC_INQUISITOR_SIGAR:          SetBossState(DATA_INQUISITOR_SIGAR, DONE); break;
+                case NPC_INQUISITOR_SIGAR:
+                    SetBossState(DATA_INQUISITOR_SIGAR, DONE);
+                    break;
+                case NPC_SHARD_OF_HALKIAS:
+                    _shardsOfHalkiasKilled = _shardsOfHalkiasKilled + 1;
+                    if (_shardsOfHalkiasKilled >= SHARDS_OF_HALKIAS_COUNT)
+                        if (Creature* halkias = GetCreature(DATA_HALKIAS))
+                            halkias->AI()->DoAction(ACTION_HALKIAS_RELEASE);
+                    break;
                 default:
                     break;
             }
         }
+
+        uint32 GetData(uint32 type) const override
+        {
+            if (type == DATA_HALKIAS_RELEASED)
+                return _shardsOfHalkiasKilled >= SHARDS_OF_HALKIAS_COUNT ? 1 : 0;
+
+            return 0;
+        }
+
+    private:
+        PersistentInstanceScriptValue<uint8> _shardsOfHalkiasKilled;
     };
 
     InstanceScript* GetInstanceScript(InstanceMap* map) const override

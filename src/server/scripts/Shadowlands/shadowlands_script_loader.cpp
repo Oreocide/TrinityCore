@@ -33,6 +33,10 @@ void AddSC_boss_lady_inerva_darkvein();
 void AddSC_boss_sun_kings_salvation();
 
 void AddSC_instance_halls_of_atonement();
+void AddSC_boss_halkias();
+void AddSC_boss_echelon();
+void AddSC_boss_high_adjudicator_aleez();
+void AddSC_boss_lord_chamberlain();
 
 void AddSC_boss_eye_of_the_jailer_sod();
 void AddSC_boss_the_tarragrue_sod();
@@ -69,6 +73,10 @@ void AddShadowlandsScripts()
 
     // Halls of Atonement
     AddSC_instance_halls_of_atonement();
+    AddSC_boss_halkias();
+    AddSC_boss_echelon();
+    AddSC_boss_high_adjudicator_aleez();
+    AddSC_boss_lord_chamberlain();
 
     // Sanctum of Domination
     AddSC_boss_eye_of_the_jailer_sod();
