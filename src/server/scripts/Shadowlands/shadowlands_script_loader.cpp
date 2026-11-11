@@ -42,6 +42,8 @@ void AddSC_instance_sanguine_depths();
 
 void AddSC_instance_de_other_side();
 
+void AddSC_instance_mists_of_tirna_scithe();
+
 void AddSC_boss_eye_of_the_jailer_sod();
 void AddSC_boss_the_tarragrue_sod();
 void AddSC_boss_kelthuzad_sod();
@@ -87,6 +89,9 @@ void AddShadowlandsScripts()
 
     // De Other Side
     AddSC_instance_de_other_side();
+
+    // Mists of Tirna Scithe
+    AddSC_instance_mists_of_tirna_scithe();
 
     // Sanctum of Domination
     AddSC_boss_eye_of_the_jailer_sod();
