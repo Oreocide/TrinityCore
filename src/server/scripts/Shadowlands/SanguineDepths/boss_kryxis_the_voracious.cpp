@@ -47,6 +47,7 @@
 #include "G3D/Vector3.h"
 #include "InstanceScript.h"
 #include "ObjectAccessor.h"
+#include "Player.h"
 #include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "Spell.h"
@@ -246,7 +247,9 @@ class spell_sd_kryxis_hungering_drain_tick : public SpellScript
     }
 };
 
-// 319685 - Severing Smash: an orb of Living Essence is left where each player was hit
+// 319685 - Severing Smash: an orb of Living Essence is left at each player in the area, hit or not. Capture 2026-11-10 12-50-53:
+// the Smash's SPELL_GO missed the only player (MissStatus reason 1), and Kryxis's 319684 created the orb in the same tick,
+// just before that SPELL_GO. Targets are collected before the hit roll and the orbs cast in OnCast, which runs before the GO.
 class spell_sd_kryxis_severing_smash : public SpellScript
 {
     bool Validate(SpellInfo const* /*spellInfo*/) override
@@ -254,22 +257,36 @@ class spell_sd_kryxis_severing_smash : public SpellScript
         return ValidateSpellInfo({ SPELL_LIVING_ESSENCE });
     }
 
-    void HandleOrb(SpellEffIndex /*effIndex*/)
+    void CollectPlayers(std::list<WorldObject*>& targets)
     {
-        Unit* target = GetHitUnit();
-        if (!target || !target->IsPlayer())
-            return;
+        for (WorldObject* target : targets)
+            if (Player* player = target->ToPlayer())
+                _players.push_back(player->GetGUID());
+    }
 
-        // The orb knows the player it split off from: that player does not collect it (see the areatrigger)
-        CastSpellExtraArgs args(TRIGGERED_FULL_MASK);
-        args.SetCustomArg(target->GetGUID());
-        GetCaster()->CastSpell(target->GetPosition(), SPELL_LIVING_ESSENCE, args);
+    void HandleOrbs()
+    {
+        Unit* caster = GetCaster();
+        for (ObjectGuid const& playerGuid : _players)
+        {
+            Player* player = ObjectAccessor::GetPlayer(*caster, playerGuid);
+            if (!player)
+                continue;
+
+            // The orb knows the player it split off from: that player does not collect it (see the areatrigger)
+            CastSpellExtraArgs args(TRIGGERED_FULL_MASK);
+            args.SetCustomArg(player->GetGUID());
+            caster->CastSpell(player->GetPosition(), SPELL_LIVING_ESSENCE, args);
+        }
     }
 
     void Register() override
     {
-        OnEffectHitTarget += SpellEffectFn(spell_sd_kryxis_severing_smash::HandleOrb, EFFECT_0, SPELL_EFFECT_SCHOOL_DAMAGE);
+        OnObjectAreaTargetSelect += SpellObjectAreaTargetSelectFn(spell_sd_kryxis_severing_smash::CollectPlayers, EFFECT_0, TARGET_UNIT_DEST_AREA_ENEMY);
+        OnCast += SpellCastFn(spell_sd_kryxis_severing_smash::HandleOrbs);
     }
+
+    std::vector<ObjectGuid> _players;
 };
 
 // 319713 - Juggernaut Rush: when the cast ends the rectangle spell goes to the target's position
