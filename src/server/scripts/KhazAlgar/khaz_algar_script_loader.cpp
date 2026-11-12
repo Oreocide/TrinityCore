@@ -46,6 +46,9 @@ void AddSC_boss_orator_krix_vizk();
 void AddSC_instance_darkflame_cleft();
 void AddSC_boss_the_candle_king();
 
+// Hallowfall: Priory scenario
+void AddSC_instance_priory_scenario();
+
 // The name of this function should match:
 // void Add${NameOfDirectory}Scripts()
 void AddKhazAlgarScripts()
@@ -78,4 +81,7 @@ void AddKhazAlgarScripts()
     // Darkflame Cleft
     AddSC_instance_darkflame_cleft();
     AddSC_boss_the_candle_king();
+
+    // Hallowfall: Priory scenario
+    AddSC_instance_priory_scenario();
 }
