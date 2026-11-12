@@ -252,6 +252,10 @@ void Metric::Unload()
         SendBatch();
     }
 
+    // Cancelled timer handlers still run (they ignore the error code) and re-arm while _enabled is set.
+    // At shutdown the IoContext is still running here, so a re-armed timer keeps it busy forever and the
+    // thread pool join in main() never returns (worldserver hung until SIGKILL with Metric.Enable = 1).
+    _enabled = false;
     _batchTimer->cancel();
     _overallStatusTimer->cancel();
 }
