@@ -82,14 +82,7 @@ public:
             return true;
         }
 
-        bool IsAlive(uint32 type) const
-        {
-            Creature* creature = instance->GetCreature(GetObjectGuid(type));
-            return creature && creature->IsAlive();
-        }
-
-        // Skeleton: no boss has a script yet, so an encounter is done when its boss dies (both Manastorms for theirs). Retail ends the
-        // Manastorms and Mueh'zala by script at about 10% health without a death; that needs their boss scripts.
+        // The Manastorms and Mueh'zala never die: their scripts set DONE at about 10% health, as on retail
         void OnUnitDeath(Unit* unit) override
         {
             Creature* creature = unit->ToCreature();
@@ -100,12 +93,6 @@ public:
             {
                 case BOSS_HAKKAR_THE_SOULFLAYER:    SetBossState(DATA_HAKKAR_THE_SOULFLAYER, DONE); break;
                 case BOSS_DEALER_XYEXA:             SetBossState(DATA_DEALER_XYEXA, DONE); break;
-                case BOSS_MUEHZALA:                 SetBossState(DATA_MUEHZALA, DONE); break;
-                case BOSS_MILLIFICENT_MANASTORM:
-                case BOSS_MILLHOUSE_MANASTORM:
-                    if (!IsAlive(DATA_MILLIFICENT_MANASTORM) && !IsAlive(DATA_MILLHOUSE_MANASTORM))
-                        SetBossState(DATA_THE_MANASTORMS, DONE);
-                    break;
                 default:
                     break;
             }

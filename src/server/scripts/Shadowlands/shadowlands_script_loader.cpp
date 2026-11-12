@@ -45,6 +45,10 @@ void AddSC_boss_grand_proctor_beryllia();
 void AddSC_boss_general_kaal();
 
 void AddSC_instance_de_other_side();
+void AddSC_boss_hakkar_the_soulflayer();
+void AddSC_boss_the_manastorms();
+void AddSC_boss_dealer_xyexa();
+void AddSC_boss_muehzala();
 
 void AddSC_instance_mists_of_tirna_scithe();
 
@@ -97,6 +101,10 @@ void AddShadowlandsScripts()
 
     // De Other Side
     AddSC_instance_de_other_side();
+    AddSC_boss_hakkar_the_soulflayer();
+    AddSC_boss_the_manastorms();
+    AddSC_boss_dealer_xyexa();
+    AddSC_boss_muehzala();
 
     // Mists of Tirna Scithe
     AddSC_instance_mists_of_tirna_scithe();
