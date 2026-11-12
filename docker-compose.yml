@@ -40,6 +40,16 @@ services:
         GROUP_ID: ${DOCKER_GROUP_ID:-1000}
     network_mode: host
     restart: unless-stopped
+    # crash cores (mod-playerbots#36): the host's kernel.core_pattern decides where they go
+    # (trinitycore-tracking/tools/coredump/README.md); this only makes sure the limit never stops one
+    ulimits:
+      core: -1
+    # OOM containment (2026-11-11): at this limit the kernel OOM killer acts inside this container's
+    # cgroup instead of starving the host; memswap_limit = mem_limit gives it no swap.
+    # RSS seen: ~8 GB idle, ~11-12 GB in 150-bot BG tests, 12.9-15.6 GB with 1000 random bots.
+    # After the 64 GB RAM upgrade, run trinitycore-tracking/tools/ram64/after_reboot.sh: it raises both limits to 28g.
+    mem_limit: 18g
+    memswap_limit: 18g
     logging:
       driver: json-file
       options:
