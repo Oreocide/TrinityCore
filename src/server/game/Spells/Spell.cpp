@@ -3245,6 +3245,15 @@ void Spell::DoSpellEffectHit(Unit* unit, SpellEffectInfo const& spellEffectInfo,
                 if (m_targets.HasDst())
                     createInfo.SetDst(m_targets.GetDstPos());
 
+                // Pandemic: TryRefreshStackOrCreate resets a refreshed aura to its full duration, so read the time left first
+                // (same lookup as Unit::_TryStackingOrRefreshingExistingAura)
+                int32 durationLeftBeforeRefresh = 0;
+                if (m_spellInfo->HasAttribute(SPELL_ATTR13_PERIODIC_REFRESH_EXTENDS_DURATION) && !m_spellInfo->IsMultiSlotAura())
+                    if (Aura const* existingAura = unit->GetOwnedAura(m_spellInfo->Id,
+                        m_spellInfo->IsStackableOnOneSlotWithDifferentCasters() ? ObjectGuid::Empty : caster->GetGUID(),
+                        m_spellInfo->HasAttribute(SPELL_ATTR0_CU_ENCHANT_PROC) ? m_castItemGUID : ObjectGuid::Empty))
+                        durationLeftBeforeRefresh = std::max(existingAura->GetDuration(), 0);
+
                 if (Aura* aura = Aura::TryRefreshStackOrCreate(createInfo, false))
                 {
                     hitInfo.HitAura = aura->ToUnitAura();
@@ -3277,7 +3286,7 @@ void Spell::DoSpellEffectHit(Unit* unit, SpellEffectInfo const& spellEffectInfo,
 
                             if (refresh && m_spellInfo->HasAttribute(SPELL_ATTR13_PERIODIC_REFRESH_EXTENDS_DURATION))
                             {
-                                int32 newDuration = hitInfo.AuraDuration + hitInfo.HitAura->GetDuration();
+                                int32 newDuration = hitInfo.AuraDuration + durationLeftBeforeRefresh;
                                 hitInfo.AuraDuration = std::min(newDuration, CalculatePct(hitInfo.AuraDuration, 130));
                             }
                         }
