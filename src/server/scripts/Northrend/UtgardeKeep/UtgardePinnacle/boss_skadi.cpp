@@ -724,7 +724,9 @@ class spell_skadi_ride_vehicle : public AuraScript
         if (!caster)
             return;
 
-        GetTarget()->GetVehicleKit()->RemovePassenger(caster);
+        // the vehicle kit can already be gone when the aura is removed during a grid unload (Oreocide/TrinityCore#194)
+        if (Vehicle* vehicle = GetTarget()->GetVehicleKit())
+            vehicle->RemovePassenger(caster);
         caster->SetControlled(false, UNIT_STATE_ROOT);
     }
 
