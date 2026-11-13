@@ -1265,6 +1265,8 @@ bool CriteriaHandler::IsCompletedCriteria(Criteria const* criteria, uint64 requi
         case CriteriaType::ReachRenownLevel:
         case CriteriaType::BankTabPurchased:
         case CriteriaType::LearnTaxiNode:
+        case CriteriaType::PlayerTriggerGameEvent:
+        case CriteriaType::AnyoneTriggerGameEventScenario:
             return progress->Counter >= requiredAmount;
         case CriteriaType::EarnAchievement:
         case CriteriaType::CompleteQuest:
