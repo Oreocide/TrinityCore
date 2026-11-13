@@ -28,9 +28,12 @@ EndScriptData */
 #include "CriteriaHandler.h"
 #include "DB2Stores.h"
 #include "GameEventSender.h"
+#include "Map.h"
 #include "Player.h"
 #include "RBAC.h"
 #include "Scenario.h"
+#include "StringFormat.h"
+#include "WorldSession.h"
 
 using namespace Trinity::ChatCommands;
 
@@ -54,20 +57,46 @@ public:
         return commandTable;
     }
 
-    // .scenario info - scenario of the map you are on and its current step
+    // .scenario info - scenario of the map you are on, its current step and the progress of that step's criteria
+    // (SendSysMessage + StringFormat: PSendSysMessage is printf-style and printed these {} literally)
     static bool HandleScenarioInfoCommand(ChatHandler* handler)
     {
         Player* player = handler->GetSession()->GetPlayer();
-        Scenario const* scenario = player->GetScenario();
+        Scenario* scenario = player->GetScenario();
         if (!scenario)
         {
-            handler->PSendSysMessage("No scenario on this map (map {}, difficulty {}).", player->GetMapId(), uint32(player->GetMap()->GetDifficultyID()));
+            handler->SendSysMessage(Trinity::StringFormat("No scenario on this map (map {}, difficulty {}).", player->GetMapId(), uint32(player->GetMap()->GetDifficultyID())));
             return true;
         }
 
-        handler->PSendSysMessage("Scenario {} '{}' complete: {}", scenario->GetEntry()->ID, scenario->GetEntry()->Name[handler->GetSessionDbcLocale()], scenario->IsComplete() ? "yes" : "no");
-        if (ScenarioStepEntry const* step = scenario->GetStep())
-            handler->PSendSysMessage("Current step {} (order {}) '{}', criteria tree {}", step->ID, uint32(step->OrderIndex), step->Title[handler->GetSessionDbcLocale()], step->Criteriatreeid);
+        handler->SendSysMessage(Trinity::StringFormat("Scenario {} '{}' complete: {}", scenario->GetEntry()->ID, scenario->GetEntry()->Name[handler->GetSessionDbcLocale()], scenario->IsComplete() ? "yes" : "no"));
+        ScenarioStepEntry const* step = scenario->GetStep();
+        if (!step)
+        {
+            handler->SendSysMessage("No current step.");
+            return true;
+        }
+
+        handler->SendSysMessage(Trinity::StringFormat("Current step {} (order {}) '{}', criteria tree {}, step state {}, tree complete: {}", step->ID, uint32(step->OrderIndex),
+            step->Title[handler->GetSessionDbcLocale()], step->Criteriatreeid, uint32(scenario->GetStepState(step)), scenario->IsCompletedStep(step) ? "yes" : "no"));
+
+        CriteriaTree const* tree = sCriteriaMgr->GetCriteriaTree(step->Criteriatreeid);
+        if (!tree)
+        {
+            handler->SendSysMessage(Trinity::StringFormat("Criteria tree {} is not loaded.", step->Criteriatreeid));
+            return true;
+        }
+
+        CriteriaMgr::WalkCriteriaTree(tree, [&](CriteriaTree const* node)
+        {
+            if (!node->Criteria)
+                return;
+
+            CriteriaProgress const* progress = scenario->GetProgress(node->Criteria);
+            handler->SendSysMessage(Trinity::StringFormat("  tree {} criteria {} {} ({}) asset {}: {} / {}", node->ID, node->Criteria->ID,
+                CriteriaMgr::GetCriteriaTypeString(node->Criteria->Entry->Type), uint32(node->Criteria->Entry->Type), node->Criteria->Entry->Asset.ID,
+                progress ? progress->Counter : 0, node->Entry->Amount));
+        });
         return true;
     }
 
@@ -76,7 +105,7 @@ public:
     {
         Player* player = handler->GetSession()->GetPlayer();
         GameEvents::Trigger(gameEventId, player, nullptr);
-        handler->PSendSysMessage("Triggered game event {}.", gameEventId);
+        handler->SendSysMessage(Trinity::StringFormat("Triggered game event {}.", gameEventId));
         return true;
     }
 
@@ -87,7 +116,7 @@ public:
         uint32 n = count.value_or(1);
         for (uint32 i = 0; i < n; ++i)
             player->UpdateCriteria(CriteriaType::CompleteInternalCriteria, criteriaId);
-        handler->PSendSysMessage("Fed internal criteria {} x{}.", criteriaId, n);
+        handler->SendSysMessage(Trinity::StringFormat("Fed internal criteria {} x{}.", criteriaId, n));
         return true;
     }
 };

@@ -77,6 +77,9 @@ class TC_GAME_API Scenario : public CriteriaHandler
         void SendScenarioState(Player const* player) const;
         void SendBootPlayer(Player const* player) const;
 
+        // Read-only view of one criteria's progress on this scenario (nullptr when it has none), for .scenario info
+        CriteriaProgress const* GetProgress(Criteria const* criteria) { return GetCriteriaProgress(criteria); }
+
     protected:
         Map const* _map;
         GuidUnorderedSet _players;
