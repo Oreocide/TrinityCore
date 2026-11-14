@@ -232,6 +232,7 @@ enum PriestSpells
     SPELL_PRIEST_SHADOW_WORD_DEATH_DAMAGE           = 32409,
     SPELL_PRIEST_SHADOW_MEND_PERIODIC_DUMMY         = 187464,
     SPELL_PRIEST_SHADOW_WORD_PAIN                   = 589,
+    SPELL_PRIEST_SHADOWFORM                         = 232698,
     SPELL_PRIEST_SHADOWY_APPARITION_DUMMY           = 341263,
     SPELL_PRIEST_SHADOWY_APPARITION_MISSILE         = 148859,
     SPELL_PRIEST_SHIELD_DISCIPLINE                  = 197045,
@@ -264,7 +265,11 @@ enum PriestSpells
     SPELL_PRIEST_UNFURLING_DARKNESS_DEBUFF          = 341291,
     SPELL_PRIEST_VAMPIRIC_EMBRACE_HEAL              = 15290,
     SPELL_PRIEST_VAMPIRIC_TOUCH                     = 34914,
+    SPELL_PRIEST_VOIDFORM                           = 194249,
+    SPELL_PRIEST_VOIDFORM_1                         = 210199,
+    SPELL_PRIEST_VOID_VOLLEY                        = 1242173,
     SPELL_PRIEST_VOID_VOLLEY_DAMAGE                 = 1242189,
+    SPELL_PRIEST_VOID_VOLLEY_OVERRIDE               = 1242171,
     SPELL_PRIEST_VOID_SHIELD                        = 199144,
     SPELL_PRIEST_VOID_SHIELD_EFFECT                 = 199145,
     SPELL_PRIEST_VOICE_OF_HARMONY                   = 390994,
@@ -5363,7 +5368,7 @@ class spell_pri_void_volley : public SpellScript
 
     bool Validate(SpellInfo const* spellInfo) override
     {
-        return ValidateSpellInfo({ SPELL_PRIEST_VOID_VOLLEY_DAMAGE })
+        return ValidateSpellInfo({ SPELL_PRIEST_VOID_VOLLEY_DAMAGE, SPELL_PRIEST_VOID_VOLLEY_OVERRIDE })
             && ValidateSpellEffect({ { spellInfo->Id, EFFECT_2 } });
     }
 
@@ -5382,9 +5387,103 @@ class spell_pri_void_volley : public SpellScript
             caster->m_Events.AddEventAtOffset(new BoltEvent(caster, target->GetGUID(), GetSpell()->m_originalCastId, bolts - 1), BoltEvent::Period);
     }
 
+    // each Void Volley the priest casts during Voidform spends one of the extra volleys; the one Voidform fires itself is triggered
+    void SpendVolley() const
+    {
+        if (GetSpell()->IsTriggered())
+            return;
+
+        Unit* caster = GetCaster();
+        if (Aura* overrideAura = caster->GetAura(SPELL_PRIEST_VOID_VOLLEY_OVERRIDE, caster->GetGUID()))
+            overrideAura->ModStackAmount(-1);
+    }
+
     void Register() override
     {
         OnEffectHitTarget += SpellEffectFn(spell_pri_void_volley::HandleEffectHit, EFFECT_0, SPELL_EFFECT_DUMMY);
+        AfterCast += SpellCastFn(spell_pri_void_volley::SpendVolley);
+    }
+};
+
+// 228260 - Voidform
+class spell_pri_voidform : public SpellScript
+{
+    bool Validate(SpellInfo const* spellInfo) override
+    {
+        return ValidateSpellInfo({ SPELL_PRIEST_VOID_VOLLEY, SPELL_PRIEST_VOIDFORM, SPELL_PRIEST_VOID_VOLLEY_OVERRIDE })
+            && ValidateSpellEffect({ { spellInfo->Id, EFFECT_2 } });
+    }
+
+    void HandleVoidVolley(SpellEffIndex /*effIndex*/) const
+    {
+        GetCaster()->CastSpell(GetHitUnit(), SPELL_PRIEST_VOID_VOLLEY, CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_FULL_MASK,
+            .TriggeringSpell = GetSpell()
+        });
+    }
+
+    void HandleVoidform() const
+    {
+        Unit* caster = GetCaster();
+        caster->CastSpell(caster, SPELL_PRIEST_VOIDFORM, CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_FULL_MASK,
+            .TriggeringSpell = GetSpell()
+        });
+
+        // effect 2 is the number of extra Void Volleys (Improved Voidform adds to it)
+        caster->CastSpell(caster, SPELL_PRIEST_VOID_VOLLEY_OVERRIDE, CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_FULL_MASK,
+            .TriggeringSpell = GetSpell(),
+            .SpellValueOverrides = { { SPELLVALUE_AURA_STACK, GetEffectInfo(EFFECT_2).CalcValueAsInt(caster) } }
+        });
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_pri_voidform::HandleVoidVolley, EFFECT_0, SPELL_EFFECT_DUMMY);
+        AfterCast += SpellCastFn(spell_pri_voidform::HandleVoidform);
+    }
+};
+
+// 194249 - Voidform
+class spell_pri_voidform_aura : public AuraScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_PRIEST_VOIDFORM_1, SPELL_PRIEST_VOID_VOLLEY_OVERRIDE, SPELL_PRIEST_SHADOWFORM });
+    }
+
+    void AfterApply(AuraEffect const* aurEff, AuraEffectHandleModes /*mode*/) const
+    {
+        Unit* target = GetTarget();
+        if (!target->HasAura(SPELL_PRIEST_VOIDFORM_1, target->GetGUID()))
+            target->CastSpell(target, SPELL_PRIEST_VOIDFORM_1, CastSpellExtraArgsInit{
+                .TriggerFlags = TRIGGERED_FULL_MASK,
+                .TriggeringAura = aurEff
+            });
+    }
+
+    // runs after the shapeshift handler has reset the form
+    void AfterRemove(AuraEffect const* aurEff, AuraEffectHandleModes /*mode*/) const
+    {
+        Unit* target = GetTarget();
+        target->RemoveAurasDueToSpell(SPELL_PRIEST_VOID_VOLLEY_OVERRIDE, target->GetGUID());
+        target->RemoveAurasDueToSpell(SPELL_PRIEST_VOIDFORM_1, target->GetGUID());
+
+        // Voidform's shapeshift removed Shadowform; it comes back when Voidform runs out
+        if (GetTargetApplication()->GetRemoveMode() != AURA_REMOVE_BY_EXPIRE || !target->IsAlive())
+            return;
+
+        target->CastSpell(target, SPELL_PRIEST_SHADOWFORM, CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_FULL_MASK,
+            .TriggeringAura = aurEff
+        });
+    }
+
+    void Register() override
+    {
+        AfterEffectApply += AuraEffectApplyFn(spell_pri_voidform_aura::AfterApply, EFFECT_6, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL);
+        AfterEffectRemove += AuraEffectRemoveFn(spell_pri_voidform_aura::AfterRemove, EFFECT_9, SPELL_AURA_MOD_SHAPESHIFT, AURA_EFFECT_HANDLE_REAL);
     }
 };
 
@@ -5600,6 +5699,8 @@ void AddSC_priest_spell_scripts()
     RegisterSpellScript(spell_pri_vampiric_touch);
     RegisterSpellScript(spell_pri_voice_of_harmony);
     RegisterSpellScript(spell_pri_void_volley);
+    RegisterSpellScript(spell_pri_voidform);
+    RegisterSpellScript(spell_pri_voidform_aura);
     RegisterSpellScript(spell_pri_whispering_shadows);
     RegisterSpellScript(spell_pri_whispering_shadows_effect);
 }
