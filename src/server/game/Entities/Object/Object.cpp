@@ -2157,7 +2157,14 @@ ReputationRank WorldObject::GetReactionTo(WorldObject const* target) const
         {
             if (FactionEntry const* factionEntry = sFactionStore.LookupEntry(factionTemplateEntry->Faction))
             {
-                if (factionEntry->CanHaveReputation())
+                if (factionEntry->CanHaveReputation() && factionEntry->FriendshipRepID)
+                {
+                    // friendship reputation: GetRank is the friendship level index, not a reaction (the first level would be
+                    // REP_HATED), so only the at-war state is taken from it and the faction template decides the rest
+                    if (targetPlayerOwner->GetReputationMgr().IsAtWar(factionEntry))
+                        return REP_HOSTILE;
+                }
+                else if (factionEntry->CanHaveReputation())
                 {
                     // CvP case - check reputation, don't allow state higher than neutral when at war
                     ReputationRank repRank = targetPlayerOwner->GetReputationMgr().GetRank(factionEntry);
