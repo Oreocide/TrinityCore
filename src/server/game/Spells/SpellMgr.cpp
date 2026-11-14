@@ -5189,6 +5189,16 @@ void SpellMgr::LoadSpellInfoCorrections()
     // ENDOF DARKFLAME CLEFT SPELLS
     //
 
+    // Ravager (Warrior): retail sends a 4 s duration for these auras and its weapon summon, the client data says 12 s
+    ApplySpellFix({
+        228920, // Ravager
+        227876, // Ravager (summon)
+        1299405 // Ravaged
+    }, [](SpellInfo* spellInfo)
+    {
+        spellInfo->DurationEntry = sSpellDurationStore.LookupEntry(35); // 4 seconds
+    });
+
     // Earthquake
     ApplySpellFix({ 61882 }, [](SpellInfo* spellInfo)
     {

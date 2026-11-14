@@ -34,6 +34,7 @@
 #include "SpellAuraEffects.h"
 #include "SpellHistory.h"
 #include "SpellScript.h"
+#include "TemporarySummon.h"
 
 enum WarriorSpells
 {
@@ -90,7 +91,10 @@ enum WarriorSpells
     SPELL_WARRIOR_POWERFUL_ENRAGE                   = 440277,
     SPELL_WARRIOR_RAMPAGING_RUIN                    = 1265357,
     SPELL_WARRIOR_RALLYING_CRY                      = 97463,
+    SPELL_WARRIOR_RAVAGED                           = 1299405,
     SPELL_WARRIOR_RAVAGER                           = 228920,
+    SPELL_WARRIOR_RAVAGER_DAMAGE                    = 156287,
+    SPELL_WARRIOR_RAVAGER_SUMMON                    = 227876,
     SPELL_WARRIOR_RECKLESSNESS                      = 1719,
     SPELL_WARRIOR_REND                              = 772,
     SPELL_WARRIOR_REND_AURA                         = 388539,
@@ -129,7 +133,9 @@ enum WarriorSpells
 
 enum WarriorMisc
 {
-    SPELL_VISUAL_BLAZING_CHARGE = 26423
+    SPELL_VISUAL_BLAZING_CHARGE = 26423,
+
+    NPC_WARRIOR_RAVAGER         = 76168
 };
 
 enum WarriorSpellLabels
@@ -1715,6 +1721,78 @@ class spell_warr_rampaging_ruin : public SpellScript
     }
 };
 
+// 228920 - Ravager
+class spell_warr_ravager : public SpellScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_WARRIOR_RAVAGER_SUMMON });
+    }
+
+    void SummonRavager() const
+    {
+        // the weapon is summoned at the target's position in the cast's own tick, before the throw lands
+        if (Unit* target = GetExplTargetUnit())
+            GetCaster()->CastSpell(target->GetPosition(), SPELL_WARRIOR_RAVAGER_SUMMON, CastSpellExtraArgsInit{
+                .TriggerFlags = TRIGGERED_IGNORE_CAST_IN_PROGRESS | TRIGGERED_DONT_REPORT_CAST_ERROR,
+                .TriggeringSpell = GetSpell()
+            });
+    }
+
+    void Register() override
+    {
+        AfterCast += SpellCastFn(spell_warr_ravager::SummonRavager);
+    }
+};
+
+class spell_warr_ravager_aura : public AuraScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_WARRIOR_RAVAGER_DAMAGE });
+    }
+
+    void HandlePeriodic(AuraEffect const* aurEff) const
+    {
+        Unit* caster = GetTarget();
+        std::list<TempSummon*> ravagers;
+        caster->GetAllMinionsByEntry(ravagers, NPC_WARRIOR_RAVAGER);
+        // the hits land where the weapon was summoned (its home position), not where it has moved since
+        for (TempSummon const* ravager : ravagers)
+            caster->CastSpell(ravager->GetHomePosition(), SPELL_WARRIOR_RAVAGER_DAMAGE, CastSpellExtraArgsInit{
+                .TriggerFlags = TRIGGERED_IGNORE_CAST_IN_PROGRESS | TRIGGERED_DONT_REPORT_CAST_ERROR,
+                .TriggeringAura = aurEff
+            });
+    }
+
+    void Register() override
+    {
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_warr_ravager_aura::HandlePeriodic, EFFECT_1, SPELL_AURA_PERIODIC_DUMMY);
+    }
+};
+
+// 156287 - Ravager
+class spell_warr_ravager_damage : public SpellScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_WARRIOR_RAVAGED });
+    }
+
+    void ApplyRavaged() const
+    {
+        GetCaster()->CastSpell(GetHitUnit(), SPELL_WARRIOR_RAVAGED, CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_IGNORE_CAST_IN_PROGRESS | TRIGGERED_DONT_REPORT_CAST_ERROR,
+            .TriggeringSpell = GetSpell()
+        });
+    }
+
+    void Register() override
+    {
+        AfterHit += SpellHitFn(spell_warr_ravager_damage::ApplyRavaged);
+    }
+};
+
 // 275339 - (attached to 46968 - Shockwave)
 class spell_warr_rumbling_earth : public SpellScript
 {
@@ -2397,6 +2475,8 @@ void AddSC_warrior_spell_scripts()
     RegisterSpellScript(spell_warr_raging_blow_cooldown_reset);
     RegisterSpellScript(spell_warr_rallying_cry);
     RegisterSpellScript(spell_warr_rampaging_ruin);
+    RegisterSpellAndAuraScriptPair(spell_warr_ravager, spell_warr_ravager_aura);
+    RegisterSpellScript(spell_warr_ravager_damage);
     RegisterSpellScript(spell_warr_rumbling_earth);
     RegisterSpellScript(spell_warr_shield_block);
     RegisterSpellScript(spell_warr_shield_charge);
