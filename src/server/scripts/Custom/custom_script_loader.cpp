@@ -21,9 +21,11 @@
 // void Add${NameOfDirectory}Scripts()
 void AddSC_token_shop();
 void AddSC_horrific_visions();
+void AddSC_task_area_pickup();
 
 void AddCustomScripts()
 {
     AddSC_token_shop();
     AddSC_horrific_visions();
+    AddSC_task_area_pickup();
 }
