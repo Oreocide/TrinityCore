@@ -43,6 +43,7 @@ enum MonkSpells
     SPELL_MONK_CRACKLING_JADE_LIGHTNING_KNOCKBACK       = 117962,
     SPELL_MONK_CRACKLING_JADE_LIGHTNING_KNOCKBACK_CD    = 117953,
     SPELL_MONK_ENVELOPING_MIST                          = 124682,
+    SPELL_MONK_FISTS_OF_FURY_DAMAGE                     = 117418,
     SPELL_MONK_JADE_WALK                                = 450552,
     SPELL_MONK_MISTS_OF_LIFE                            = 388548,
     SPELL_MONK_MORTAL_WOUNDS                            = 115804,
@@ -184,6 +185,44 @@ class spell_monk_crackling_jade_lightning_knockback_proc_aura : public AuraScrip
     {
         DoCheckProc += AuraCheckProcFn(spell_monk_crackling_jade_lightning_knockback_proc_aura::CheckProc);
         OnEffectProc += AuraEffectProcFn(spell_monk_crackling_jade_lightning_knockback_proc_aura::HandleProc, EFFECT_0, SPELL_AURA_DUMMY);
+    }
+};
+
+// 113656 - Fists of Fury
+class spell_monk_fists_of_fury : public AuraScript
+{
+    // one hit when the channel starts, then one every 6th tick (166 ms period): 5 hits in a full channel
+    static constexpr uint32 TICKS_PER_DAMAGE = 6;
+
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_MONK_FISTS_OF_FURY_DAMAGE });
+    }
+
+    void CastDamage(AuraEffect const* aurEff) const
+    {
+        GetTarget()->CastSpell(nullptr, SPELL_MONK_FISTS_OF_FURY_DAMAGE, CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_IGNORE_CAST_IN_PROGRESS | TRIGGERED_DONT_REPORT_CAST_ERROR,
+            .TriggeringAura = aurEff
+        });
+    }
+
+    void AfterApply(AuraEffect const* aurEff, AuraEffectHandleModes /*mode*/) const
+    {
+        CastDamage(aurEff);
+    }
+
+    void HandlePeriodic(AuraEffect const* aurEff) const
+    {
+        if (!(aurEff->GetTickNumber() % TICKS_PER_DAMAGE))
+            CastDamage(aurEff);
+    }
+
+    void Register() override
+    {
+        // EFFECT_1 (stun 120086) is left alone: retail never applies it
+        AfterEffectApply += AuraEffectApplyFn(spell_monk_fists_of_fury::AfterApply, EFFECT_2, SPELL_AURA_PERIODIC_DUMMY, AURA_EFFECT_HANDLE_REAL);
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_monk_fists_of_fury::HandlePeriodic, EFFECT_2, SPELL_AURA_PERIODIC_DUMMY);
     }
 };
 
@@ -789,6 +828,7 @@ void AddSC_monk_spell_scripts()
     RegisterSpellScript(spell_monk_burst_of_life_heal);
     RegisterSpellScript(spell_monk_crackling_jade_lightning);
     RegisterSpellScript(spell_monk_crackling_jade_lightning_knockback_proc_aura);
+    RegisterSpellScript(spell_monk_fists_of_fury);
     RegisterSpellScript(spell_monk_jade_walk);
     RegisterSpellScript(spell_monk_life_cocoon);
     RegisterSpellScript(spell_monk_mists_of_life);
