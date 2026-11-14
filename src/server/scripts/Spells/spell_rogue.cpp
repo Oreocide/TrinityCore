@@ -81,6 +81,7 @@ enum RogueSpells
     SPELL_ROGUE_PREMEDITATION_ENERGIZE              = 343170,
     SPELL_ROGUE_PREY_ON_THE_WEAK_TALENT             = 131511,
     SPELL_ROGUE_PREY_ON_THE_WEAK                    = 255909,
+    SPELL_ROGUE_RECUPERATOR                         = 378996,
     SPELL_ROGUE_RUTHLESS_PRECISION                  = 193357,
     SPELL_ROGUE_SANCTUARY                           = 98877,
     SPELL_ROGUE_SKULL_AND_CROSSBONES                = 199603,
@@ -94,6 +95,7 @@ enum RogueSpells
     SPELL_ROGUE_SHURIKEN_STORM_DAMAGE               = 197835,
     SPELL_ROGUE_SHURIKEN_STORM_ENERGIZE             = 212743,
     SPELL_ROGUE_SLICE_AND_DICE                      = 315496,
+    SPELL_ROGUE_SLICE_AND_DICE_RECUPERATOR          = 426605,
     SPELL_ROGUE_SPRINT                              = 2983,
     SPELL_ROGUE_SOOTHING_DARKNESS_TALENT            = 393970,
     SPELL_ROGUE_SOOTHING_DARKNESS_HEAL              = 393971,
@@ -1272,6 +1274,40 @@ class spell_rog_sinister_strike : public SpellScript
     }
 };
 
+// 315496 - Slice and Dice
+class spell_rog_slice_and_dice : public AuraScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_ROGUE_RECUPERATOR, SPELL_ROGUE_SLICE_AND_DICE_RECUPERATOR });
+    }
+
+    // effect 1 names the Recuperator heal; its only points come from Recuperator, and retail applies it only with Recuperator
+    void AfterApply(AuraEffect const* aurEff, AuraEffectHandleModes /*mode*/) const
+    {
+        Unit* target = GetTarget();
+        if (!target->HasAura(SPELL_ROGUE_RECUPERATOR))
+            return;
+
+        target->CastSpell(target, SPELL_ROGUE_SLICE_AND_DICE_RECUPERATOR, CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_FULL_MASK,
+            .TriggeringAura = aurEff
+        });
+    }
+
+    void AfterRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/) const
+    {
+        GetTarget()->RemoveAurasDueToSpell(SPELL_ROGUE_SLICE_AND_DICE_RECUPERATOR, GetTarget()->GetGUID());
+    }
+
+    void Register() override
+    {
+        // AURA_EFFECT_HANDLE_REAL: a refresh of Slice and Dice keeps the heal up instead of applying it again
+        AfterEffectApply += AuraEffectApplyFn(spell_rog_slice_and_dice::AfterApply, EFFECT_1, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL);
+        AfterEffectRemove += AuraEffectRemoveFn(spell_rog_slice_and_dice::AfterRemove, EFFECT_1, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL);
+    }
+};
+
 // Called by 1856 - Vanish
 class spell_rog_soothing_darkness : public SpellScript
 {
@@ -1603,6 +1639,7 @@ void AddSC_rogue_spell_scripts()
     RegisterSpellScript(spell_rog_shuriken_storm);
     RegisterSpellScript(spell_rog_shuriken_tornado);
     RegisterSpellScript(spell_rog_sinister_strike);
+    RegisterSpellScript(spell_rog_slice_and_dice);
     RegisterSpellScript(spell_rog_soothing_darkness);
     RegisterSpellScript(spell_rog_stealth);
     RegisterSpellScript(spell_rog_swift_slasher);
