@@ -687,6 +687,11 @@ void ReputationMgr::SetAtWar(FactionState* faction, bool atWar) const
     if (atWar && faction->Flags.HasFlag(ReputationFlags::Peaceful) && GetRank(sFactionStore.AssertEntry(faction->ID)) > REP_HATED)
         return;
 
+    // A friendship reputation's rank is its friendship level index (the first level is REP_HATED), not a reaction,
+    // so it never puts the player at war: otherwise every friendship faction starts at war and its NPCs turn hostile
+    if (atWar && sFactionStore.AssertEntry(faction->ID)->FriendshipRepID)
+        return;
+
     // already set
     if (faction->Flags.HasFlag(ReputationFlags::AtWar) == atWar)
         return;
