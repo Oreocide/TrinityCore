@@ -1030,11 +1030,10 @@ void ObjectMgr::CheckCreatureTemplate(CreatureTemplate const* cInfo)
     {
         if (cInfo->KillCredit[k])
         {
+            // kept: Player::KilledMonsterCredit needs only the entry, and retail credit bunnies often have no template
+            // (zeroing it made every quest objective on such an entry impossible, Oreocide/TrinityCore#152)
             if (!GetCreatureTemplate(cInfo->KillCredit[k]))
-            {
                 TC_LOG_ERROR("sql.sql", "Creature (Entry: {}) lists non-existing creature entry {} in `KillCredit{}`.", cInfo->Entry, cInfo->KillCredit[k], k + 1);
-                const_cast<CreatureTemplate*>(cInfo)->KillCredit[k] = 0;
-            }
         }
     }
 
