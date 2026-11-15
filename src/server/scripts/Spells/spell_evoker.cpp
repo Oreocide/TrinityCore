@@ -25,6 +25,7 @@
 #include "AreaTriggerAI.h"
 #include "Containers.h"
 #include "DB2Stores.h"
+#include "ObjectAccessor.h"
 #include "Player.h"
 #include "ScriptMgr.h"
 #include "Spell.h"
@@ -51,6 +52,13 @@ enum EvokerSpells
     SPELL_EVOKER_BLESSING_OF_THE_BRONZE_SHAMAN  = 381756,
     SPELL_EVOKER_BLESSING_OF_THE_BRONZE_WARLOCK = 381757,
     SPELL_EVOKER_BLESSING_OF_THE_BRONZE_WARRIOR = 381758,
+    SPELL_EVOKER_BOMBARDMENTS                   = 434300,
+    SPELL_EVOKER_BOMBARDMENTS_DAMAGE            = 434481,
+    SPELL_EVOKER_BOMBARDMENTS_FLYOVER_LEFT      = 434319,
+    SPELL_EVOKER_BOMBARDMENTS_FLYOVER_RIGHT     = 434301,
+    SPELL_EVOKER_BOMBARDMENTS_MARK              = 434473,
+    SPELL_EVOKER_BOMBARDMENTS_MISSILE_LEFT      = 441661,
+    SPELL_EVOKER_BOMBARDMENTS_MISSILE_RIGHT     = 442161,
     SPELL_EVOKER_BURNOUT                        = 375802,
     SPELL_EVOKER_CALL_OF_YSERA_TALENT           = 373834,
     SPELL_EVOKER_CALL_OF_YSERA                  = 373835,
@@ -68,6 +76,8 @@ enum EvokerSpells
     SPELL_EVOKER_LIVING_FLAME                   = 361469,
     SPELL_EVOKER_LIVING_FLAME_DAMAGE            = 361500,
     SPELL_EVOKER_LIVING_FLAME_HEAL              = 361509,
+    SPELL_EVOKER_MASS_DISINTEGRATE              = 436335,
+    SPELL_EVOKER_MASS_DISINTEGRATE_BUFF         = 436336,
     SPELL_EVOKER_PANACEA_HEAL                   = 387763,
     SPELL_EVOKER_PANACEA_TALENT                 = 387761,
     SPELL_EVOKER_PERMEATING_CHILL_TALENT        = 370897,
@@ -156,6 +166,119 @@ class spell_evo_blessing_of_the_bronze : public SpellScript
     {
         OnObjectAreaTargetSelect += SpellObjectAreaTargetSelectFn(spell_evo_blessing_of_the_bronze::RemoveInvalidTargets, EFFECT_ALL, TARGET_UNIT_CASTER_AREA_RAID);
     }
+};
+
+// 356995 - Disintegrate (Blue)
+// a Disintegrate that spends Mass Disintegrate marks its primary target when the caster has Bombardments
+class spell_evo_bombardments_disintegrate : public SpellScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_EVOKER_BOMBARDMENTS, SPELL_EVOKER_BOMBARDMENTS_MARK, SPELL_EVOKER_MASS_DISINTEGRATE_BUFF });
+    }
+
+    bool Load() override
+    {
+        return GetCaster()->HasAura(SPELL_EVOKER_BOMBARDMENTS);
+    }
+
+    // OnCast runs before the cast phase procs that spend the Mass Disintegrate stack
+    void HandleMark() const
+    {
+        Unit* caster = GetCaster();
+        if (!caster->HasAura(SPELL_EVOKER_MASS_DISINTEGRATE_BUFF))
+            return;
+
+        if (Unit* target = GetExplTargetUnit())
+            caster->CastSpell(target, SPELL_EVOKER_BOMBARDMENTS_MARK, CastSpellExtraArgsInit{
+                .TriggerFlags = TRIGGERED_FULL_MASK,
+                .TriggeringSpell = GetSpell()
+            });
+    }
+
+    void Register() override
+    {
+        OnCast += SpellCastFn(spell_evo_bombardments_disintegrate::HandleMark);
+    }
+};
+
+// 434473 - Bombardments
+class spell_evo_bombardments_mark : public AuraScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_EVOKER_BOMBARDMENTS_FLYOVER_LEFT, SPELL_EVOKER_BOMBARDMENTS_FLYOVER_RIGHT,
+            SPELL_EVOKER_BOMBARDMENTS_MISSILE_LEFT, SPELL_EVOKER_BOMBARDMENTS_MISSILE_RIGHT });
+    }
+
+    // the evoker and their allies call the flyover
+    bool CheckProc(ProcEventInfo& eventInfo) const
+    {
+        Unit* actor = eventInfo.GetActor();
+        Unit* caster = GetCaster();
+        return actor && caster && (actor == caster || actor->IsFriendlyTo(caster));
+    }
+
+    void HandleProc(AuraEffect const* /*aurEff*/, ProcEventInfo& eventInfo) const
+    {
+        Unit* actor = eventInfo.GetActor();
+        Unit* target = GetTarget();
+        bool left = roll_chance(50);
+
+        actor->CastSpell(actor, left ? SPELL_EVOKER_BOMBARDMENTS_FLYOVER_LEFT : SPELL_EVOKER_BOMBARDMENTS_FLYOVER_RIGHT, CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_FULL_MASK,
+            .CustomArg = target->GetGUID()
+        });
+        actor->CastSpell(target, left ? SPELL_EVOKER_BOMBARDMENTS_MISSILE_LEFT : SPELL_EVOKER_BOMBARDMENTS_MISSILE_RIGHT, TRIGGERED_FULL_MASK);
+    }
+
+    void Register() override
+    {
+        DoCheckProc += AuraCheckProcFn(spell_evo_bombardments_mark::CheckProc);
+        OnEffectProc += AuraEffectProcFn(spell_evo_bombardments_mark::HandleProc, EFFECT_0, SPELL_AURA_DUMMY);
+    }
+};
+
+// 434301 / 434319 - Bombardments (areatriggers 31941 / 31946)
+struct at_evo_bombardments : AreaTriggerAI
+{
+    using AreaTriggerAI::AreaTriggerAI;
+
+    // retail drops the damage either at once or about 1 s after the flyover; 1 s here, until a capture shows the rule
+    static constexpr Milliseconds DropDelay = 1s;
+
+    void OnCreate(Spell const* creatingSpell) override
+    {
+        if (ObjectGuid const* target = std::any_cast<ObjectGuid>(&creatingSpell->m_customArg))
+            _target = *target;
+        _originalCastId = creatingSpell->m_castId;
+
+        _scheduler.Schedule(DropDelay, [this](TaskContext /*task*/)
+        {
+            Unit* caster = at->GetCaster();
+            if (!caster)
+                return;
+
+            Unit* target = ObjectAccessor::GetUnit(*at, _target);
+            if (!target || !target->IsAlive())
+                return;
+
+            caster->CastSpell(target, SPELL_EVOKER_BOMBARDMENTS_DAMAGE, CastSpellExtraArgsInit{
+                .TriggerFlags = TRIGGERED_IGNORE_CAST_IN_PROGRESS | TRIGGERED_DONT_REPORT_CAST_ERROR,
+                .OriginalCastId = _originalCastId
+            });
+        });
+    }
+
+    void OnUpdate(uint32 diff) override
+    {
+        _scheduler.Update(diff);
+    }
+
+private:
+    TaskScheduler _scheduler;
+    ObjectGuid _target;
+    ObjectGuid _originalCastId;
 };
 
 // 375801 - Burnout
@@ -465,6 +588,34 @@ private:
     std::any _damageSpellCustomArg;
 };
 
+// 357208 - Fire Breath (Red), 382266 - Fire Breath (Font of Magic), 359073 - Eternity Surge (Blue), 382411 - Eternity Surge (Font of Magic)
+// Mass Disintegrate: each released Empower spell adds a stack of the buff
+class spell_evo_mass_disintegrate_empower : public SpellScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_EVOKER_MASS_DISINTEGRATE_BUFF });
+    }
+
+    bool Load() override
+    {
+        return GetCaster()->HasAura(SPELL_EVOKER_MASS_DISINTEGRATE);
+    }
+
+    void HandleEmpowerCompleted(int32 /*completedStagesCount*/) const
+    {
+        GetCaster()->CastSpell(GetCaster(), SPELL_EVOKER_MASS_DISINTEGRATE_BUFF, CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_FULL_MASK,
+            .TriggeringSpell = GetSpell()
+        });
+    }
+
+    void Register() override
+    {
+        OnEmpowerCompleted += SpellOnEmpowerCompletedFn(spell_evo_mass_disintegrate_empower::HandleEmpowerCompleted);
+    }
+};
+
 // 358733 - Glide (Racial)
 class spell_evo_glide : public SpellScript
 {
@@ -769,6 +920,9 @@ void AddSC_evoker_spell_scripts()
 {
     RegisterSpellScript(spell_evo_azure_strike);
     RegisterSpellScript(spell_evo_blessing_of_the_bronze);
+    RegisterSpellScript(spell_evo_bombardments_disintegrate);
+    RegisterSpellScript(spell_evo_bombardments_mark);
+    RegisterAreaTriggerAI(at_evo_bombardments);
     RegisterSpellScript(spell_evo_burnout);
     RegisterSpellScript(spell_evo_call_of_ysera);
     RegisterSpellScript(spell_evo_causality_disintegrate);
@@ -783,6 +937,7 @@ void AddSC_evoker_spell_scripts()
     RegisterSpellScript(spell_evo_fire_breath_damage);
     RegisterSpellScript(spell_evo_glide);
     RegisterSpellScript(spell_evo_living_flame);
+    RegisterSpellScript(spell_evo_mass_disintegrate_empower);
     RegisterSpellScript(spell_evo_panacea);
     RegisterSpellScript(spell_evo_permeating_chill);
     RegisterSpellScript(spell_evo_pyre);
