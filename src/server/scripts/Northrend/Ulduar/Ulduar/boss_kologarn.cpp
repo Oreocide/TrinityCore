@@ -574,7 +574,9 @@ class spell_ulduar_stone_grip : public SpellScriptLoader
                 exitPosition.m_positionZ = 457.9322f;
 
                 // Remove pending passengers before exiting vehicle - might cause an Uninstall
-                GetTarget()->GetVehicleKit()->RemovePendingEventsForPassenger(caster);
+                // the vehicle kit can already be gone when the aura is removed during a grid unload (Oreocide/TrinityCore#194)
+                if (Vehicle* vehicle = GetTarget()->GetVehicleKit())
+                    vehicle->RemovePendingEventsForPassenger(caster);
                 caster->_ExitVehicle(&exitPosition);
                 caster->RemoveAurasDueToSpell(GetId());
 
