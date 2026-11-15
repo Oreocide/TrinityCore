@@ -58,6 +58,7 @@
 #include "WorldSession.h"
 #include "WorldStateScheduler.h"
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <limits>
 #include <cmath>
@@ -335,13 +336,15 @@ public:
         if (areaItr == AreasByMap.end())
             return;
 
-        // scan the map's players once per step instead of every map tick (one Map per world map id, one thread at a time)
+        // scan the map's players once per step instead of every map tick; a world map has one Map, or one per team on
+        // faction-split maps (instance id = TeamId), each updated by one thread, so each gets its own counter
         uint32 interval = Config.Interval.load();
-        _sinceScan += diff;
-        if (_sinceScan < std::min<uint32>(interval, SCAN_STEP_MS))
+        uint32& sinceScan = _sinceScan[std::min<std::size_t>(map->GetInstanceId(), _sinceScan.size() - 1)];
+        sinceScan += diff;
+        if (sinceScan < std::min<uint32>(interval, SCAN_STEP_MS))
             return;
-        diff = _sinceScan;
-        _sinceScan = 0;
+        diff = sinceScan;
+        sinceScan = 0;
 
         for (MapReference const& ref : map->GetPlayers())
         {
@@ -378,7 +381,7 @@ public:
 
 private:
     uint32 _mapId;
-    uint32 _sinceScan = 0;
+    std::array<uint32, 3> _sinceScan = { };
 };
 
 class task_area_pickup_player : public PlayerScript
