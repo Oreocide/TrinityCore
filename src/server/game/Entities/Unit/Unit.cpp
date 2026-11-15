@@ -10339,7 +10339,11 @@ void Unit::AddToWorld()
     WorldObject::AddToWorld();
     i_motionMaster->AddToWorld();
 
-    RemoveAurasWithInterruptFlags(SpellAuraInterruptFlags::EnterWorld);
+    // EnterWorld auras end when a player logs in or changes map. A creature carries only its addon auras here (applied in Create,
+    // before it is in the world); a respawn in the world (setDeathState -> LoadCreaturesAddon) already keeps them, so this makes a
+    // fresh spawn match (250 addon spells have the flag, e.g. 49416, Oreocide/TrinityCore#178). Pets load their auras after AddToMap.
+    if (IsPlayer())
+        RemoveAurasWithInterruptFlags(SpellAuraInterruptFlags::EnterWorld);
 }
 
 void Unit::RemoveFromWorld()
