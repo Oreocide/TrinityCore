@@ -347,6 +347,7 @@ class TC_GAME_API ConditionMgr
         bool IsObjectMeetingPlayerChoiceResponseConditions(uint32 playerChoiceId, int32 playerChoiceResponseId, Player const* player) const;
 
         bool IsSpellUsedInSpellClickConditions(uint32 spellId) const;
+        bool IsSpellUsedInPhaseConditions(uint32 spellId) const;
 
         ConditionContainer const* GetConditionsForAreaTrigger(uint32 areaTriggerId, bool isServerSide) const;
         bool IsObjectMeetingTrainerSpellConditions(uint32 trainerId, uint32 spellId, Player* player) const;
@@ -390,6 +391,7 @@ class TC_GAME_API ConditionMgr
 
         std::unordered_set<uint32> SpellsUsedInSpellClickConditions;
         std::unordered_set<uint32> ObjectivesUsedInVisibilityConditions;
+        std::unordered_set<uint32> SpellsUsedInPhaseConditions;     // last member: added locally (Oreocide/TrinityCore#197)
 };
 
 #define sConditionMgr ConditionMgr::instance()

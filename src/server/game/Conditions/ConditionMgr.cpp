@@ -1286,6 +1286,11 @@ bool ConditionMgr::IsSpellUsedInSpellClickConditions(uint32 spellId) const
     return SpellsUsedInSpellClickConditions.find(spellId) != SpellsUsedInSpellClickConditions.end();
 }
 
+bool ConditionMgr::IsSpellUsedInPhaseConditions(uint32 spellId) const
+{
+    return SpellsUsedInPhaseConditions.contains(spellId);
+}
+
 ConditionContainer const* ConditionMgr::GetConditionsForAreaTrigger(uint32 areaTriggerId, bool isServerSide) const
 {
     auto itr = ConditionStore[CONDITION_SOURCE_TYPE_AREATRIGGER].find({ areaTriggerId, isServerSide ? 1 : 0, 0 });
@@ -1522,6 +1527,14 @@ void ConditionMgr::LoadConditions(bool isReload)
         for (Condition const& condition : *conditions)
             if (condition.ConditionType == CONDITION_AURA)
                 SpellsUsedInSpellClickConditions.insert(condition.ConditionValue1);
+
+    // auras that phase_area / terrain swap conditions name: applying or removing one refreshes the player's phases (Oreocide/TrinityCore#197)
+    SpellsUsedInPhaseConditions.clear();
+    for (ConditionSourceType sourceType : { CONDITION_SOURCE_TYPE_PHASE, CONDITION_SOURCE_TYPE_TERRAIN_SWAP })
+        for (auto&& [id, conditions] : ConditionStore[sourceType])
+            for (Condition const& condition : *conditions)
+                if (condition.ConditionType == CONDITION_AURA)
+                    SpellsUsedInPhaseConditions.insert(condition.ConditionValue1);
 
     ObjectivesUsedInVisibilityConditions.clear();
     for (auto&& [id, conditions] : ConditionStore[CONDITION_SOURCE_TYPE_OBJECT_ID_VISIBILITY])
@@ -2819,6 +2832,7 @@ void ConditionMgr::Clean()
         conditionsMap.clear();
 
     SpellsUsedInSpellClickConditions.clear();
+    SpellsUsedInPhaseConditions.clear();
     ObjectivesUsedInVisibilityConditions.clear();
 }
 

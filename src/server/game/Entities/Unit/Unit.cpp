@@ -3617,6 +3617,11 @@ void Unit::_ApplyAura(AuraApplication* aurApp, uint32 effMask)
         if (sConditionMgr->IsSpellUsedInSpellClickConditions(aura->GetId()))
             player->UpdateVisibleObjectInteractions(false, true, false, false);
 
+        // a phase conditioned on this aura follows it at once, as on retail (Oreocide/TrinityCore#197); the next update runs it,
+        // so the aura code is not re-entered
+        if (sConditionMgr->IsSpellUsedInPhaseConditions(aura->GetId()))
+            m_Events.AddEventAtOffset([player]() { PhasingHandler::OnConditionChange(player); }, 0ms);
+
         player->FailCriteria(CriteriaFailEvent::GainAura, aura->GetId());
         player->StartCriteria(CriteriaStartEvent::GainAura, aura->GetId());
         player->UpdateCriteria(CriteriaType::GainAura, aura->GetId(), 0, 0, caster);
@@ -3709,6 +3714,9 @@ void Unit::_UnapplyAura(AuraApplicationMap::iterator& i, AuraRemoveMode removeMo
     {
         if (sConditionMgr->IsSpellUsedInSpellClickConditions(aurApp->GetBase()->GetId()))
             player->UpdateVisibleObjectInteractions(false, true, false, false);
+
+        if (sConditionMgr->IsSpellUsedInPhaseConditions(aurApp->GetBase()->GetId()))
+            m_Events.AddEventAtOffset([player]() { PhasingHandler::OnConditionChange(player); }, 0ms);
 
         player->FailCriteria(CriteriaFailEvent::LoseAura, aurApp->GetBase()->GetId());
     }
