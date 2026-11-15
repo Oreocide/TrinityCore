@@ -80,6 +80,10 @@ enum PriestSpells
     SPELL_PRIEST_DARK_REPRIMAND_DAMAGE              = 373130,
     SPELL_PRIEST_DARK_REPRIMAND_HEALING             = 400187,
     SPELL_PRIEST_DAZZLING_LIGHT                     = 196810,
+    SPELL_PRIEST_DEATH_AND_MADNESS                  = 321291,
+    SPELL_PRIEST_DEATH_AND_MADNESS_DEBUFF           = 322098,
+    SPELL_PRIEST_DEATH_AND_MADNESS_INSANITY         = 321973,
+    SPELL_PRIEST_DEATH_AND_MADNESS_LOCKOUT          = 390628,
     SPELL_PRIEST_DEVOURING_PLAGUE                   = 335467,
     SPELL_PRIEST_DISPERSING_LIGHT                   = 1215265,
     SPELL_PRIEST_DISPERSING_LIGHT_HEAL              = 1215266,
@@ -1030,6 +1034,90 @@ class spell_pri_dark_indulgence : public SpellScript
     void Register() override
     {
         OnEffectHit += SpellEffectFn(spell_pri_dark_indulgence::HandleEffectHit, EFFECT_0, SPELL_EFFECT_SCHOOL_DAMAGE);
+    }
+};
+
+// 321291 - Death and Madness
+// 32379 - Shadow Word: Death
+class spell_pri_death_and_madness : public SpellScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_PRIEST_DEATH_AND_MADNESS_DEBUFF, SPELL_PRIEST_DEATH_AND_MADNESS_LOCKOUT })
+            && ValidateSpellEffect({ { SPELL_PRIEST_DEATH_AND_MADNESS, EFFECT_1 } });
+    }
+
+    bool Load() override
+    {
+        return GetCaster()->HasAura(SPELL_PRIEST_DEATH_AND_MADNESS);
+    }
+
+    // runs before any damage is dealt, so the health read here is the target's health before the hit
+    void HandleDebuff(SpellEffIndex /*effIndex*/)
+    {
+        Unit* caster = GetCaster();
+        Unit* target = GetHitUnit();
+
+        if (AuraEffect const* deathAndMadness = caster->GetAuraEffect(SPELL_PRIEST_DEATH_AND_MADNESS, EFFECT_1))
+            if (target->HealthBelowPct(deathAndMadness->GetAmountAsInt()))
+                _executeTarget = target->GetGUID();
+
+        caster->CastSpell(target, SPELL_PRIEST_DEATH_AND_MADNESS_DEBUFF, CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_FULL_MASK,
+            .TriggeringSpell = GetSpell()
+        });
+    }
+
+    // Shadow Word: Death also hits the priest (its energize), so only the recorded enemy counts
+    void HandleReset() const
+    {
+        Unit* target = GetHitUnit();
+        if (!target || target->GetGUID() != _executeTarget || !target->IsAlive())
+            return;
+
+        Unit* caster = GetCaster();
+        if (caster->HasAura(SPELL_PRIEST_DEATH_AND_MADNESS_LOCKOUT))
+            return;
+
+        caster->GetSpellHistory()->RestoreCharge(GetSpellInfo()->ChargeCategoryId);
+        caster->CastSpell(caster, SPELL_PRIEST_DEATH_AND_MADNESS_LOCKOUT, CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_FULL_MASK,
+            .TriggeringSpell = GetSpell()
+        });
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_pri_death_and_madness::HandleDebuff, EFFECT_0, SPELL_EFFECT_SCHOOL_DAMAGE);
+        AfterHit += SpellHitFn(spell_pri_death_and_madness::HandleReset);
+    }
+
+    ObjectGuid _executeTarget;
+};
+
+// 322098 - Death and Madness
+class spell_pri_death_and_madness_debuff : public AuraScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_PRIEST_DEATH_AND_MADNESS_INSANITY });
+    }
+
+    void HandleRemove(AuraEffect const* aurEff, AuraEffectHandleModes /*mode*/) const
+    {
+        if (GetTargetApplication()->GetRemoveMode() != AURA_REMOVE_BY_DEATH)
+            return;
+
+        if (Unit* caster = GetCaster())
+            caster->CastSpell(caster, SPELL_PRIEST_DEATH_AND_MADNESS_INSANITY, CastSpellExtraArgsInit{
+                .TriggerFlags = TRIGGERED_FULL_MASK,
+                .TriggeringAura = aurEff
+            });
+    }
+
+    void Register() override
+    {
+        AfterEffectRemove += AuraEffectRemoveFn(spell_pri_death_and_madness_debuff::HandleRemove, EFFECT_0, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL);
     }
 };
 
@@ -5580,6 +5668,8 @@ void AddSC_priest_spell_scripts()
     RegisterSpellScript(spell_pri_circle_of_healing);
     RegisterSpellScript(spell_pri_crystalline_reflection);
     RegisterSpellScript(spell_pri_dark_indulgence);
+    RegisterSpellScript(spell_pri_death_and_madness);
+    RegisterSpellScript(spell_pri_death_and_madness_debuff);
     RegisterSpellScript(spell_pri_deaths_torment);
     RegisterSpellScript(spell_pri_dispersing_light);
     RegisterSpellScript(spell_pri_dispersing_light_heal);
