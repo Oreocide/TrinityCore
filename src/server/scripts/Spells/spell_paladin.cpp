@@ -44,6 +44,7 @@ enum PaladinSpells
     SPELL_PALADIN_ART_OF_WAR_TRIGGERED           = 231843,
     SPELL_PALADIN_AVENGERS_SHIELD                = 31935,
     SPELL_PALADIN_AVENGING_WRATH                 = 31884,
+    SPELL_PALADIN_BEACON_OF_FAITH                = 156910,
     SPELL_PALADIN_BEACON_OF_LIGHT                = 53563,
     SPELL_PALADIN_BEACON_OF_LIGHT_HEAL           = 53652,
     SPELL_PALADIN_BLADE_OF_JUSTICE               = 184575,
@@ -1523,19 +1524,21 @@ class spell_pal_lay_on_hands : public SpellScript
     }
 };
 
-// 53651 - Light's Beacon - Beacon of Light
+// 53651 - Light's Beacon - Beacon of Light, Beacon of Faith
 class spell_pal_light_s_beacon : public AuraScript
 {
     bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        return ValidateSpellInfo({ SPELL_PALADIN_BEACON_OF_LIGHT, SPELL_PALADIN_BEACON_OF_LIGHT_HEAL });
+        return ValidateSpellInfo({ SPELL_PALADIN_BEACON_OF_LIGHT, SPELL_PALADIN_BEACON_OF_LIGHT_HEAL })
+            && ValidateSpellEffect({ { SPELL_PALADIN_BEACON_OF_FAITH, EFFECT_3 } });
     }
 
     bool CheckProc(ProcEventInfo& eventInfo)
     {
         if (!eventInfo.GetActionTarget())
             return false;
-        if (eventInfo.GetActionTarget()->HasAura(SPELL_PALADIN_BEACON_OF_LIGHT, eventInfo.GetActor()->GetGUID()))
+        // the beacon heal is never transferred again: it can proc (SPELL_ATTR3_NOT_A_PROC), and two beacons would heal each other forever
+        if (eventInfo.GetSpellInfo() && eventInfo.GetSpellInfo()->Id == SPELL_PALADIN_BEACON_OF_LIGHT_HEAL)
             return false;
         HealInfo* healInfo = eventInfo.GetHealInfo();
         return healInfo && healInfo->GetHeal();
@@ -1545,23 +1548,40 @@ class spell_pal_light_s_beacon : public AuraScript
     {
         PreventDefaultAction();
 
+        Unit* caster = GetCaster();
+        Unit* healed = eventInfo.GetActionTarget();
+
+        // every beacon of the paladin is healed, except the unit that took the heal
+        std::vector<Unit*> beacons;
+        bool beaconOfFaith = false;
+        for (Aura const* aura : caster->GetSingleCastAuras())
+        {
+            if (aura->GetId() != SPELL_PALADIN_BEACON_OF_LIGHT && aura->GetId() != SPELL_PALADIN_BEACON_OF_FAITH)
+                continue;
+
+            if (aura->GetId() == SPELL_PALADIN_BEACON_OF_FAITH)
+                beaconOfFaith = true;
+
+            std::vector<AuraApplication*> applications;
+            aura->GetApplicationVector(applications);
+            if (!applications.empty() && applications.front()->GetTarget() != healed)
+                beacons.push_back(applications.front()->GetTarget());
+        }
+
+        if (beacons.empty())
+            return;
+
         SpellEffectValue heal = CalculatePct(eventInfo.GetHealInfo()->GetHeal(), aurEff->GetAmount());
 
-        Unit::AuraList const& auras = GetCaster()->GetSingleCastAuras();
-        for (Unit::AuraList::const_iterator itr = auras.begin(); itr != auras.end(); ++itr)
+        // Beacon of Faith: both beacons are healed at reduced effectiveness
+        if (beaconOfFaith)
+            AddPct(heal, -sSpellMgr->AssertSpellInfo(SPELL_PALADIN_BEACON_OF_FAITH, GetCastDifficulty())->GetEffect(EFFECT_3).CalcValue(caster));
+
+        for (Unit* beacon : beacons)
         {
-            if ((*itr)->GetId() == SPELL_PALADIN_BEACON_OF_LIGHT)
-            {
-                std::vector<AuraApplication*> applications;
-                (*itr)->GetApplicationVector(applications);
-                if (!applications.empty())
-                {
-                    CastSpellExtraArgs args(aurEff);
-                    args.AddSpellMod(SPELLVALUE_BASE_POINT0, heal);
-                    eventInfo.GetActor()->CastSpell(applications.front()->GetTarget(), SPELL_PALADIN_BEACON_OF_LIGHT_HEAL, args);
-                }
-                return;
-            }
+            CastSpellExtraArgs args(aurEff);
+            args.AddSpellMod(SPELLVALUE_BASE_POINT0, heal);
+            eventInfo.GetActor()->CastSpell(beacon, SPELL_PALADIN_BEACON_OF_LIGHT_HEAL, args);
         }
     }
 
