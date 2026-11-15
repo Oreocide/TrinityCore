@@ -70,6 +70,7 @@ namespace
 {
 constexpr uint32 QUEST_TYPE_TASK = 3;
 constexpr float MIN_MOVE_YD = 3.0f;
+constexpr uint32 SCAN_STEP_MS = 500;
 
 struct Blob
 {
@@ -334,7 +335,14 @@ public:
         if (areaItr == AreasByMap.end())
             return;
 
+        // scan the map's players once per step instead of every map tick (one Map per world map id, one thread at a time)
         uint32 interval = Config.Interval.load();
+        _sinceScan += diff;
+        if (_sinceScan < std::min<uint32>(interval, SCAN_STEP_MS))
+            return;
+        diff = _sinceScan;
+        _sinceScan = 0;
+
         for (MapReference const& ref : map->GetPlayers())
         {
             Player* player = ref.GetSource();
@@ -370,6 +378,7 @@ public:
 
 private:
     uint32 _mapId;
+    uint32 _sinceScan = 0;
 };
 
 class task_area_pickup_player : public PlayerScript
