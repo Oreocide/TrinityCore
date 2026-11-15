@@ -959,8 +959,17 @@ public:
             if (!spellInfo)
                 return false;
 
-            if (Player* caster = handler->GetSession()->GetPlayer())
-                caster->SendDirectMessage(WorldPackets::Misc::DisplayGameError(GameError::ERR_CLIENT_LOCKED_OUT).Write());
+            if (WorldSession* session = handler->GetSession())
+            {
+                if (Player* caster = session->GetPlayer())
+                    caster->SendDirectMessage(WorldPackets::Misc::DisplayGameError(GameError::ERR_CLIENT_LOCKED_OUT).Write());
+            }
+            else
+            {
+                // console, SOAP or RA: there is no caster to send the game error to
+                handler->SendSysMessage(Trinity::StringFormat("{} is in combat or on a taxi flight and cannot be unstuck.", player->GetName()));
+                handler->SetSentErrorMessage(true);
+            }
 
             return false;
         }
