@@ -43,6 +43,7 @@ enum MonkSpells
     SPELL_MONK_CRACKLING_JADE_LIGHTNING_KNOCKBACK       = 117962,
     SPELL_MONK_CRACKLING_JADE_LIGHTNING_KNOCKBACK_CD    = 117953,
     SPELL_MONK_ENVELOPING_MIST                          = 124682,
+    SPELL_MONK_ENVELOPING_MIST_2                        = 227345,
     SPELL_MONK_FISTS_OF_FURY_DAMAGE                     = 117418,
     SPELL_MONK_JADE_WALK                                = 450552,
     SPELL_MONK_MISTS_OF_LIFE                            = 388548,
@@ -54,6 +55,8 @@ enum MonkSpells
     SPELL_MONK_PROVOKE_AOE                              = 118635,
     SPELL_MONK_NO_FEATHER_FALL                          = 79636,
     SPELL_MONK_OPEN_PALM_STRIKES_TALENT                 = 392970,
+    SPELL_MONK_OVERFLOWING_MISTS                        = 388511,
+    SPELL_MONK_OVERFLOWING_MISTS_HEAL                   = 388514,
     SPELL_MONK_RENEWING_MIST                            = 119611,
     SPELL_MONK_ROLL_BACKWARD                            = 109131,
     SPELL_MONK_ROLL_FORWARD                             = 107427,
@@ -330,6 +333,76 @@ class spell_monk_open_palm_strikes : public AuraScript
     void Register() override
     {
         DoCheckEffectProc += AuraCheckEffectProcFn(spell_monk_open_palm_strikes::CheckProc, EFFECT_0, SPELL_AURA_PROC_TRIGGER_SPELL);
+    }
+};
+
+// 388512 - Overflowing Mists
+// only Enveloping Mist puts 388513 on its target (the DB2 proc has no spell filter, and a family mask cannot tell it from Enveloping Breath)
+class spell_monk_overflowing_mists_trigger : public AuraScript
+{
+    static bool CheckProc(AuraScript const&, ProcEventInfo const& eventInfo)
+    {
+        SpellInfo const* spellInfo = eventInfo.GetSpellInfo();
+        return spellInfo && (spellInfo->Id == SPELL_MONK_ENVELOPING_MIST || spellInfo->Id == SPELL_MONK_ENVELOPING_MIST_2);
+    }
+
+    void Register() override
+    {
+        DoCheckProc += AuraCheckProcFn(spell_monk_overflowing_mists_trigger::CheckProc);
+    }
+};
+
+// 388513 - Overflowing Mists
+// each direct hit on the Enveloping Mist target heals it
+class spell_monk_overflowing_mists : public AuraScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_MONK_OVERFLOWING_MISTS_HEAL });
+    }
+
+    static bool CheckProc(AuraScript const&, ProcEventInfo const& eventInfo)
+    {
+        DamageInfo const* damageInfo = eventInfo.GetDamageInfo();
+        return damageInfo && damageInfo->GetDamage();
+    }
+
+    void HandleProc(AuraEffect const* aurEff, ProcEventInfo const& /*eventInfo*/)
+    {
+        PreventDefaultAction();
+
+        if (Unit* caster = GetCaster())
+            caster->CastSpell(GetTarget(), SPELL_MONK_OVERFLOWING_MISTS_HEAL, CastSpellExtraArgsInit{
+                .TriggerFlags = TRIGGERED_FULL_MASK,
+                .TriggeringAura = aurEff
+            });
+    }
+
+    void Register() override
+    {
+        DoCheckProc += AuraCheckProcFn(spell_monk_overflowing_mists::CheckProc);
+        OnEffectProc += AuraEffectProcFn(spell_monk_overflowing_mists::HandleProc, EFFECT_0, SPELL_AURA_DUMMY);
+    }
+};
+
+// 388514 - Overflowing Mists
+// the talent's value scales the heal ($388514s1 * $388511s1)
+class spell_monk_overflowing_mists_heal : public SpellScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellEffect({ { SPELL_MONK_OVERFLOWING_MISTS, EFFECT_0 } });
+    }
+
+    void CalculateHealing(SpellEffectInfo const& /*spellEffectInfo*/, Unit const* /*victim*/, int32 const& /*healing*/, int32 const& /*flatMod*/, float& pctMod) const
+    {
+        if (AuraEffect const* overflowingMists = GetCaster()->GetAuraEffect(SPELL_MONK_OVERFLOWING_MISTS, EFFECT_0))
+            pctMod *= overflowingMists->GetAmountAsInt();
+    }
+
+    void Register() override
+    {
+        CalcHealing += SpellCalcHealingFn(spell_monk_overflowing_mists_heal::CalculateHealing);
     }
 };
 
@@ -833,6 +906,9 @@ void AddSC_monk_spell_scripts()
     RegisterSpellScript(spell_monk_life_cocoon);
     RegisterSpellScript(spell_monk_mists_of_life);
     RegisterSpellScript(spell_monk_open_palm_strikes);
+    RegisterSpellScript(spell_monk_overflowing_mists_trigger);
+    RegisterSpellScript(spell_monk_overflowing_mists);
+    RegisterSpellScript(spell_monk_overflowing_mists_heal);
     RegisterSpellScript(spell_monk_power_strike_periodic);
     RegisterSpellScript(spell_monk_power_strike_proc);
     RegisterSpellScript(spell_monk_pressure_points);
