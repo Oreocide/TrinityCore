@@ -119,6 +119,8 @@ enum PaladinSpells
     SPELL_PALADIN_TEMPLAR_VERDICT_DAMAGE         = 224266,
     SPELL_PALADIN_T30_2P_HEARTFIRE_DAMAGE        = 408399,
     SPELL_PALADIN_T30_2P_HEARTFIRE_HEAL          = 408400,
+    SPELL_PALADIN_VALIANT_CRUSADE                = 1245979,
+    SPELL_PALADIN_VALIANT_CRUSADE_MARKER         = 1246042,
     SPELL_PALADIN_WAKE_OF_ASHES_STUN             = 255941,
     SPELL_PALADIN_ZEAL_AURA                      = 269571
 };
@@ -674,6 +676,77 @@ class spell_pal_divine_steed : public SpellScript
     {
         OnCast += SpellCastFn(spell_pal_divine_steed::HandleOnCast);
     }
+};
+
+// 221883 - Divine Steed (Human), 221885 - Divine Steed (Tauren), 221886 - Divine Steed (Blood Elf), 221887 - Divine Steed (Draenei)
+// 276111 - Divine Steed (Dwarf), 276112 - Divine Steed (Dark Iron Dwarf), 294133 - Divine Steed (Zandalari Troll), 363608 - Divine Steed (Lightforged Draenei)
+// Valiant Crusade: out of combat the steed grants Shield of the Righteous for its duration and 4 s after it fades
+class spell_pal_divine_steed_valiant_crusade : public AuraScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_PALADIN_VALIANT_CRUSADE_MARKER, SPELL_PALADIN_SHIELD_OF_THE_RIGHTEOUS_ARMOR })
+            && ValidateSpellEffect({ { SPELL_PALADIN_VALIANT_CRUSADE, EFFECT_0 } });
+    }
+
+    void HandleApply(AuraEffect const* aurEff, AuraEffectHandleModes /*mode*/)
+    {
+        Unit* target = GetTarget();
+        if (!target->HasAura(SPELL_PALADIN_VALIANT_CRUSADE_MARKER))
+            return;
+
+        AuraEffect const* valiantCrusade = target->GetAuraEffect(SPELL_PALADIN_VALIANT_CRUSADE, EFFECT_0);
+        if (!valiantCrusade)
+            return;
+
+        // read a pressed Shield of the Righteous first: the cast below resets its duration
+        int32 duration = GetMaxDuration() + valiantCrusade->GetAmountAsInt();
+        if (Aura const* shield = target->GetAura(SPELL_PALADIN_SHIELD_OF_THE_RIGHTEOUS_ARMOR, target->GetGUID()))
+            duration = std::max(duration, shield->GetDuration());
+
+        target->CastSpell(target, SPELL_PALADIN_SHIELD_OF_THE_RIGHTEOUS_ARMOR, CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_FULL_MASK,
+            .TriggeringAura = aurEff
+        });
+
+        if (Aura* shield = target->GetAura(SPELL_PALADIN_SHIELD_OF_THE_RIGHTEOUS_ARMOR, target->GetGUID()))
+        {
+            shield->SetMaxDuration(duration);
+            shield->SetDuration(duration);
+            _shieldDuration = duration;
+        }
+    }
+
+    // a steed that ends early leaves 4 s of the shield it granted; a shield pressed since then is left alone
+    void HandleRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/) const
+    {
+        if (!_shieldDuration)
+            return;
+
+        Unit* target = GetTarget();
+        AuraEffect const* valiantCrusade = target->GetAuraEffect(SPELL_PALADIN_VALIANT_CRUSADE, EFFECT_0);
+        if (!valiantCrusade)
+            return;
+
+        Aura* shield = target->GetAura(SPELL_PALADIN_SHIELD_OF_THE_RIGHTEOUS_ARMOR, target->GetGUID());
+        if (!shield || shield->GetMaxDuration() != _shieldDuration)
+            return;
+
+        int32 afterFade = valiantCrusade->GetAmountAsInt();
+        if (shield->GetDuration() > afterFade)
+        {
+            shield->SetMaxDuration(afterFade);
+            shield->SetDuration(afterFade);
+        }
+    }
+
+    void Register() override
+    {
+        AfterEffectApply += AuraEffectApplyFn(spell_pal_divine_steed_valiant_crusade::HandleApply, EFFECT_0, SPELL_AURA_MOD_DAMAGE_PERCENT_TAKEN, AURA_EFFECT_HANDLE_REAL);
+        AfterEffectRemove += AuraEffectRemoveFn(spell_pal_divine_steed_valiant_crusade::HandleRemove, EFFECT_0, SPELL_AURA_MOD_DAMAGE_PERCENT_TAKEN, AURA_EFFECT_HANDLE_REAL);
+    }
+
+    int32 _shieldDuration = 0;
 };
 
 // 53385 - Divine Storm
@@ -1872,6 +1945,45 @@ class spell_pal_t30_2p_protection_bonus_heal : public AuraScript
     }
 };
 
+// 1245979 - Valiant Crusade
+// keeps the marker 1246042 up while out of combat; entering combat removes it (its aura interrupt flags)
+class spell_pal_valiant_crusade : public AuraScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_PALADIN_VALIANT_CRUSADE_MARKER });
+    }
+
+    void ApplyMarker() const
+    {
+        GetTarget()->CastSpell(GetTarget(), SPELL_PALADIN_VALIANT_CRUSADE_MARKER, TRIGGERED_FULL_MASK);
+    }
+
+    void HandleApply(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/) const
+    {
+        if (!GetTarget()->IsInCombat())
+            ApplyMarker();
+    }
+
+    void HandleRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/) const
+    {
+        GetTarget()->RemoveAurasDueToSpell(SPELL_PALADIN_VALIANT_CRUSADE_MARKER);
+    }
+
+    void HandleEnterLeaveCombat(bool isNowInCombat) const
+    {
+        if (!isNowInCombat)
+            ApplyMarker();
+    }
+
+    void Register() override
+    {
+        AfterEffectApply += AuraEffectApplyFn(spell_pal_valiant_crusade::HandleApply, EFFECT_0, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL);
+        AfterEffectRemove += AuraEffectRemoveFn(spell_pal_valiant_crusade::HandleRemove, EFFECT_0, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL);
+        OnEnterLeaveCombat += AuraEnterLeaveCombatFn(spell_pal_valiant_crusade::HandleEnterLeaveCombat);
+    }
+};
+
 // 255937 - Wake of Ashes
 class spell_pal_wake_of_ashes : public SpellScript
 {
@@ -1938,6 +2050,7 @@ void AddSC_paladin_spell_scripts()
     RegisterSpellScript(spell_pal_divine_purpose);
     RegisterSpellScript(spell_pal_divine_shield);
     RegisterSpellScript(spell_pal_divine_steed);
+    RegisterSpellScript(spell_pal_divine_steed_valiant_crusade);
     RegisterSpellScript(spell_pal_divine_storm);
     RegisterSpellAndAuraScriptPair(spell_pal_eternal_flame, spell_pal_eternal_flame_aura);
     RegisterSpellAndAuraScriptPair(spell_pal_execution_sentence, spell_pal_execution_sentence_aura);
@@ -1977,6 +2090,7 @@ void AddSC_paladin_spell_scripts()
     RegisterSpellScript(spell_pal_t8_2p_bonus);
     RegisterSpellScript(spell_pal_t30_2p_protection_bonus);
     RegisterSpellScript(spell_pal_t30_2p_protection_bonus_heal);
+    RegisterSpellScript(spell_pal_valiant_crusade);
     RegisterSpellScript(spell_pal_wake_of_ashes);
     RegisterSpellScript(spell_pal_zeal);
 }
