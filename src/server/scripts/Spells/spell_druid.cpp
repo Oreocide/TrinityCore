@@ -28,14 +28,19 @@
 #include "Containers.h"
 #include "DB2Stores.h"
 #include "GridNotifiersImpl.h"
+#include "Group.h"
+#include "MotionMaster.h"
 #include "ObjectAccessor.h"
+#include "PetDefines.h"
 #include "Player.h"
+#include "ScriptedCreature.h"
 #include "Spell.h"
 #include "SpellAuraEffects.h"
 #include "SpellHistory.h"
 #include "SpellMgr.h"
 #include "SpellScript.h"
 #include "TaskScheduler.h"
+#include "TemporarySummon.h"
 
 enum DruidSpells
 {
@@ -103,6 +108,9 @@ enum DruidSpells
     SPELL_DRUID_GLYPH_OF_STARS                 = 114301,
     SPELL_DRUID_GLYPH_OF_STARS_VISUAL          = 114302,
     SPELL_DRUID_GORE_PROC                      = 93622,
+    SPELL_DRUID_GROVE_GUARDIANS                = 1226140,
+    SPELL_DRUID_GROVE_GUARDIANS_NOURISH        = 422090,
+    SPELL_DRUID_GROVE_GUARDIANS_SUMMON         = 102693,
     SPELL_DRUID_GROWL                          = 6795,
     SPELL_DRUID_GUARDIAN_OF_ELUNE_AURA         = 213680,
     SPELL_DRUID_HALF_MOON                      = 274282,
@@ -154,6 +162,7 @@ enum DruidSpells
     SPELL_DRUID_STAR_BURST                     = 356474,
     SPELL_DRUID_SUNFIRE_DAMAGE                 = 164815,
     SPELL_DRUID_SURVIVAL_INSTINCTS             = 50322,
+    SPELL_DRUID_SWIFTMEND                      = 18562,
     SPELL_DRUID_TRAVEL_FORM                    = 783,
     SPELL_DRUID_TREE_OF_LIFE                   = 33891,
     SPELL_DRUID_THRASH_BEAR                    = 77758,
@@ -167,8 +176,14 @@ enum DruidSpells
     SPELL_DRUID_UMBRAL_INSPIRATION_TALENT      = 450418,
     SPELL_DRUID_UMBRAL_INSPIRATION_AURA        = 450419,
     SPELL_DRUID_URSOCS_FURY_SHIELD             = 372505,
+    SPELL_DRUID_WILD_GROWTH                    = 48438,
     SPELL_DRUID_YSERAS_GIFT_HEAL_PARTY         = 145110,
     SPELL_DRUID_YSERAS_GIFT_HEAL_SELF          = 145109
+};
+
+enum DruidCreatures
+{
+    NPC_DRUID_GROVE_GUARDIAN                   = 54983
 };
 
 // 774 - Rejuvenation
@@ -1303,6 +1318,166 @@ class spell_dru_gore : public AuraScript
         DoCheckEffectProc += AuraCheckEffectProcFn(spell_dru_gore::CheckEffectProc, EFFECT_0, SPELL_AURA_DUMMY);
         OnEffectProc += AuraEffectProcFn(spell_dru_gore::HandleProc, EFFECT_0, SPELL_AURA_DUMMY);
     }
+};
+
+// 1226140 - Grove Guardians
+// Swiftmend and Wild Growth summon a Treant that heals their target
+class spell_dru_grove_guardians : public AuraScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_DRUID_GROVE_GUARDIANS_SUMMON });
+    }
+
+    static bool CheckProc(AuraScript const&, ProcEventInfo const& eventInfo)
+    {
+        SpellInfo const* spellInfo = eventInfo.GetSpellInfo();
+        return spellInfo && (spellInfo->Id == SPELL_DRUID_SWIFTMEND || spellInfo->Id == SPELL_DRUID_WILD_GROWTH);
+    }
+
+    // the CAST-phase proc has no action target: the Treant heals the spell's own target (the druid when there is none)
+    void HandleProc(AuraEffect const* aurEff, ProcEventInfo const& eventInfo)
+    {
+        PreventDefaultAction();
+
+        Unit* druid = GetTarget();
+        Unit* target = nullptr;
+        if (Spell const* procSpell = eventInfo.GetProcSpell())
+            target = procSpell->m_targets.GetUnitTarget();
+        if (!target)
+            target = druid;
+
+        druid->CastSpell(target, SPELL_DRUID_GROVE_GUARDIANS_SUMMON, CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_FULL_MASK,
+            .TriggeringAura = aurEff
+        });
+
+        // the summon is instant, so the Treant exists now; hand it the target (spell scripts have no summon hook)
+        std::list<Creature*> treants;
+        druid->GetCreatureListWithEntryInGrid(treants, NPC_DRUID_GROVE_GUARDIAN, 30.0f);
+        for (Creature* treant : treants)
+            if (TempSummon const* summon = treant->ToTempSummon())
+                if (summon->GetSummonerGUID() == druid->GetGUID() && treant->AI() && treant->AI()->GetGUID(0).IsEmpty())
+                    treant->AI()->SetGUID(target->GetGUID(), 0);
+    }
+
+    void Register() override
+    {
+        DoCheckProc += AuraCheckProcFn(spell_dru_grove_guardians::CheckProc);
+        OnEffectProc += AuraEffectProcFn(spell_dru_grove_guardians::HandleProc, EFFECT_0, SPELL_AURA_DUMMY);
+    }
+};
+
+// 422090 - Nourish (Grove Guardians)
+class spell_dru_grove_guardian_nourish : public SpellScript
+{
+    // retail heals one unit per cast: the Treant's chosen target
+    void FilterTargets(std::list<WorldObject*>& targets) const
+    {
+        Unit* target = GetExplTargetUnit();
+        bool inRange = target && std::find(targets.begin(), targets.end(), target) != targets.end();
+        targets.clear();
+        if (inRange)
+            targets.push_back(target);
+    }
+
+    // a Treant has no spell power of its own: the heal scales with the druid's
+    void CalculateHealing(SpellEffectInfo const& spellEffectInfo, Unit const* /*victim*/, int32 const& /*healing*/, int32& flatMod, float const& /*pctMod*/) const
+    {
+        if (Player const* druid = GetCaster()->GetCharmerOrOwnerPlayerOrPlayerItself())
+            if (druid != GetCaster())
+                flatMod += int32(druid->SpellBaseHealingBonusDone(GetSpellInfo()->GetSchoolMask()) * spellEffectInfo.BonusCoefficient);
+    }
+
+    void Register() override
+    {
+        OnObjectAreaTargetSelect += SpellObjectAreaTargetSelectFn(spell_dru_grove_guardian_nourish::FilterTargets, EFFECT_0, TARGET_UNIT_DEST_AREA_ALLY);
+        CalcHealing += SpellCalcHealingFn(spell_dru_grove_guardian_nourish::CalculateHealing);
+    }
+};
+
+// 54983 - Treant (Grove Guardians)
+// casts Nourish back to back: on the Swiftmend / Wild Growth target while it is injured, else on the most injured ally of the druid's group
+struct npc_dru_grove_guardian : public ScriptedAI
+{
+    static constexpr float NourishRange = 40.0f;
+
+    npc_dru_grove_guardian(Creature* creature) : ScriptedAI(creature) { }
+
+    void IsSummonedBy(WorldObject* summoner) override
+    {
+        _druidGuid = summoner->GetGUID();
+        me->SetReactState(REACT_PASSIVE);
+        if (Unit* druid = summoner->ToUnit())
+            me->GetMotionMaster()->MoveFollow(druid, PET_FOLLOW_DIST, PET_FOLLOW_ANGLE);
+    }
+
+    void SetGUID(ObjectGuid const& guid, int32 /*id*/) override
+    {
+        _healTarget = guid;
+    }
+
+    ObjectGuid GetGUID(int32 /*id*/) const override
+    {
+        return _healTarget;
+    }
+
+    void UpdateAI(uint32 diff) override
+    {
+        if (_retryTimer > diff)
+        {
+            _retryTimer -= diff;
+            return;
+        }
+        _retryTimer = 0;
+
+        if (me->HasUnitState(UNIT_STATE_CASTING))
+            return;
+
+        Unit* target = SelectHealTarget();
+        if (!target || DoCast(target, SPELL_DRUID_GROVE_GUARDIANS_NOURISH) != SPELL_CAST_OK)
+            _retryTimer = 500;
+    }
+
+private:
+    bool CanHeal(Unit const* unit) const
+    {
+        return unit && unit->IsAlive() && me->IsWithinDistInMap(unit, NourishRange);
+    }
+
+    Unit* SelectHealTarget() const
+    {
+        Unit* chosen = ObjectAccessor::GetUnit(*me, _healTarget);
+        if (CanHeal(chosen) && !chosen->IsFullHealth())
+            return chosen;
+
+        Unit* mostInjured = nullptr;
+        auto consider = [&](Unit* unit)
+        {
+            if (CanHeal(unit) && !unit->IsFullHealth() && (!mostInjured || unit->GetHealthPct() < mostInjured->GetHealthPct()))
+                mostInjured = unit;
+        };
+
+        if (Player* druid = ObjectAccessor::GetPlayer(*me, _druidGuid))
+        {
+            if (Group* group = druid->GetGroup())
+            {
+                for (GroupReference const& itr : group->GetMembers())
+                    consider(itr.GetSource());
+            }
+            else
+                consider(druid);
+        }
+
+        if (mostInjured)
+            return mostInjured;
+
+        return CanHeal(chosen) ? chosen : nullptr;
+    }
+
+    ObjectGuid _druidGuid;
+    ObjectGuid _healTarget;
+    uint32 _retryTimer = 0;
 };
 
 // 213680 - Guardian of Elune
@@ -3146,6 +3321,9 @@ void AddSC_druid_spell_scripts()
     RegisterSpellScript(spell_dru_germination);
     RegisterSpellScript(spell_dru_glyph_of_stars);
     RegisterSpellScript(spell_dru_gore);
+    RegisterSpellScript(spell_dru_grove_guardians);
+    RegisterSpellScript(spell_dru_grove_guardian_nourish);
+    RegisterCreatureAI(npc_dru_grove_guardian);
     RegisterSpellScript(spell_dru_guardian_of_elune_healing);
     RegisterSpellScript(spell_dru_incapacitating_roar);
     RegisterSpellScript(spell_dru_incarnation);
