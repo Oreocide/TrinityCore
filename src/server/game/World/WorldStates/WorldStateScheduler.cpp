@@ -23,12 +23,14 @@
 #include "Log.h"
 #include "MapUtils.h"
 #include "ObjectMgr.h"
+#include "QuestDef.h"
 #include "ResetClock.h"
 #include "SharedDefines.h"
 #include "Timer.h"
 #include "World.h"
 #include "WorldStateMgr.h"
 #include <algorithm>
+#include <iterator>
 #include <limits>
 #include <tuple>
 #include <unordered_map>
@@ -476,6 +478,74 @@ time_t WorldStateScheduler::GetQuestCompletionExpiry(uint32 questId, time_t now)
                     expiry = std::min(expiry, Trinity::ResetClock::NextBoundary(now, group->Interval->DurationSecs, group->Interval->OffsetSecs));
 
     return expiry;
+}
+
+namespace
+{
+// a quest starter (creature or gameobject), or a task quest (QuestType 3) whose map outline the area pickup can use
+bool IsObtainableHere(uint32 questId)
+{
+    static std::unordered_set<uint32> const starters = []
+    {
+        std::unordered_set<uint32> quests;
+        for (auto const& [entry, starterQuestId] : *sObjectMgr->GetCreatureQuestRelationMapHACK())
+            quests.insert(starterQuestId);
+        for (auto const& [entry, starterQuestId] : *sObjectMgr->GetGOQuestRelationMapHACK())
+            quests.insert(starterQuestId);
+        return quests;
+    }();
+
+    if (starters.contains(questId))
+        return true;
+
+    Quest const* quest = sObjectMgr->GetQuestTemplate(questId);
+    if (!quest || quest->GetQuestType() != 3)
+        return false;
+
+    QuestPOIData const* poi = sObjectMgr->GetQuestPOIData(questId);
+    return poi && std::ranges::any_of(poi->Blobs, [](QuestPOIBlobData const& blob) { return blob.Points.size() >= 3; });
+}
+}
+
+std::vector<WorldStateScheduler::WorldQuestFeedEntry> WorldStateScheduler::GetWorldQuestFeed(time_t now, int32 mode)
+{
+    std::vector<WorldQuestFeedEntry> feed;
+    Data& data = GetData();
+    if (mode <= 0 || !data.Enabled)
+        return feed;
+
+    for (auto const& [questId, gates] : data.QuestGates)
+    {
+        if (gates.empty() || std::ranges::any_of(gates, [](std::pair<int32, int32> const& gate) { return WorldStateMgr::GetValue(gate.first, nullptr) != gate.second; }))
+            continue;
+        if (mode == 1 && !IsObtainableHere(questId))
+            continue;
+
+        // retail sends one gate per quest: a non-zero value first, then the higher world state id
+        auto pick = gates.begin();
+        for (auto itr = std::next(gates.begin()); itr != gates.end(); ++itr)
+        {
+            bool better = (itr->second != 0) != (pick->second != 0) ? itr->second != 0 : itr->first > pick->first;
+            if (better)
+                pick = itr;
+        }
+
+        std::vector<ScheduledWorldStateGroup const*> const* groups = Trinity::Containers::MapGetValuePtr(data.GroupsByWorldState, pick->first);
+        if (!groups || groups->empty())
+            continue;
+
+        ScheduledWorldStateGroup const* group = groups->front();
+        int64 index = GetPeriodIndex(*group, now);
+        WorldQuestFeedEntry& entry = feed.emplace_back();
+        entry.QuestId = questId;
+        entry.WorldStateId = pick->first;
+        entry.Value = pick->second;
+        entry.PeriodStart = Trinity::ResetClock::PeriodStart(index, group->Interval->DurationSecs, group->Interval->OffsetSecs);
+        entry.DurationSecs = group->Interval->DurationSecs;
+    }
+
+    std::ranges::sort(feed, {}, &WorldQuestFeedEntry::QuestId);
+    return feed;
 }
 
 bool WorldStateScheduler::IsQuestGateClosed(uint32 questId)

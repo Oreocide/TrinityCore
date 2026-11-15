@@ -35,6 +35,7 @@ EndScriptData */
 #include "Conversation.h"
 #include "CreatureAI.h"
 #include "DB2Stores.h"
+#include "Config.h"
 #include "GameTime.h"
 #include "GridNotifiersImpl.h"
 #include "InstanceScript.h"
@@ -47,6 +48,7 @@ EndScriptData */
 #include "MovementTypedefs.h"
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
+#include "QuestDef.h"
 #include "PhasingHandler.h"
 #include "PoolMgr.h"
 #include "RBAC.h"
@@ -103,6 +105,7 @@ public:
             { "show",               HandleDebugScheduleShowCommand,        rbac::RBAC_PERM_COMMAND_DEBUG,   Console::Yes },
             { "reload",             HandleDebugScheduleReloadCommand,      rbac::RBAC_PERM_COMMAND_DEBUG,   Console::Yes },
             { "value",              HandleDebugScheduleValueCommand,       rbac::RBAC_PERM_COMMAND_DEBUG,   Console::Yes },
+            { "feed",               HandleDebugScheduleFeedCommand,        rbac::RBAC_PERM_COMMAND_DEBUG,   Console::Yes },
         };
         static ChatCommandTable debugCommandTable =
         {
@@ -574,6 +577,21 @@ public:
             handler->SendSysMessage(Trinity::StringFormat("  row {}: world state {} = {} (order {}, weight {}, category {}){}{}", row->Id, row->WorldStateId, row->Value,
                 row->OrderIndex, row->Weight, row->UniqueCategory, inWindow ? "" : " - outside its on-window",
                 unixTime ? "" : Trinity::StringFormat(", current value {}", WorldStateMgr::GetValue(row->WorldStateId, nullptr))));
+        }
+        return true;
+    }
+
+    // .debug schedule feed [mode]: the world quest map feed as CMSG_REQUEST_WORLD_QUEST_UPDATE would answer it now
+    static bool HandleDebugScheduleFeedCommand(ChatHandler* handler, Optional<int32> mode)
+    {
+        int32 feedMode = mode.value_or(sConfigMgr->GetIntDefault("WorldStateScheduler.WorldQuestFeed", 0));
+        std::vector<WorldStateScheduler::WorldQuestFeedEntry> feed = WorldStateScheduler::GetWorldQuestFeed(GameTime::GetGameTime(), feedMode);
+        handler->SendSysMessage(Trinity::StringFormat("World quest feed (mode {}): {} quests", feedMode, feed.size()));
+        for (WorldStateScheduler::WorldQuestFeedEntry const& entry : feed)
+        {
+            Quest const* quest = sObjectMgr->GetQuestTemplate(entry.QuestId);
+            handler->SendSysMessage(Trinity::StringFormat("  quest {} ({}): world state {} = {}, period start {}, timer {} s", entry.QuestId,
+                quest ? quest->GetLogTitle() : "?", entry.WorldStateId, entry.Value, TimeToTimestampStr(entry.PeriodStart), entry.DurationSecs));
         }
         return true;
     }

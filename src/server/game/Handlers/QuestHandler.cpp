@@ -20,6 +20,7 @@
 #include "Common.h"
 #include "Creature.h"
 #include "CreatureAI.h"
+#include "Config.h"
 #include "DatabaseEnv.h"
 #include "DB2Stores.h"
 #include "GameObject.h"
@@ -41,6 +42,7 @@
 #include "ReputationMgr.h"
 #include "ScriptMgr.h"
 #include "World.h"
+#include "WorldStateScheduler.h"
 
 void WorldSession::HandleQuestgiverStatusQueryOpcode(WorldPackets::Quest::QuestGiverStatusQuery& packet)
 {
@@ -751,8 +753,10 @@ void WorldSession::HandleRequestWorldQuestUpdate(WorldPackets::Quest::RequestWor
 {
     WorldPackets::Quest::WorldQuestUpdateResponse response;
 
-    /// @todo: 7.x Has to be implemented
-    //response.WorldQuestUpdates.push_back(WorldPackets::Quest::WorldQuestUpdateInfo(lastUpdate, questID, timer, variableID, value));
+    // WorldStateScheduler.WorldQuestFeed: 0 off, 1 only quests the server can hand out, 2 every open scheduled quest
+    int32 mode = sConfigMgr->GetIntDefault("WorldStateScheduler.WorldQuestFeed", 0);
+    for (WorldStateScheduler::WorldQuestFeedEntry const& entry : WorldStateScheduler::GetWorldQuestFeed(GameTime::GetGameTime(), mode))
+        response.WorldQuestUpdates.emplace_back(entry.PeriodStart, entry.QuestId, uint32(entry.DurationSecs), entry.WorldStateId, entry.Value);
 
     SendPacket(response.Write());
 }

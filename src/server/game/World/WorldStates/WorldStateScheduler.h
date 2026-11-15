@@ -94,6 +94,22 @@ namespace WorldStateScheduler
     TC_GAME_API time_t GetQuestCompletionExpiry(uint32 questId, time_t now);
     // scheduled quest whose gate does not match now
     TC_GAME_API bool IsQuestGateClosed(uint32 questId);
+
+    // the world quest map feed (SMSG_WORLD_QUEST_UPDATE_RESPONSE): one entry per scheduled quest whose gate holds now,
+    // with the gate retail sends (the quest's own slot, a non-zero value, before a zone-wide state that must be 0) and
+    // the period of the group that sets it (retail: LastUpdate = period start, Timer = interval length)
+    struct WorldQuestFeedEntry
+    {
+        uint32 QuestId = 0;
+        int32 WorldStateId = 0;
+        int32 Value = 0;
+        time_t PeriodStart = 0;
+        int64 DurationSecs = 0;
+    };
+
+    // mode 0: empty, 1: only quests the server can hand out (a quest starter, or a task quest with a map outline for
+    // the area pickup), 2: every open scheduled quest
+    TC_GAME_API std::vector<WorldQuestFeedEntry> GetWorldQuestFeed(time_t now, int32 mode);
 };
 
 #endif // TRINITYCORE_WORLD_STATE_SCHEDULER_H
