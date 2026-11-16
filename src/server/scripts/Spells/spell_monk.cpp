@@ -34,6 +34,7 @@
 
 enum MonkSpells
 {
+    SPELL_MONK_BLACKOUT_KICK_BREWMASTER                 = 205523,
     SPELL_MONK_BURST_OF_LIFE_TALENT                     = 399226,
     SPELL_MONK_BURST_OF_LIFE_HEAL                       = 399230,
     SPELL_MONK_CALMING_COALESCENCE                      = 388220,
@@ -46,6 +47,8 @@ enum MonkSpells
     SPELL_MONK_ENVELOPING_MIST_2                        = 227345,
     SPELL_MONK_FISTS_OF_FURY_DAMAGE                     = 117418,
     SPELL_MONK_JADE_WALK                                = 450552,
+    SPELL_MONK_KEG_SMASH                                = 121253,
+    SPELL_MONK_MASTERY_ELUSIVE_BRAWLER                  = 117906,
     SPELL_MONK_MISTS_OF_LIFE                            = 388548,
     SPELL_MONK_MORTAL_WOUNDS                            = 115804,
     SPELL_MONK_POWER_STRIKE_PROC                        = 129914,
@@ -61,8 +64,11 @@ enum MonkSpells
     SPELL_MONK_ROLL_BACKWARD                            = 109131,
     SPELL_MONK_ROLL_FORWARD                             = 107427,
     SPELL_MONK_SAVE_THEM_ALL_HEAL_BONUS                 = 390105,
+    SPELL_MONK_SHUFFLE                                  = 215479,
+    SPELL_MONK_SHUFFLE_PASSIVE                          = 322120,
     SPELL_MONK_SONG_OF_CHI_JI_STUN                      = 198909,
     SPELL_MONK_SOOTHING_MIST                            = 115175,
+    SPELL_MONK_SPINNING_CRANE_KICK_SHUFFLE              = 322700,
     SPELL_MONK_STANCE_OF_THE_SPIRITED_CRANE             = 154436,
     SPELL_MONK_STAGGER_DAMAGE_AURA                      = 124255,
     SPELL_MONK_STAGGER_HEAVY                            = 124273,
@@ -626,6 +632,75 @@ class spell_monk_save_them_all : public AuraScript
     }
 };
 
+// Shuffle: each gain adds to the time left, up to 15 s (retail aura updates; no DB2 field holds the cap)
+static constexpr int32 ShuffleMaxDuration = 15 * IN_MILLISECONDS;
+
+static void GrantShuffle(Unit* monk, int32 gain)
+{
+    if (gain <= 0)
+        return;
+
+    if (Aura* shuffle = monk->GetAura(SPELL_MONK_SHUFFLE))
+    {
+        int32 duration = std::min(shuffle->GetDuration() + gain, ShuffleMaxDuration);
+        shuffle->SetMaxDuration(duration);
+        shuffle->SetDuration(duration);
+        return;
+    }
+
+    // a new Shuffle lasts for the gain, not for its 5 s base duration
+    monk->CastSpell(monk, SPELL_MONK_SHUFFLE, CastSpellExtraArgsInit{
+        .TriggerFlags = TRIGGERED_FULL_MASK,
+        .SpellValueOverrides = { { SPELLVALUE_DURATION, std::min(gain, ShuffleMaxDuration) } }
+    });
+}
+
+// 121253 - Keg Smash
+// 205523 - Blackout Kick
+// 107270 - Spinning Crane Kick
+class spell_monk_shuffle_grant : public SpellScript
+{
+public:
+    explicit spell_monk_shuffle_grant(uint32 requiredSpellId, uint32 gainSpellId, SpellEffIndex gainEffIndex, SpellEffIndex damageEffIndex)
+        : _requiredSpellId(requiredSpellId), _gainSpellId(gainSpellId), _gainEffIndex(gainEffIndex), _damageEffIndex(damageEffIndex) { }
+
+private:
+    bool Validate(SpellInfo const* spellInfo) override
+    {
+        return ValidateSpellInfo({ SPELL_MONK_SHUFFLE, _requiredSpellId })
+            && ValidateSpellEffect({ { _gainSpellId, _gainEffIndex } })
+            && ValidateSpellEffect({ { spellInfo->Id, _damageEffIndex } });
+    }
+
+    bool Load() override
+    {
+        Unit const* caster = GetCaster();
+        return caster->GetTypeId() == TYPEID_PLAYER && caster->HasAura(_requiredSpellId);
+    }
+
+    void HandleHit(SpellEffIndex /*effIndex*/)
+    {
+        // once per cast, however many enemies it hits
+        if (_granted)
+            return;
+
+        _granted = true;
+        SpellInfo const* gainSpell = sSpellMgr->AssertSpellInfo(_gainSpellId, GetCastDifficulty());
+        GrantShuffle(GetCaster(), gainSpell->GetEffect(_gainEffIndex).CalcValueAsInt(GetCaster()) * IN_MILLISECONDS);
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_monk_shuffle_grant::HandleHit, _damageEffIndex, SPELL_EFFECT_SCHOOL_DAMAGE);
+    }
+
+    uint32 _requiredSpellId;
+    uint32 _gainSpellId;
+    SpellEffIndex _gainEffIndex;
+    SpellEffIndex _damageEffIndex;
+    bool _granted = false;
+};
+
 // 198898 - Song of Chi-Ji
 struct at_monk_song_of_chi_ji : AreaTriggerAI
 {
@@ -917,6 +992,9 @@ void AddSC_monk_spell_scripts()
     RegisterSpellScript(spell_monk_roll);
     RegisterSpellScript(spell_monk_roll_aura);
     RegisterSpellScript(spell_monk_save_them_all);
+    RegisterSpellScriptWithArgs(spell_monk_shuffle_grant, "spell_monk_keg_smash_shuffle", SPELL_MONK_SHUFFLE_PASSIVE, SPELL_MONK_KEG_SMASH, EFFECT_5, EFFECT_1);
+    RegisterSpellScriptWithArgs(spell_monk_shuffle_grant, "spell_monk_blackout_kick_shuffle", SPELL_MONK_MASTERY_ELUSIVE_BRAWLER, SPELL_MONK_BLACKOUT_KICK_BREWMASTER, EFFECT_1, EFFECT_0);
+    RegisterSpellScriptWithArgs(spell_monk_shuffle_grant, "spell_monk_spinning_crane_kick_shuffle", SPELL_MONK_SPINNING_CRANE_KICK_SHUFFLE, SPELL_MONK_SPINNING_CRANE_KICK_SHUFFLE, EFFECT_0, EFFECT_0);
     RegisterAreaTriggerAI(at_monk_song_of_chi_ji);
     RegisterSpellScript(spell_monk_stagger);
     RegisterSpellScript(spell_monk_stagger_damage_aura);
