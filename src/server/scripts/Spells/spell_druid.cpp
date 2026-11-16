@@ -105,6 +105,7 @@ enum DruidSpells
     SPELL_DRUID_FULL_MOON                      = 274283,
     SPELL_DRUID_GALACTIC_GUARDIAN_AURA         = 213708,
     SPELL_DRUID_GERMINATION                    = 155675,
+    SPELL_DRUID_GIFT_OF_THE_WILD               = 1262034,
     SPELL_DRUID_GLYPH_OF_STARS                 = 114301,
     SPELL_DRUID_GLYPH_OF_STARS_VISUAL          = 114302,
     SPELL_DRUID_GORE_PROC                      = 93622,
@@ -133,6 +134,7 @@ enum DruidSpells
     SPELL_DRUID_MAIM_STUN                      = 203123,
     SPELL_DRUID_MANGLE                         = 33917,
     SPELL_DRUID_MANGLE_TALENT                  = 231064,
+    SPELL_DRUID_MARK_OF_THE_WILD               = 1126,
     SPELL_DRUID_MASS_ENTANGLEMENT              = 102359,
     SPELL_DRUID_MATTED_FUR                     = 385786,
     SPELL_DRUID_MOONFIRE                       = 8921,
@@ -1859,6 +1861,31 @@ class spell_dru_mangle : public SpellScript
     }
 };
 
+// 1126 - Mark of the Wild
+// Gift of the Wild: the druid's own Mark is more effective on the druid
+class spell_dru_gift_of_the_wild_mark : public AuraScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellEffect({ { SPELL_DRUID_GIFT_OF_THE_WILD, EFFECT_0 } });
+    }
+
+    void CalculateAmount(AuraEffect const* /*aurEff*/, SpellEffectValue& amount, bool& /*canBeRecalculated*/) const
+    {
+        Unit* caster = GetCaster();
+        if (!caster || caster != GetUnitOwner())
+            return;
+
+        if (AuraEffect const* giftOfTheWild = caster->GetAuraEffect(SPELL_DRUID_GIFT_OF_THE_WILD, EFFECT_0))
+            AddPct(amount, giftOfTheWild->GetAmount());
+    }
+
+    void Register() override
+    {
+        DoEffectCalcAmount += AuraEffectCalcAmountFn(spell_dru_gift_of_the_wild_mark::CalculateAmount, EFFECT_0, SPELL_AURA_MOD_VERSATILITY);
+    }
+};
+
 // 385787 - Matted Fur (Absorb)
 class spell_dru_matted_fur_absorb : public AuraScript
 {
@@ -3338,6 +3365,7 @@ void AddSC_druid_spell_scripts()
     RegisterSpellScript(spell_dru_luxuriant_soil);
     RegisterSpellScript(spell_dru_maim);
     RegisterSpellScript(spell_dru_mangle);
+    RegisterSpellScript(spell_dru_gift_of_the_wild_mark);
     RegisterSpellScript(spell_dru_matted_fur_absorb);
     RegisterSpellScript(spell_dru_moonfire);
     RegisterSpellScript(spell_dru_moonless_night);
