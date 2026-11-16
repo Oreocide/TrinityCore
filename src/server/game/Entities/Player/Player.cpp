@@ -29135,8 +29135,19 @@ void Player::ActivateTalentGroup(ChrSpecializationEntry const* spec)
     for (uint32 glyphId : GetGlyphs(GetActiveTalentGroup()))
         RemoveAurasDueToSpell(sGlyphPropertiesStore.AssertEntry(glyphId)->SpellID);
 
+    // a MOD_STAT aura with misc -2 adds to the primary stat, which the spec decides: move it with the spec (#23)
+    std::vector<AuraEffect*> primaryStatMods;
+    for (AuraEffect* aurEff : GetAuraEffectsByType(SPELL_AURA_MOD_STAT))
+        if (aurEff->GetMiscValue() == -2)
+            primaryStatMods.push_back(aurEff);
+    for (AuraEffect* aurEff : primaryStatMods)
+        aurEff->HandleEffect(this, AURA_EFFECT_HANDLE_STAT, false);
+
     SetActiveTalentGroup(spec->OrderIndex);
     SetPrimarySpecialization(spec->ID);
+
+    for (AuraEffect* aurEff : primaryStatMods)
+        aurEff->HandleEffect(this, AURA_EFFECT_HANDLE_STAT, true);
     UF::TraitConfig const* specTraitConfig = m_activePlayerData->TraitConfigs.FindIf([spec](UF::TraitConfig const& traitConfig)
     {
         return static_cast<TraitConfigType>(*traitConfig.Type) == TraitConfigType::Combat

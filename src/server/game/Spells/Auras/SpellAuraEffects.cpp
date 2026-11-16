@@ -3861,10 +3861,12 @@ void AuraEffect::HandleAuraModStat(AuraApplication const* aurApp, uint8 mode, bo
     if (std::abs(spellGroupVal) >= std::abs(GetAmount()))
         return;
 
+    // -1 is all stats. -2 is the primary stat (Light's Potential 1236616: "increase your primary stat"), which only a player
+    // has (its spec decides it, Player::GetPrimaryStat); other units keep all stats (Oreocide/mod-playerbots#23)
+    int32 const primaryStat = GetMiscValue() == -2 && target->IsPlayer() ? int32(target->ToPlayer()->GetPrimaryStat()) : -1;
     for (int32 i = STAT_STRENGTH; i < MAX_STATS; ++i)
     {
-        // -1 or -2 is all stats (misc < -2 checked in function beginning)
-        if (GetMiscValue() < 0 || GetMiscValue() == i)
+        if ((GetMiscValue() < 0 && (primaryStat < 0 || primaryStat == i)) || GetMiscValue() == i)
         {
             if (spellGroupVal)
             {
