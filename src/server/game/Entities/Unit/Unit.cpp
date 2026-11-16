@@ -8743,6 +8743,33 @@ int32 Unit::ModifyPower(Powers power, int32 dVal, bool withPowerUpdate /*= true*
     if (dVal > 0)
         dVal *= GetTotalAuraMultiplierByMiscValue(SPELL_AURA_MOD_POWER_GAIN_PCT, power);
 
+    // runes are cooldowns (Player::SetRuneCooldown keeps the power in step with the ready runes): a rune gain readies the runes
+    // closest to recharged, else the next regen tick would reset the power and the rune could never be spent
+    if (power == POWER_RUNES && dVal > 0)
+    {
+        if (Player* player = ToPlayer(); player && player->GetClass() == CLASS_DEATH_KNIGHT && GetPowerIndex(POWER_RUNES) < MAX_POWERS_PER_CLASS)
+        {
+            int32 maxRunes = std::min<int32>(GetMaxPower(POWER_RUNES), MAX_RUNES);
+            for (; gain < dVal; ++gain)
+            {
+                int32 rune = -1;
+                for (int32 i = 0; i < maxRunes; ++i)
+                    if (player->GetRuneCooldown(i) < 1.0f && (rune < 0 || player->GetRuneCooldown(i) > player->GetRuneCooldown(rune)))
+                        rune = i;
+
+                if (rune < 0)
+                    break;
+
+                player->SetRuneCooldown(rune, 1.0f);
+            }
+
+            if (gain)
+                player->ResyncRunes();
+
+            return gain;
+        }
+    }
+
     int32 curPower = GetPower(power);
 
     int32 val = dVal + curPower;
