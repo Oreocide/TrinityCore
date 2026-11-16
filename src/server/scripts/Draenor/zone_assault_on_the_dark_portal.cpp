@@ -101,6 +101,18 @@ public:
 
     void OnSceneComplete(Player* player, uint32 /*sceneInstanceID*/, SceneTemplate const* /*sceneTemplate*/) override
     {
+        Finish(player);
+    }
+
+    // A skipped scene ends like a watched one
+    void OnSceneCancel(Player* player, uint32 /*sceneInstanceID*/, SceneTemplate const* /*sceneTemplate*/) override
+    {
+        Finish(player);
+    }
+
+private:
+    static void Finish(Player* player)
+    {
         player->RemoveAurasDueToSpell(SPELL_DARK_PORTAL_RUN_AWAY);
         PhasingHandler::OnConditionChange(player);
     }
@@ -158,14 +170,29 @@ public:
 
     void OnSceneComplete(Player* player, uint32 /*sceneInstanceID*/, SceneTemplate const* /*sceneTemplate*/) override
     {
-        player->RemoveAurasDueToSpell(SPELL_BLEEDING_HOLLOW_HOLDOUT);
-        PhasingHandler::OnConditionChange(player);
+        Finish(player);
+    }
+
+    // A skip sends no trigger events, so the "Push" quest completion (Push Army completes the army-pushed flag quest) is
+    // applied here when the skip came before it
+    void OnSceneCancel(Player* player, uint32 /*sceneInstanceID*/, SceneTemplate const* /*sceneTemplate*/) override
+    {
+        if (!player->HasAura(SPELL_PUSH_ARMY))
+            player->CastSpell(player, SPELL_PUSH_ARMY, false);
+        Finish(player);
     }
 
     void OnSceneTriggerEvent(Player* player, uint32 /*sceneInstanceID*/, SceneTemplate const* /*sceneTemplate*/, std::string const& triggerName) override
     {
         if (triggerName == "Push")
             player->CastSpell(player, SPELL_PUSH_ARMY, false);
+    }
+
+private:
+    static void Finish(Player* player)
+    {
+        player->RemoveAurasDueToSpell(SPELL_BLEEDING_HOLLOW_HOLDOUT);
+        PhasingHandler::OnConditionChange(player);
     }
 };
 

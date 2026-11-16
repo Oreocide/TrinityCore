@@ -1014,6 +1014,12 @@ public:
     {
         player->CastSpell(player, player->GetTeam() == ALLIANCE ? SPELL_CRASHED_LANDED_ALLIANCE : SPELL_CRASHED_LANDED_HORDE, true);
     }
+
+    // A skipped scene ends like a watched one
+    void OnSceneCancel(Player* player, uint32 sceneInstanceID, SceneTemplate const* sceneTemplate) override
+    {
+        OnSceneComplete(player, sceneInstanceID, sceneTemplate);
+    }
 };
 
 CreatureAI* CaptainGarrickAISelector(Creature* creature)
