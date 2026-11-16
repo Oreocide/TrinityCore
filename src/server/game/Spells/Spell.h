@@ -320,6 +320,7 @@ class TC_GAME_API Spell
         void EffectTeleUnitsFaceCaster();
         void EffectLearnSkill();
         void EffectPlayMovie();
+        void EffectTeleportToLFGDungeon();
         void EffectTradeSkill();
         void EffectEnchantItemPerm();
         void EffectEnchantItemTmp();

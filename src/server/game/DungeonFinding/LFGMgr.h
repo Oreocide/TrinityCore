@@ -367,6 +367,8 @@ class TC_GAME_API LFGMgr
         void SetupGroupMember(ObjectGuid guid, ObjectGuid gguid);
         /// Return Lfg dungeon entry for given dungeon id
         uint32 GetLFGDungeonEntry(uint32 id);
+        /// Dungeon data, teleport location included (SPELL_EFFECT_TELEPORT_TO_LFG_DUNGEON)
+        LFGDungeonData const* GetLFGDungeon(uint32 id);
 
         // cs_lfg
         /// Get current player roles
@@ -466,7 +468,6 @@ class TC_GAME_API LFGMgr
         void RemovePlayerData(ObjectGuid guid);
         void GetCompatibleDungeons(LfgDungeonSet* dungeons, GuidSet const& players, LfgLockPartyMap* lockMap, std::vector<std::string_view>* playersMissingRequirement, bool isContinue);
         void _SaveToDB(ObjectGuid guid, uint32 db_guid);
-        LFGDungeonData const* GetLFGDungeon(uint32 id);
 
         // Proposals
         void RemoveProposal(LfgProposalContainer::iterator itProposal, LfgUpdateType type);

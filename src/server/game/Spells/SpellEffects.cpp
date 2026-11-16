@@ -49,6 +49,7 @@
 #include "InstanceScript.h"
 #include "Item.h"
 #include "Language.h"
+#include "LFGMgr.h"
 #include "Log.h"
 #include "Loot.h"
 #include "LootMgr.h"
@@ -316,7 +317,7 @@ NonDefaultConstructible<SpellEffectHandlerFn> SpellEffectHandlers[TOTAL_SPELL_EF
     &Spell::EffectActivateGarrisonBuilding,                 //224 SPELL_EFFECT_ACTIVATE_GARRISON_BUILDING
     &Spell::EffectGrantBattlePetLevel,                      //225 SPELL_EFFECT_GRANT_BATTLEPET_LEVEL
     &Spell::EffectNULL,                                     //226 SPELL_EFFECT_TRIGGER_ACTION_SET
-    &Spell::EffectNULL,                                     //227 SPELL_EFFECT_TELEPORT_TO_LFG_DUNGEON
+    &Spell::EffectTeleportToLFGDungeon,                     //227 SPELL_EFFECT_TELEPORT_TO_LFG_DUNGEON
     &Spell::EffectNULL,                                     //228 SPELL_EFFECT_228
     &Spell::EffectNULL,                                     //229 SPELL_EFFECT_SET_FOLLOWER_QUALITY
     &Spell::EffectNULL,                                     //230 SPELL_EFFECT_230
@@ -2446,6 +2447,29 @@ void Spell::EffectPlayMovie()
         return;
 
     unitTarget->ToPlayer()->SendMovieStart(movieId);
+}
+
+void Spell::EffectTeleportToLFGDungeon()
+{
+    if (effectHandleMode != SPELL_EFFECT_HANDLE_HIT_TARGET)
+        return;
+
+    Player* player = unitTarget ? unitTarget->ToPlayer() : nullptr;
+    if (!player || player->IsInFlight())
+        return;
+
+    // MiscValueB is the LFGDungeons id; its entrance comes from lfg_dungeon_template or the map's entrance areatrigger
+    lfg::LFGDungeonData const* dungeon = sLFGMgr->GetLFGDungeon(effectInfo->MiscValueB);
+    if (!dungeon || (dungeon->x == 0.0f && dungeon->y == 0.0f && dungeon->z == 0.0f))
+    {
+        TC_LOG_ERROR("spells.effect.nospell", "Spell::EffectTeleportToLFGDungeon: spell {} names LFG dungeon {}, which has no teleport location (lfg_dungeon_template or an entrance areatrigger).",
+            m_spellInfo->Id, effectInfo->MiscValueB);
+        return;
+    }
+
+    // as LFGMgr::TeleportPlayer does: the dungeon id goes with the teleport, so the instance knows its LFG dungeon and
+    // ScenarioMgr can take that dungeon's ScenarioID when no scenario row matches the map's difficulty (ScenarioMgr.cpp:41-45)
+    player->TeleportTo({ .Location = WorldLocation(dungeon->map, dungeon->x, dungeon->y, dungeon->z, dungeon->o), .LfgDungeonsId = dungeon->id });
 }
 
 void Spell::EffectSetChromieTime()
