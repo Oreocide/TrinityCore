@@ -18,6 +18,7 @@
 #include "WorldStateScheduler.h"
 #include "Config.h"
 #include "DatabaseEnv.h"
+#include "DB2Stores.h"
 #include "GameEventMgr.h"
 #include "GameTime.h"
 #include "Log.h"
@@ -501,6 +502,10 @@ bool IsObtainableHere(uint32 questId)
     Quest const* quest = sObjectMgr->GetQuestTemplate(questId);
     if (!quest || quest->GetQuestType() != 3)
         return false;
+
+    // TaskAreaPickup adds a task quest inside its AreaGroupID areas, or near its map outline
+    if (quest->GetAreaGroupID() && !sDB2Manager.GetAreasForGroup(quest->GetAreaGroupID()).empty())
+        return true;
 
     QuestPOIData const* poi = sObjectMgr->GetQuestPOIData(questId);
     return poi && std::ranges::any_of(poi->Blobs, [](QuestPOIBlobData const& blob) { return blob.Points.size() >= 3; });

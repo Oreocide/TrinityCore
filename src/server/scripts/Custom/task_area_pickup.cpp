@@ -17,15 +17,21 @@
 
 /*
  * Task quest area pickup: world quests and bonus objectives (QuestType 3) are added to the quest log when a player
- * comes near the quest's map outline (quest_poi blobs with 3+ points) and dropped again when the player walks well
- * past it. Progress of a dropped quest is kept in memory and put back when it is added again. Task quests without a
- * quest ender are rewarded as soon as they are complete.
+ * enters the quest's area and dropped again when the player leaves it. Progress of a dropped quest is kept in memory
+ * and put back when it is added again. Task quests without a quest ender are rewarded as soon as they are complete.
  *
- * Measured on retail sniffs (trinitycore-tracking/docs/sniff-analysis/poi-areatriggers/REPORT.md): adds happen a
- * median 45 yd outside the outline, drops a median 110 yd past it; progress survives a drop; the reward arrives with
+ * The quest's area is its AreaGroupID (quest_template, from retail's quest query): the player's area, subarea or any
+ * of their parents is in the group's AreaGroupMember list. Retail sniffs matched this on every add (52/52) and every
+ * drop that was not a reward (67/67) where the capture recorded the area (Oreocide/TrinityCore#77). Quests without an
+ * AreaGroupID fall back to the map outline (quest_poi blobs with 3+ points): added near it, dropped well past it.
+ * Quests with only single-point POIs (world bosses, rares) use a radius around the points: retail adds those at a
+ * fixed distance per quest that no data source holds (40-150 yd in sniffs, typically ~95), so one radius stands in.
+ *
+ * Measured on retail sniffs (trinitycore-tracking/docs/sniff-analysis/poi-areatriggers/REPORT.md): outline adds happen
+ * a median 45 yd outside the outline, drops a median 110 yd past it; progress survives a drop; the reward arrives with
  * the last credit (SMSG_QUEST_GIVER_QUEST_COMPLETE, no turn-in).
  *
- * Which quests: task quests with an area outline and no quest starter. Quests in quest_scheduled_gate only while
+ * Which quests: task quests with an area group or an outline and no quest starter. Quests in quest_scheduled_gate only while
  * their gate is open (WorldStateScheduler); ungated ones only when QuestInfoID is 0 and the quest is not reset by
  * the scheduler (always-on bonus objectives). Each blob's PlayerConditionID must hold. Real players only: sessions
  * without a socket (playerbots, headless QA) are skipped unless their account is listed in SocketlessAccounts.
@@ -34,6 +40,8 @@
  *   TaskAreaPickup.Enable             0     master switch (pickup, drop and auto-reward)
  *   TaskAreaPickup.AddMargin          45    yd outside the outline at which the quest is added
  *   TaskAreaPickup.DropMargin         110   yd outside the outline at which the quest is dropped
+ *   TaskAreaPickup.PointAddRadius     95    yd from a single-point POI (no area group, no outline) to add the quest
+ *   TaskAreaPickup.PointDropRadius    200   yd from it to drop the quest
  *   TaskAreaPickup.Interval           1000  ms between checks per player
  *   TaskAreaPickup.AutoReward         1     reward complete task quests that have no quest ender
  *   TaskAreaPickup.SocketlessAccounts ""    account ids without a socket that still take part (QA characters)
@@ -83,6 +91,7 @@ struct Blob
 struct TaskArea
 {
     uint32 QuestId = 0;
+    bool Point = false; // single-point POIs only: radius instead of outline margins
     float MinX = 0.0f, MinY = 0.0f, MaxX = 0.0f, MaxY = 0.0f;
     std::vector<Blob> Blobs;
 };
@@ -93,6 +102,8 @@ struct Settings
     std::atomic<bool> AutoReward{ true };
     std::atomic<float> AddMargin{ 45.0f };
     std::atomic<float> DropMargin{ 110.0f };
+    std::atomic<float> PointAddRadius{ 95.0f };
+    std::atomic<float> PointDropRadius{ 200.0f };
     std::atomic<uint32> Interval{ 1000 };
     std::mutex AccountLock;
     std::unordered_set<uint32> SocketlessAccounts;
@@ -104,12 +115,22 @@ struct PlayerState
     uint32 SinceCheck = 0;
     uint32 MapId = 0;
     float X = 0.0f, Y = 0.0f;
+    uint32 AreaId = 0;
     bool Checked = false;
+};
+
+struct GroupTask
+{
+    std::unordered_set<uint32> Areas;
+    std::unordered_set<uint32> Maps;
 };
 
 // read-only after AddSC_task_area_pickup (built once, before any map updates)
 std::unordered_map<uint32 /*mapId*/, std::vector<TaskArea>> AreasByMap;
 std::unordered_map<uint32 /*questId*/, std::pair<uint32 /*mapId*/, std::size_t /*index*/>> AreaByQuest;
+std::unordered_map<uint32 /*questId*/, GroupTask> GroupByQuest;
+std::unordered_map<uint32 /*areaId*/, std::vector<uint32 /*questId*/>> GroupQuestsByArea;
+std::unordered_set<uint32> ScanMaps;
 std::unordered_set<uint32> GatedQuests;
 std::unordered_set<uint32> StarterQuests;
 std::deque<std::string> ScriptNames;
@@ -198,8 +219,29 @@ bool HasEnder(uint32 questId)
 
 bool IsAreaTask(Quest const* quest)
 {
-    return quest->GetQuestType() == QUEST_TYPE_TASK && AreaByQuest.contains(quest->GetQuestId())
+    return quest->GetQuestType() == QUEST_TYPE_TASK
+        && (GroupByQuest.contains(quest->GetQuestId()) || AreaByQuest.contains(quest->GetQuestId()))
         && !StarterQuests.contains(quest->GetQuestId());
+}
+
+// the player's area and its parents (subarea -> area -> zone)
+std::vector<uint32> AreaChain(uint32 areaId)
+{
+    std::vector<uint32> chain;
+    while (areaId && chain.size() < 8)
+    {
+        chain.push_back(areaId);
+        AreaTableEntry const* area = sAreaTableStore.LookupEntry(areaId);
+        if (!area)
+            break;
+        areaId = area->ParentAreaID;
+    }
+    return chain;
+}
+
+bool InGroupArea(GroupTask const& group, uint32 mapId, std::vector<uint32> const& chain)
+{
+    return group.Maps.contains(mapId) && std::ranges::any_of(chain, [&](uint32 areaId) { return group.Areas.contains(areaId); });
 }
 
 bool IsTaskOpen(Quest const* quest)
@@ -284,12 +326,37 @@ void DropTask(Player* player, Quest const* quest)
     TC_LOG_DEBUG("scripts", "TaskAreaPickup: dropped quest {} from {}", questId, player->GetGUID().ToString());
 }
 
-void CheckPlayer(Player* player, std::vector<TaskArea> const& areas)
+// an owned task quest the player is no longer in (or near, for outlines) on this map
+bool ShouldDrop(Player const* player, uint32 questId, std::vector<uint32> const& chain, float x, float y)
+{
+    if (auto group = GroupByQuest.find(questId); group != GroupByQuest.end())
+        return !InGroupArea(group->second, player->GetMapId(), chain);
+
+    auto [mapId, index] = AreaByQuest.at(questId);
+    if (mapId != player->GetMapId())
+        return true;
+    TaskArea const& area = AreasByMap.at(mapId)[index];
+    return OutsideDistance(player, area, x, y) > (area.Point ? Config.PointDropRadius.load() : Config.DropMargin.load());
+}
+
+bool TryAdd(Player* player, uint32 questId)
+{
+    Quest const* quest = sObjectMgr->GetQuestTemplate(questId);
+    if (!quest || player->GetQuestStatus(questId) != QUEST_STATUS_NONE || !IsTaskOpen(quest) || IsExcluded(questId))
+        return false;
+    if (!player->CanTakeQuest(quest, false) || !player->CanAddQuest(quest, false))
+        return false;
+    AddTask(player, quest);
+    return true;
+}
+
+void CheckPlayer(Player* player, std::vector<TaskArea> const* areas)
 {
     float x = player->GetPositionX(), y = player->GetPositionY();
-    float addMargin = Config.AddMargin.load(), dropMargin = Config.DropMargin.load();
+    float addMargin = Config.AddMargin.load(), pointRadius = Config.PointAddRadius.load();
+    std::vector<uint32> chain = AreaChain(player->GetAreaId());
 
-    // drops: task quests in the log that this system owns, on this map, now far outside
+    // drops: task quests in the log that this system owns, now outside their area
     std::vector<Quest const*> drops;
     for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
     {
@@ -299,26 +366,30 @@ void CheckPlayer(Player* player, std::vector<TaskArea> const& areas)
         Quest const* quest = sObjectMgr->GetQuestTemplate(questId);
         if (!quest || !IsAreaTask(quest) || !IsOwned(player, questId) || player->GetQuestStatus(questId) == QUEST_STATUS_COMPLETE)
             continue;
-        auto [mapId, index] = AreaByQuest.at(questId);
-        if (mapId != player->GetMapId() || OutsideDistance(player, AreasByMap.at(mapId)[index], x, y) > dropMargin)
+        if (ShouldDrop(player, questId, chain, x, y))
             drops.push_back(quest);
     }
     for (Quest const* quest : drops)
         DropTask(player, quest);
 
-    // adds: open task quests whose outline the player is in or near
-    for (TaskArea const& area : areas)
+    // adds: open task quests whose area group holds the player's area
+    for (uint32 areaId : chain)
+        if (auto itr = GroupQuestsByArea.find(areaId); itr != GroupQuestsByArea.end())
+            for (uint32 questId : itr->second)
+                if (GroupByQuest.at(questId).Maps.contains(player->GetMapId()))
+                    TryAdd(player, questId);
+
+    // adds: open task quests (without an area group) whose outline the player is in or near
+    if (!areas)
+        return;
+    for (TaskArea const& area : *areas)
     {
-        if (x < area.MinX - addMargin || x > area.MaxX + addMargin || y < area.MinY - addMargin || y > area.MaxY + addMargin)
+        float margin = area.Point ? pointRadius : addMargin;
+        if (x < area.MinX - margin || x > area.MaxX + margin || y < area.MinY - margin || y > area.MaxY + margin)
             continue;
-        Quest const* quest = sObjectMgr->GetQuestTemplate(area.QuestId);
-        if (!quest || player->GetQuestStatus(area.QuestId) != QUEST_STATUS_NONE || !IsTaskOpen(quest) || IsExcluded(area.QuestId))
+        if (player->GetQuestStatus(area.QuestId) != QUEST_STATUS_NONE || OutsideDistance(player, area, x, y) > margin)
             continue;
-        if (OutsideDistance(player, area, x, y) > addMargin)
-            continue;
-        if (!player->CanTakeQuest(quest, false) || !player->CanAddQuest(quest, false))
-            continue;
-        AddTask(player, quest);
+        TryAdd(player, area.QuestId);
     }
 }
 
@@ -333,8 +404,7 @@ public:
             return;
 
         auto areaItr = AreasByMap.find(_mapId);
-        if (areaItr == AreasByMap.end())
-            return;
+        std::vector<TaskArea> const* areas = areaItr != AreasByMap.end() ? &areaItr->second : nullptr;
 
         // scan the map's players once per step instead of every map tick; a world map has one Map, or one per team on
         // faction-split maps (instance id = TeamId), each updated by one thread, so each gets its own counter
@@ -361,12 +431,13 @@ public:
                 if (state.SinceCheck >= interval)
                 {
                     state.SinceCheck = 0;
-                    bool moved = !state.Checked || state.MapId != _mapId
+                    bool moved = !state.Checked || state.MapId != _mapId || state.AreaId != player->GetAreaId()
                         || std::hypot(player->GetPositionX() - state.X, player->GetPositionY() - state.Y) >= MIN_MOVE_YD;
                     if (moved)
                     {
                         state.Checked = true;
                         state.MapId = _mapId;
+                        state.AreaId = player->GetAreaId();
                         state.X = player->GetPositionX();
                         state.Y = player->GetPositionY();
                         check = true;
@@ -375,7 +446,7 @@ public:
             }
 
             if (check)
-                CheckPlayer(player, areaItr->second);
+                CheckPlayer(player, areas);
         }
     }
 
@@ -422,18 +493,26 @@ public:
         }, 0ms);
     }
 
-    // a task quest from another map is dropped when the player changes map (retail drops it on leaving the area)
+    // a task quest from another map is dropped when the player changes map (retail drops it on leaving the area); the
+    // new map may have no scan, so this is the only check there
     void OnMapChanged(Player* player) override
     {
         if (!Config.Enable.load() || !TakesPart(player))
             return;
+
+        auto onOtherMap = [player](uint32 questId)
+        {
+            if (auto group = GroupByQuest.find(questId); group != GroupByQuest.end())
+                return !group->second.Maps.contains(player->GetMapId());
+            return AreaByQuest.at(questId).first != player->GetMapId();
+        };
 
         std::vector<Quest const*> drops;
         for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
             if (uint32 questId = player->GetQuestSlotQuestId(slot))
                 if (Quest const* quest = sObjectMgr->GetQuestTemplate(questId))
                     if (IsAreaTask(quest) && IsOwned(player, questId) && player->GetQuestStatus(questId) != QUEST_STATUS_COMPLETE
-                        && AreaByQuest.at(questId).first != player->GetMapId())
+                        && onOtherMap(questId))
                         drops.push_back(quest);
         for (Quest const* quest : drops)
             DropTask(player, quest);
@@ -459,6 +538,8 @@ public:
         Config.AutoReward = sConfigMgr->GetBoolDefault("TaskAreaPickup.AutoReward", true);
         Config.AddMargin = sConfigMgr->GetFloatDefault("TaskAreaPickup.AddMargin", 45.0f);
         Config.DropMargin = std::max(Config.AddMargin.load(), sConfigMgr->GetFloatDefault("TaskAreaPickup.DropMargin", 110.0f));
+        Config.PointAddRadius = sConfigMgr->GetFloatDefault("TaskAreaPickup.PointAddRadius", 95.0f);
+        Config.PointDropRadius = std::max(Config.PointAddRadius.load(), sConfigMgr->GetFloatDefault("TaskAreaPickup.PointDropRadius", 200.0f));
         Config.Interval = std::max<uint32>(250, sConfigMgr->GetIntDefault("TaskAreaPickup.Interval", 1000));
 
         auto readIds = [](char const* key)
@@ -502,14 +583,37 @@ void BuildIndex()
     {
         if (quest->GetQuestType() != QUEST_TYPE_TASK || StarterQuests.contains(questId))
             continue;
+
+        // retail's own pickup area: used instead of the outline when the quest has one
+        if (uint32 groupId = quest->GetAreaGroupID())
+        {
+            GroupTask group;
+            for (uint32 areaId : sDB2Manager.GetAreasForGroup(groupId))
+                if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(areaId))
+                {
+                    group.Areas.insert(areaId);
+                    group.Maps.insert(area->ContinentID);
+                }
+            if (!group.Areas.empty())
+            {
+                for (uint32 areaId : group.Areas)
+                    GroupQuestsByArea[areaId].push_back(questId);
+                ScanMaps.insert(group.Maps.begin(), group.Maps.end());
+                GroupByQuest[questId] = std::move(group);
+                continue;
+            }
+        }
+
         QuestPOIData const* poi = sObjectMgr->GetQuestPOIData(questId);
         if (!poi)
             continue;
 
+        // outlines (3+ points) when the quest has any, else its single points (world bosses, rares)
+        bool hasOutline = std::ranges::any_of(poi->Blobs, [](QuestPOIBlobData const& data) { return data.Points.size() >= 3; });
         std::unordered_map<uint32, TaskArea> byMap;
         for (QuestPOIBlobData const& data : poi->Blobs)
         {
-            if (data.Points.size() < 3)
+            if (data.Points.empty() || (hasOutline && data.Points.size() < 3))
                 continue;
             Blob blob;
             blob.ConditionId = data.PlayerConditionID;
@@ -527,6 +631,7 @@ void BuildIndex()
             if (area.Blobs.empty())
             {
                 area.QuestId = questId;
+                area.Point = !hasOutline;
                 area.MinX = blob.MinX; area.MinY = blob.MinY; area.MaxX = blob.MaxX; area.MaxY = blob.MaxY;
             }
             area.MinX = std::min(area.MinX, blob.MinX);
@@ -549,10 +654,12 @@ void BuildIndex()
         std::vector<TaskArea>& list = AreasByMap[pickMap];
         AreaByQuest[questId] = { pickMap, list.size() };
         list.push_back(std::move(*pick));
+        ScanMaps.insert(pickMap);
     }
 
-    TC_LOG_INFO("server.loading", ">> TaskAreaPickup: {} task quests with outlines ({} blobs) on {} maps, {} gated quests",
-        AreaByQuest.size(), blobs, AreasByMap.size(), GatedQuests.size());
+    TC_LOG_INFO("server.loading", ">> TaskAreaPickup: {} task quests with area groups ({} areas), {} with outlines ({} blobs), "
+        "{} maps, {} gated quests", GroupByQuest.size(), GroupQuestsByArea.size(), AreaByQuest.size(), blobs, ScanMaps.size(),
+        GatedQuests.size());
 }
 }
 
@@ -560,7 +667,7 @@ void AddSC_task_area_pickup()
 {
     BuildIndex();
 
-    for (auto const& [mapId, areas] : AreasByMap)
+    for (uint32 mapId : ScanMaps)
     {
         MapEntry const* entry = sMapStore.LookupEntry(mapId);
         if (!entry || !entry->IsWorldMap())
