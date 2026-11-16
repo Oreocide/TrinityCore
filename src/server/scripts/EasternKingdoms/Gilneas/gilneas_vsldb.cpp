@@ -1715,7 +1715,7 @@ struct npc_drowning_watchman_36440 : public ScriptedAI
             me->SetNpcFlag(UNIT_NPC_FLAG_SPELLCLICK);
         }
 
-        void OnSpellClick(Unit* clicker, bool& result)
+        void OnSpellClick(Unit* clicker, bool /*spellClickHandled*/) override
         {
             if (Player* player = clicker->ToPlayer())
                 if (player->GetQuestStatus(QUEST_GASPING_FOR_BREATH) == QUEST_STATUS_INCOMPLETE)
