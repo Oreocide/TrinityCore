@@ -69,6 +69,8 @@ enum PaladinSpells
     SPELL_PALADIN_DIVINE_STEED_ZANDALARI_TROLL   = 294133,
     SPELL_PALADIN_DIVINE_STEED_LF_DRAENEI        = 363608,
     SPELL_PALADIN_DIVINE_STORM_DAMAGE            = 224239,
+    SPELL_PALADIN_DIVINE_TOLL                    = 375576,
+    SPELL_PALADIN_EMPYREAN_HAMMER                = 431398,
     SPELL_PALADIN_ENDURING_LIGHT                 = 40471,
     SPELL_PALADIN_ENDURING_JUDGEMENT             = 40472,
     SPELL_PALADIN_ETERNAL_FLAME                  = 156322,
@@ -84,6 +86,9 @@ enum PaladinSpells
     SPELL_PALADIN_FORBEARANCE                    = 25771,
     SPELL_PALADIN_GUARDIAN_OF_ANCIENT_KINGS      = 86659,
     SPELL_PALADIN_HAMMER_OF_JUSTICE              = 853,
+    SPELL_PALADIN_HAMMER_OF_LIGHT                = 427453,
+    SPELL_PALADIN_HAMMER_OF_LIGHT_AREA           = 429826,
+    SPELL_PALADIN_HAMMER_OF_LIGHT_ENABLER        = 427441,
     SPELL_PALADIN_HAMMER_OF_THE_RIGHTEOUS_AOE    = 88263,
     SPELL_PALADIN_HAND_OF_SACRIFICE              = 6940,
     SPELL_PALADIN_HOLY_MENDING                   = 64891,
@@ -112,6 +117,12 @@ enum PaladinSpells
     SPELL_PALADIN_LIGHT_HAMMER_DAMAGE            = 114919,
     SPELL_PALADIN_LIGHT_HAMMER_HEALING           = 119952,
     SPELL_PALADIN_LIGHT_HAMMER_PERIODIC          = 114918,
+    SPELL_PALADIN_LIGHTS_DELIVERANCE             = 425518,
+    SPELL_PALADIN_LIGHTS_DELIVERANCE_FREE        = 433732,
+    SPELL_PALADIN_LIGHTS_DELIVERANCE_STACKS      = 433674,
+    SPELL_PALADIN_LIGHTS_GUIDANCE                = 427445,
+    SPELL_PALADIN_LIGHTS_JUDICATOR               = 1261525,
+    SPELL_PALADIN_PROTECTION                     = 137028,
     SPELL_PALADIN_RIGHTEOUS_DEFENSE_TAUNT        = 31790,
     SPELL_PALADIN_RIGHTEOUS_VERDICT_AURA         = 267611,
     SPELL_PALADIN_SEAL_OF_RIGHTEOUSNESS          = 25742,
@@ -122,6 +133,7 @@ enum PaladinSpells
     SPELL_PALADIN_T30_2P_HEARTFIRE_HEAL          = 408400,
     SPELL_PALADIN_VALIANT_CRUSADE                = 1245979,
     SPELL_PALADIN_VALIANT_CRUSADE_MARKER         = 1246042,
+    SPELL_PALADIN_WAKE_OF_ASHES                  = 255937,
     SPELL_PALADIN_WAKE_OF_ASHES_STUN             = 255941,
     SPELL_PALADIN_ZEAL_AURA                      = 269571
 };
@@ -1016,6 +1028,139 @@ class spell_pal_glyph_of_holy_light : public SpellScript
     }
 };
 
+// 431398 - Empyrean Hammer
+// Light's Deliverance: a stack per hammer, and Light's Judicator's extra stack on a crit. The hammer is triggered and lacks
+// SPELL_ATTR3_NOT_A_PROC, so it cannot proc 425518 or 1261525 itself.
+class spell_pal_empyrean_hammer : public SpellScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_PALADIN_LIGHTS_DELIVERANCE_STACKS, SPELL_PALADIN_LIGHTS_JUDICATOR });
+    }
+
+    bool Load() override
+    {
+        return GetCaster()->HasAura(SPELL_PALADIN_LIGHTS_DELIVERANCE);
+    }
+
+    void HandleStack() const
+    {
+        GetCaster()->CastSpell(GetCaster(), SPELL_PALADIN_LIGHTS_DELIVERANCE_STACKS, CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_FULL_MASK,
+            .TriggeringSpell = GetSpell()
+        });
+    }
+
+    void HandleCritStack() const
+    {
+        if (!IsHitCrit())
+            return;
+
+        Aura const* lightsJudicator = GetCaster()->GetAura(SPELL_PALADIN_LIGHTS_JUDICATOR);
+        if (!lightsJudicator || !roll_chance(lightsJudicator->GetSpellInfo()->ProcChance))
+            return;
+
+        GetCaster()->CastSpell(GetCaster(), SPELL_PALADIN_LIGHTS_DELIVERANCE_STACKS, CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_FULL_MASK,
+            .TriggeringSpell = GetSpell()
+        });
+    }
+
+    void Register() override
+    {
+        AfterCast += SpellCastFn(spell_pal_empyrean_hammer::HandleStack);
+        AfterHit += SpellHitFn(spell_pal_empyrean_hammer::HandleCritStack);
+    }
+};
+
+// 427453 - Hammer of Light
+class spell_pal_hammer_of_light : public SpellScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_PALADIN_HAMMER_OF_LIGHT_AREA, SPELL_PALADIN_HAMMER_OF_LIGHT_ENABLER, SPELL_PALADIN_LIGHTS_DELIVERANCE_FREE });
+    }
+
+    void HandleArea(SpellEffIndex /*effIndex*/) const
+    {
+        GetCaster()->CastSpell(GetHitUnit(), SPELL_PALADIN_HAMMER_OF_LIGHT_AREA, CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_FULL_MASK,
+            .TriggeringSpell = GetSpell()
+        });
+    }
+
+    // one Hammer of Light per Wake of Ashes (retail never cast it twice in one window): 427441's charge never drops by itself,
+    // its only effect (aura 332) is not a proc aura; the Light's Deliverance free cast is used up too
+    void SpendFreeCast() const
+    {
+        GetCaster()->RemoveAurasDueToSpell(SPELL_PALADIN_HAMMER_OF_LIGHT_ENABLER);
+        GetCaster()->RemoveAurasDueToSpell(SPELL_PALADIN_LIGHTS_DELIVERANCE_FREE);
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_pal_hammer_of_light::HandleArea, EFFECT_0, SPELL_EFFECT_SCHOOL_DAMAGE);
+        AfterCast += SpellCastFn(spell_pal_hammer_of_light::SpendFreeCast);
+    }
+};
+
+// 429826 - Hammer of Light (area)
+// calls down $427445s2 Empyrean Hammers on the enemies it hit, the primary target first, the first after $427445s4 ms and then every $427445s3 ms
+class spell_pal_hammer_of_light_area : public SpellScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_PALADIN_EMPYREAN_HAMMER })
+            && ValidateSpellEffect({ { SPELL_PALADIN_LIGHTS_GUIDANCE, EFFECT_3 } });
+    }
+
+    void CollectTargets(std::list<WorldObject*>& targets)
+    {
+        Unit* primary = GetExplTargetUnit();
+        for (WorldObject const* target : targets)
+        {
+            if (target == primary)
+                _targets.insert(_targets.begin(), target->GetGUID());
+            else
+                _targets.push_back(target->GetGUID());
+        }
+    }
+
+    void HandleHammers() const
+    {
+        if (_targets.empty())
+            return;
+
+        Unit* caster = GetCaster();
+        SpellInfo const* lightsGuidance = sSpellMgr->AssertSpellInfo(SPELL_PALADIN_LIGHTS_GUIDANCE, GetCastDifficulty());
+        int32 hammers = lightsGuidance->GetEffect(EFFECT_1).CalcValueAsInt(caster);
+        Milliseconds interval(lightsGuidance->GetEffect(EFFECT_2).CalcValueAsInt(caster));
+        Milliseconds firstDelay(lightsGuidance->GetEffect(EFFECT_3).CalcValueAsInt(caster));
+        ObjectGuid originalCastId = GetSpell()->m_castId;
+
+        for (int32 i = 0; i < hammers; ++i)
+        {
+            caster->m_Events.AddEventAtOffset([caster, targetGuid = _targets[i % _targets.size()], originalCastId]
+            {
+                if (Unit* target = ObjectAccessor::GetUnit(*caster, targetGuid))
+                    if (target->IsAlive())
+                        caster->CastSpell(target, SPELL_PALADIN_EMPYREAN_HAMMER, CastSpellExtraArgsInit{
+                            .TriggerFlags = TRIGGERED_FULL_MASK,
+                            .OriginalCastId = originalCastId
+                        });
+            }, firstDelay + interval * i);
+        }
+    }
+
+    void Register() override
+    {
+        OnObjectAreaTargetSelect += SpellObjectAreaTargetSelectFn(spell_pal_hammer_of_light_area::CollectTargets, EFFECT_0, TARGET_UNIT_DEST_AREA_ENEMY);
+        AfterCast += SpellCastFn(spell_pal_hammer_of_light_area::HandleHammers);
+    }
+
+    std::vector<ObjectGuid> _targets;
+};
+
 // 53595 - Hammer of the Righteous
 struct spell_pal_hammer_of_the_righteous : public SpellScript
 {
@@ -1592,6 +1737,103 @@ class spell_pal_light_s_beacon : public AuraScript
     }
 };
 
+// 425518 - Light's Deliverance
+class spell_pal_lights_deliverance : public AuraScript
+{
+    // retail consumed at 50 stacks in all 11 captured consumes, below the aura's 60-stack cap and with nothing in DB2 giving 50
+    static constexpr uint8 STACKS_TO_CONSUME = 50;
+
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_PALADIN_LIGHTS_DELIVERANCE_STACKS, SPELL_PALADIN_LIGHTS_DELIVERANCE_FREE, SPELL_PALADIN_HAMMER_OF_LIGHT,
+            SPELL_PALADIN_HAMMER_OF_LIGHT_ENABLER, SPELL_PALADIN_WAKE_OF_ASHES, SPELL_PALADIN_DIVINE_TOLL });
+    }
+
+    // the stacks come from spell_pal_empyrean_hammer; the DB2 proc (any melee ability) would add them from every melee ability
+    static bool CheckProc(AuraScript const&, ProcEventInfo const& /*eventInfo*/)
+    {
+        return false;
+    }
+
+    bool CanCastHammerOfLight(Unit* paladin) const
+    {
+        if (!paladin->HasAura(SPELL_PALADIN_HAMMER_OF_LIGHT_ENABLER))
+            return false;
+
+        SpellInfo const* hammerOfLight = sSpellMgr->AssertSpellInfo(SPELL_PALADIN_HAMMER_OF_LIGHT, GetCastDifficulty());
+        for (SpellPowerCost const& cost : hammerOfLight->CalcPowerCost(paladin, hammerOfLight->GetSchoolMask()))
+            if (paladin->GetPower(cost.Power) < cost.Amount)
+                return false;
+
+        return true;
+    }
+
+    bool CanCastWakeOfAshesOrDivineToll(Unit* paladin) const
+    {
+        if (paladin->HasAura(SPELL_PALADIN_PROTECTION))
+            return !paladin->GetSpellHistory()->HasCooldown(SPELL_PALADIN_DIVINE_TOLL);
+
+        SpellInfo const* wakeOfAshes = sSpellMgr->AssertSpellInfo(SPELL_PALADIN_WAKE_OF_ASHES, GetCastDifficulty());
+        return paladin->GetSpellHistory()->HasCharge(wakeOfAshes->ChargeCategoryId);
+    }
+
+    // while Wake of Ashes (Divine Toll) and Hammer of Light are unavailable, the stacks turn into a free Hammer of Light
+    void HandlePeriodic(AuraEffect const* /*aurEff*/) const
+    {
+        Unit* paladin = GetTarget();
+        Aura* stacks = paladin->GetAura(SPELL_PALADIN_LIGHTS_DELIVERANCE_STACKS);
+        if (!stacks || stacks->GetStackAmount() < STACKS_TO_CONSUME)
+            return;
+
+        if (CanCastWakeOfAshesOrDivineToll(paladin) || CanCastHammerOfLight(paladin))
+            return;
+
+        stacks->Remove();
+        paladin->CastSpell(paladin, SPELL_PALADIN_LIGHTS_DELIVERANCE_FREE, TRIGGERED_FULL_MASK);
+        paladin->CastSpell(paladin, SPELL_PALADIN_HAMMER_OF_LIGHT_ENABLER, TRIGGERED_FULL_MASK);
+    }
+
+    void Register() override
+    {
+        DoCheckProc += AuraCheckProcFn(spell_pal_lights_deliverance::CheckProc);
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_pal_lights_deliverance::HandlePeriodic, EFFECT_1, SPELL_AURA_PERIODIC_DUMMY);
+    }
+};
+
+// 427445 - Light's Guidance
+// only Wake of Ashes (Protection: Divine Toll) replaces itself with Hammer of Light; the DB2 proc has no spell filter
+class spell_pal_lights_guidance : public AuraScript
+{
+    bool CheckProc(ProcEventInfo& eventInfo) const
+    {
+        SpellInfo const* spellInfo = eventInfo.GetSpellInfo();
+        if (!spellInfo)
+            return false;
+
+        return spellInfo->Id == (GetTarget()->HasAura(SPELL_PALADIN_PROTECTION) ? SPELL_PALADIN_DIVINE_TOLL : SPELL_PALADIN_WAKE_OF_ASHES);
+    }
+
+    void Register() override
+    {
+        DoCheckProc += AuraCheckProcFn(spell_pal_lights_guidance::CheckProc);
+    }
+};
+
+// 1261525 - Light's Judicator
+// the extra Light's Deliverance stack comes only from Empyrean Hammer crits (spell_pal_empyrean_hammer); the DB2 proc fires on any melee ability
+class spell_pal_lights_judicator : public AuraScript
+{
+    static bool CheckProc(AuraScript const&, AuraEffect const* /*aurEff*/, ProcEventInfo const& /*eventInfo*/)
+    {
+        return false;
+    }
+
+    void Register() override
+    {
+        DoCheckEffectProc += AuraCheckEffectProcFn(spell_pal_lights_judicator::CheckProc, EFFECT_1, SPELL_AURA_PROC_TRIGGER_SPELL);
+    }
+};
+
 // 122773 - Light's Hammer
 class spell_pal_light_hammer_init_summon : public SpellScript
 {
@@ -2080,6 +2322,9 @@ void AddSC_paladin_spell_scripts()
     RegisterSpellScript(spell_pal_fist_of_justice);
     RegisterSpellScript(spell_pal_glyph_of_holy_light);
     RegisterSpellScript(spell_pal_grand_crusader);
+    RegisterSpellScript(spell_pal_empyrean_hammer);
+    RegisterSpellScript(spell_pal_hammer_of_light);
+    RegisterSpellScript(spell_pal_hammer_of_light_area);
     RegisterSpellScript(spell_pal_hammer_of_the_righteous);
     RegisterSpellScript(spell_pal_hand_of_sacrifice);
     RegisterSpellScript(spell_pal_infusion_of_light);
@@ -2097,6 +2342,9 @@ void AddSC_paladin_spell_scripts()
     RegisterSpellScript(spell_pal_item_t6_trinket);
     RegisterSpellScript(spell_pal_lay_on_hands);
     RegisterSpellScript(spell_pal_light_s_beacon);
+    RegisterSpellScript(spell_pal_lights_deliverance);
+    RegisterSpellScript(spell_pal_lights_guidance);
+    RegisterSpellScript(spell_pal_lights_judicator);
     RegisterSpellScript(spell_pal_light_hammer_init_summon);
     RegisterSpellScript(spell_pal_light_hammer_periodic);
     RegisterSpellScript(spell_pal_righteous_protector);
