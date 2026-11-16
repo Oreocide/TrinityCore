@@ -64,6 +64,7 @@ enum EvokerSpells
     SPELL_EVOKER_CALL_OF_YSERA                  = 373835,
     SPELL_EVOKER_CAUSALITY                      = 375777,
     SPELL_EVOKER_DISINTEGRATE                   = 356995,
+    SPELL_EVOKER_EBON_MIGHT_SELF                = 395296,
     SPELL_EVOKER_EMERALD_BLOSSOM_HEAL           = 355916,
     SPELL_EVOKER_ENERGIZING_FLAME               = 400006,
     SPELL_EVOKER_ESSENCE_BURST                  = 359618,
@@ -78,6 +79,7 @@ enum EvokerSpells
     SPELL_EVOKER_LIVING_FLAME_HEAL              = 361509,
     SPELL_EVOKER_MASS_DISINTEGRATE              = 436335,
     SPELL_EVOKER_MASS_DISINTEGRATE_BUFF         = 436336,
+    SPELL_EVOKER_MASTERY_TIMEWALKER             = 406380,
     SPELL_EVOKER_PANACEA_HEAL                   = 387763,
     SPELL_EVOKER_PANACEA_TALENT                 = 387761,
     SPELL_EVOKER_PERMEATING_CHILL_TALENT        = 370897,
@@ -85,8 +87,10 @@ enum EvokerSpells
     SPELL_EVOKER_RUBY_EMBERS                    = 365937,
     SPELL_EVOKER_RUBY_ESSENCE_BURST             = 376872,
     SPELL_EVOKER_SCOURING_FLAME                 = 378438,
+    SPELL_EVOKER_SHIFTING_SANDS                 = 413984,
     SPELL_EVOKER_SNAPFIRE                       = 370818,
     SPELL_EVOKER_SOAR_RACIAL                    = 369536,
+    SPELL_EVOKER_UPHEAVAL_DAMAGE                = 396288,
     SPELL_EVOKER_VERDANT_EMBRACE_HEAL           = 361195,
     SPELL_EVOKER_VERDANT_EMBRACE_JUMP           = 373514
 };
@@ -474,6 +478,28 @@ public:
     uint32 _talentAuraId;
 };
 
+// 395152 - Ebon Might
+class spell_evo_ebon_might : public SpellScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_EVOKER_EBON_MIGHT_SELF });
+    }
+
+    // the evoker's own damage bonus goes on with the cast (retail: the same millisecond as the cast's GO)
+    void HandleAfterCast() const
+    {
+        GetCaster()->CastSpell(GetCaster(), SPELL_EVOKER_EBON_MIGHT_SELF, CastSpellExtraArgs()
+            .SetTriggeringSpell(GetSpell())
+            .SetTriggerFlags(TRIGGERED_FULL_MASK));
+    }
+
+    void Register() override
+    {
+        AfterCast += SpellCastFn(spell_evo_ebon_might::HandleAfterCast);
+    }
+};
+
 // 357208 Fire Breath (Red)
 // 382266 Fire Breath (Red)
 class spell_evo_fire_breath : public SpellScript
@@ -586,6 +612,100 @@ struct at_evo_firestorm : AreaTriggerAI
 private:
     TaskScheduler _scheduler;
     std::any _damageSpellCustomArg;
+};
+
+// 357208 - Fire Breath (Red), 382266 - Fire Breath (Font of Magic), 396286 - Upheaval, 408092 - Upheaval (Font of Magic)
+class spell_evo_mastery_timewalker : public SpellScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_EVOKER_MASTERY_TIMEWALKER, SPELL_EVOKER_SHIFTING_SANDS });
+    }
+
+    bool Load() override
+    {
+        return GetCaster()->HasAura(SPELL_EVOKER_MASTERY_TIMEWALKER);
+    }
+
+    // casting an empower spell grants Shifting Sands (retail: at the release, with the empower's own effect)
+    void HandleEmpowerCompleted(int32 /*completedStageCount*/) const
+    {
+        GetCaster()->CastSpell(GetCaster(), SPELL_EVOKER_SHIFTING_SANDS, CastSpellExtraArgs()
+            .SetTriggeringSpell(GetSpell())
+            .SetTriggerFlags(TRIGGERED_FULL_MASK));
+    }
+
+    void Register() override
+    {
+        OnEmpowerCompleted += SpellOnEmpowerStageCompletedFn(spell_evo_mastery_timewalker::HandleEmpowerCompleted);
+    }
+};
+
+// 413984 - Shifting Sands
+class spell_evo_shifting_sands : public SpellScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellEffect({ { SPELL_EVOKER_MASTERY_TIMEWALKER, EFFECT_2 } });
+    }
+
+    // $406380s3 allies, preferring damage dealers (the evoker counts as one)
+    void SelectTargets(std::list<WorldObject*>& targets) const
+    {
+        std::list<WorldObject*> damageDealers;
+        for (WorldObject* target : targets)
+            if (Player const* player = target->ToPlayer())
+                if (ChrSpecializationEntry const* spec = player->GetPrimarySpecializationEntry())
+                    if (spec->Role == AsUnderlyingType(ChrSpecializationRole::Dps))
+                        damageDealers.push_back(target);
+
+        if (!damageDealers.empty())
+            targets.swap(damageDealers);
+
+        uint32 count = 1;
+        if (AuraEffect const* mastery = GetCaster()->GetAuraEffect(SPELL_EVOKER_MASTERY_TIMEWALKER, EFFECT_2))
+            count = std::max<int32>(mastery->GetAmountAsInt(), 1);
+
+        Trinity::Containers::RandomResize(targets, count);
+    }
+
+    void Register() override
+    {
+        OnObjectAreaTargetSelect += SpellObjectAreaTargetSelectFn(spell_evo_shifting_sands::SelectTargets, EFFECT_ALL, TARGET_UNIT_DEST_AREA_ALLY);
+    }
+};
+
+// 396286 - Upheaval
+// 408092 - Upheaval (Font of Magic)
+class spell_evo_upheaval : public SpellScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_EVOKER_UPHEAVAL_DAMAGE });
+    }
+
+    // the empower deals 396288 at its release; each completed stage widens it by 3 yd (SpellDescriptionVariables 777:
+    // $radiusI-IV = 3 / 6 / 9 / 12 yd) over the damage effect's 2 yd (SpellRadius 7)
+    void HandleEmpowerCompleted(int32 completedStageCount) const
+    {
+        Unit* target = GetExplTargetUnit();
+        if (!target)
+            return;
+
+        static constexpr float UpheavalRadiusPerStage = 3.0f;
+        static constexpr float UpheavalDamageBaseRadius = 2.0f;
+        float radiusMod = UpheavalRadiusPerStage * std::max(completedStageCount, 1) / UpheavalDamageBaseRadius;
+
+        GetCaster()->CastSpell(target, SPELL_EVOKER_UPHEAVAL_DAMAGE, CastSpellExtraArgs()
+            .SetTriggeringSpell(GetSpell())
+            .SetTriggerFlags(TRIGGERED_IGNORE_CAST_IN_PROGRESS | TRIGGERED_DONT_REPORT_CAST_ERROR)
+            .AddSpellMod(SPELLVALUE_RADIUS_MOD, radiusMod));
+    }
+
+    void Register() override
+    {
+        OnEmpowerCompleted += SpellOnEmpowerStageCompletedFn(spell_evo_upheaval::HandleEmpowerCompleted);
+    }
 };
 
 // 357208 - Fire Breath (Red), 382266 - Fire Breath (Font of Magic), 359073 - Eternity Surge (Blue), 382411 - Eternity Surge (Font of Magic)
@@ -933,6 +1053,7 @@ void AddSC_evoker_spell_scripts()
     RegisterSpellScriptWithArgs(spell_evo_essence_burst_trigger, "spell_evo_azure_essence_burst", SPELL_EVOKER_AZURE_ESSENCE_BURST);
     RegisterSpellScriptWithArgs(spell_evo_essence_burst_trigger, "spell_evo_ruby_essence_burst", SPELL_EVOKER_RUBY_ESSENCE_BURST);
     RegisterAreaTriggerAI(at_evo_firestorm);
+    RegisterSpellScript(spell_evo_ebon_might);
     RegisterSpellScript(spell_evo_fire_breath);
     RegisterSpellScript(spell_evo_fire_breath_damage);
     RegisterSpellScript(spell_evo_glide);
@@ -947,4 +1068,7 @@ void AddSC_evoker_spell_scripts()
     RegisterSpellScript(spell_evo_snapfire_bonus_damage);
     RegisterSpellScript(spell_evo_verdant_embrace);
     RegisterSpellScript(spell_evo_verdant_embrace_trigger_heal);
+    RegisterSpellScript(spell_evo_mastery_timewalker);
+    RegisterSpellScript(spell_evo_shifting_sands);
+    RegisterSpellScript(spell_evo_upheaval);
 }
