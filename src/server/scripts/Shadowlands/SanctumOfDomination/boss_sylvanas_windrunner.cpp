@@ -5425,7 +5425,7 @@ class spell_sylvanas_windrunner_bane_arrows : public SpellScript
                             break;
                     }
 
-                    sylvanas->SendPlaySpellVisual(baneArrowPos, 0.0f, visual, 0, 0, speed, true);
+                    sylvanas->SendPlaySpellVisual(baneArrowPos, visual, 0, 0, speed, true);
 
                     uint32 timer = uint32(speed * 1000);
 
