@@ -16,6 +16,7 @@
  */
 
 #include "ScenarioEventMgr.h"
+#include "DB2Structure.h"
 #include "DatabaseEnv.h"
 #include "GameEventSender.h"
 #include "Log.h"

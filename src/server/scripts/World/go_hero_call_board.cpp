@@ -18,6 +18,7 @@
 #include "ScriptMgr.h"
 #include "GameObject.h"
 #include "GameObjectAI.h"
+#include "GossipDef.h"
 #include "ObjectMgr.h"
 #include "Player.h"
 #include "PlayerChoice.h"

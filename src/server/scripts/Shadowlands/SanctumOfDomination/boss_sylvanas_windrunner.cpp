@@ -776,7 +776,7 @@ float const DesecratingShotSpiralEnclosedDistance[10] =
 
 static constexpr float Magnitude = 1.0f;  // Maximum wave outbreak
 
-static Position GetSineWavePoint(Position const& origin, float angle, uint32 tickNumber, float frequency)
+[[maybe_unused]] static Position GetSineWavePoint(Position const& origin, float angle, uint32 tickNumber, float frequency)
 {
     float distance = static_cast<float>(tickNumber);
     Position point = origin;
@@ -881,7 +881,7 @@ Position const InvigoratingFieldPos[8] =
     { -231.528f, -1236.39f, 5671.67f, 3.14159f }
 };
 
-Position const SylvanasEncounterFinishPos = { -249.876f, -1252.4791f, 5667.1157f, 3.3742f };
+[[maybe_unused]] Position const SylvanasEncounterFinishPos = { -249.876f, -1252.4791f, 5667.1157f, 3.3742f };
 
 Creature* GetShadowcopy(InstanceScript* instance, uint8 copyIndex)
 {
@@ -904,7 +904,7 @@ UnitAI* GetShadowcopyAI(InstanceScript* instance, uint8 copyIndex)
 class SylvanasNonMeleeSelector
 {
 public:
-    SylvanasNonMeleeSelector(Player const* obj) : _sourceObj(obj) { }
+    SylvanasNonMeleeSelector(Player const* /*obj*/) { }
 
     bool operator()(Player* player) const
     {
@@ -914,8 +914,6 @@ public:
         return true;
     }
 
-private:
-    Player const* _sourceObj;
 };
 
 class PauseAttackStateOrResetAttackTimer : public BasicEvent
@@ -1034,7 +1032,7 @@ struct DesecratingShotsStorage
 
 namespace SylvanasEventHelpers
 {
-    uint8 const GetDifficultyForTimer(Creature* creature)
+    uint8 GetDifficultyForTimer(Creature* creature)
     {
         uint8 difficulty = 0;
 
@@ -1059,7 +1057,7 @@ namespace SylvanasEventHelpers
         return difficulty;
     }
 
-    uint8 const GetWorldStatePhase(Unit* unit)
+    uint8 GetWorldStatePhase(Unit* unit)
     {
         return unit->GetMap()->GetWorldStateValue(WORLD_STATE_SYLVANAS_ENCOUNTER_PHASE);
     }
@@ -1313,7 +1311,7 @@ struct npc_sylvanas_windrunner_shadowcopy : public ScriptedAI
                         {
                             if (npc_sylvanas_windrunner_shadowcopy* shadowCopyAI = CAST_AI(npc_sylvanas_windrunner_shadowcopy, GetShadowcopyAI(_instance, DATA_INDEX_00 + witheringCount)))
                             {
-                                if (Unit* target = ObjectAccessor::GetUnit(*me, _witheringFireTargetGUIDs[witheringCount]))
+                                if (ObjectAccessor::GetUnit(*me, _witheringFireTargetGUIDs[witheringCount]))
                                     shadowCopyAI->ExecuteWitheringFirePhaseThree(_witheringFireTargetGUIDs, witheringCount);
                             }
                         }
@@ -2104,14 +2102,14 @@ struct npc_sylvanas_windrunner_shadowcopy : public ScriptedAI
 
         _scheduler.Schedule(Milliseconds(50 + additionalTimer), [this, witheringFireGuids, targetCount](TaskContext /*task*/)
         {
-            if (Creature* shadowCopy = GetShadowcopy(_instance, DATA_INDEX_00 + targetCount))
+            if (GetShadowcopy(_instance, DATA_INDEX_00 + targetCount))
                 if (Unit* target = ObjectAccessor::GetUnit(*me, witheringFireGuids[targetCount]))
                     me->CastSpell(target->GetPosition(), SPELL_WITHERING_FIRE_COPY, true);
         });
 
         _scheduler.Schedule(Milliseconds(573 + additionalTimer), [this, witheringFireGuids, targetCount](TaskContext /*task*/)
         {
-            if (Creature* shadowCopy = GetShadowcopy(_instance, DATA_INDEX_00 + targetCount))
+            if (GetShadowcopy(_instance, DATA_INDEX_00 + targetCount))
             {
                 if (Unit* target = ObjectAccessor::GetUnit(*me, witheringFireGuids[targetCount]))
                 {
@@ -3121,7 +3119,7 @@ struct boss_sylvanas_windrunner : public BossAI
 
                         scheduler.Schedule(2s + 484ms, [this](TaskContext /*task*/)
                         {
-                            if (Creature* shadowCopy2 = GetShadowcopy(instance, DATA_INDEX_02))
+                            if (GetShadowcopy(instance, DATA_INDEX_02))
                             me->CastSpell(me->GetNearPosition(9.0f, 0.0f), SPELL_RIVE_MARKER_AREATRIGGER, true);
                         });
 
@@ -3133,7 +3131,7 @@ struct boss_sylvanas_windrunner : public BossAI
 
                         me->SendPlaySpellVisualKit(SPELL_VISUAL_KIT_SYLVANAS_RIVE_BREAK_FAST, 0, 0);
 
-                        if (Creature* shadowCopy2 = GetShadowcopy(instance, DATA_INDEX_02))
+                        if (GetShadowcopy(instance, DATA_INDEX_02))
                             me->CastSpell(me->GetNearPosition(9.0f, 0.0f), SPELL_RIVE_MARKER_AREATRIGGER, true);
 
                         events.ScheduleEvent(EVENT_RIVE, 2s, EVENT_GROUP_NORMAL_EVENTS, PHASE_INTERMISSION);
@@ -4367,7 +4365,7 @@ private:
         Unit* _victim;
     };
 
-    bool Validate(SpellInfo const* spellInfo) override
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
         return ValidateSpellInfo({ SPELL_RANGER_BOW_STANCE, SPELL_SYLVANAS_ROOT });
     }
@@ -4837,7 +4835,7 @@ class spell_sylvanas_windrunner_veil_of_darkness_damage : public SpellScript
 
         uint8 stackAmount = spellInfo->GetEffect(EFFECT_4).CalcValue() - 1;
 
-        for (stackAmount; stackAmount > 0; stackAmount--)
+        for (; stackAmount > 0; stackAmount--)
             caster->CastSpell(GetHitUnit(), SPELL_VEIL_OF_DARKNESS_ABSORB_AURA, true);
     }
 
@@ -5327,7 +5325,6 @@ class spell_sylvanas_windrunner_veil_of_darkness_phase_2 : public SpellScript
 
     void HandleDummyEffect(SpellEffIndex effIndex)
     {
-        Unit* caster = GetCaster();
 
         GetCaster()->CastSpell(GetHitDest()->GetPosition(), GetEffectInfo(effIndex).TriggerSpell, true);
         GetCaster()->CastSpell(GetHitDest()->GetPosition(), SPELL_VEIL_OF_DARKNESS_PHASE_2_AREA, true);
@@ -6021,7 +6018,7 @@ class spell_sylvanas_windrunner_veil_of_darkness_phase_3 : public SpellScript
                     break;
             }
 
-            for (auraCount; auraCount > 0; auraCount--)
+            for (; auraCount > 0; auraCount--)
                 caster->CastSpell(player, SPELL_VEIL_OF_DARKNESS_ABSORB_AURA, true);
 
             caster->CastSpell(player, SPELL_VEIL_OF_DARKNESS_DAMAGE, true);
@@ -6503,7 +6500,7 @@ struct npc_sylvanas_windrunner_thrall : public ScriptedAI
         uint32 bridgeAreaTriggerSpell = 0;
         uint32 bridgeGameObjectSpell = 0;
 
-        switch (uint8 randomBridge = urand(DATA_BRIDGE_PHASE_TWO_1, DATA_BRIDGE_PHASE_TWO_3))
+        switch (urand(DATA_BRIDGE_PHASE_TWO_1, DATA_BRIDGE_PHASE_TWO_3))
         {
             case DATA_BRIDGE_PHASE_TWO_1:
                 bridgeAreaTriggerSpell = SPELL_CALL_EARTH_AREATRIGGER_01;
@@ -6720,7 +6717,7 @@ Position const JainaChannelIceTargetPos[3] =
 
 Position const JainaPrePhaseThreePos = { -258.666f, -1284.191f, 5667.1157f, 1.58863f };
 
-Position const PlayerPrePhaseThreePos = { -250.200f, -1292.985f, 5667.1147f, 1.53310f };
+[[maybe_unused]] Position const PlayerPrePhaseThreePos = { -250.200f, -1292.985f, 5667.1147f, 1.53310f };
 
 // 176533 - Jaina Proudmoore
 struct npc_sylvanas_windrunner_jaina : public ScriptedAI
@@ -7192,7 +7189,7 @@ struct npc_sylvanas_windrunner_jaina : public ScriptedAI
         uint32 bridgeAreaTriggerSpell = 0;
         uint32 bridgeGameObjectSpell = 0;
 
-        switch (uint8 randomBridge = urand(DATA_BRIDGE_PHASE_TWO_1, DATA_BRIDGE_PHASE_TWO_3))
+        switch (urand(DATA_BRIDGE_PHASE_TWO_1, DATA_BRIDGE_PHASE_TWO_3))
         {
             case DATA_BRIDGE_PHASE_TWO_1:
                 bridgeAreaTriggerSpell = SPELL_CHANNEL_ICE_AREATRIGGER_01;
@@ -7836,7 +7833,7 @@ private:
 struct at_sylvanas_windrunner_banshee_bane : AreaTriggerAI
 {
     at_sylvanas_windrunner_banshee_bane(AreaTrigger* areatrigger) : AreaTriggerAI(areatrigger),
-        _instance(at->GetInstanceScript()), _readyToPick(false), _updateDiff(0) { }
+        _instance(at->GetInstanceScript()), _readyToPick(false) { }
 
     class BansheeBanePickEvent : public BasicEvent
     {
@@ -7890,7 +7887,6 @@ private:
     InstanceScript* _instance;
     TaskScheduler _scheduler;
     bool _readyToPick;
-    uint32 _updateDiff;
 };
 
 // 23117 - Raze

@@ -517,7 +517,6 @@ struct npc_greymanes_horse : public VehicleAI
             }
         private:
             EventMap _events;
-            uint32 _currentPath;
         
 };
 
@@ -886,7 +885,7 @@ struct npc_lord_godfrey_36290 : public ScriptedAI
     npc_lord_godfrey_36290(Creature* creature) : ScriptedAI(creature) { }
 
 
-    void OnQuestAccept(Player* player, Quest const* quest) override
+    void OnQuestAccept(Player* /*player*/, Quest const* quest) override
     {
         if (quest->GetQuestId() == 14396)
         {
@@ -1119,7 +1118,7 @@ struct npc_lorna_crowley_37783 : public ScriptedAI
         }
         return;
     }
-    void OnQuestReward(Player* player, Quest const* quest, LootItemType /*type*/, uint32 /*opt*/) override
+    void OnQuestReward(Player* /*player*/, Quest const* quest, LootItemType /*type*/, uint32 /*opt*/) override
     {
         if (quest->GetQuestId() == QUEST_PUSH_THEM_OUT)
         {
@@ -1217,7 +1216,7 @@ struct npc_gwen_armstead_34571 : public ScriptedAI
     npc_gwen_armstead_34571(Creature* creature) : ScriptedAI(creature) { }
 
 
-    void OnQuestAccept(Player* player, Quest const* quest) override
+    void OnQuestAccept(Player* /*player*/, Quest const* quest) override
     {
         if (quest->GetQuestId() == QUEST_KILL_OR_BE_KILLED)
         {
@@ -1318,7 +1317,7 @@ struct npc_queen_mia_greymane_36606 : public ScriptedAI
     npc_queen_mia_greymane_36606(Creature* creature) : ScriptedAI(creature) { }
 
 
-    void OnQuestAccept(Player* player, Quest const* quest) override
+    void OnQuestAccept(Player* /*player*/, Quest const* quest) override
     {
         if (quest->GetQuestId() == QUEST_THE_KINGS_OBSERVATORY)
         {
@@ -1432,7 +1431,7 @@ struct npc_lord_hewell_38764 : public ScriptedAI
     npc_lord_hewell_38764(Creature* creature) : ScriptedAI(creature) { }
 
 
-    bool OnGossipSelect(Player* player, uint32 /*menuId*/, uint32 gossipListId) override /* PORT-CHECK: was (sender, action) */
+    bool OnGossipSelect(Player* player, uint32 /*menuId*/, uint32 /*gossipListId*/) override /* PORT-CHECK: was (sender, action) */
     {
         if (player->GetQuestStatus(QUEST_FLANK_THE_FORSAKEN) == QUEST_STATUS_COMPLETE)
         {
@@ -2489,7 +2488,7 @@ struct npc_king_genn_greymane_36743 : public ScriptedAI
                 }
                 case 1:
                 {
-                    if (Player* player = ObjectAccessor::GetPlayer(*me, m_playerGUID))
+                    if (ObjectAccessor::GetPlayer(*me, m_playerGUID))
                     {
                         (void)0; // phase aura handled by spell_area
                         (void)0; // phase aura handled by spell_area
