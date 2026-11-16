@@ -28,6 +28,7 @@
 #include "Player.h"
 #include "Spell.h"
 #include "SpellAuraEffects.h"
+#include "SpellHistory.h"
 #include "SpellInfo.h"
 #include "SpellMgr.h"
 #include "SpellScript.h"
@@ -35,6 +36,7 @@
 enum MonkSpells
 {
     SPELL_MONK_BLACKOUT_KICK_BREWMASTER                 = 205523,
+    SPELL_MONK_BREWMASTER_SPEC_AURA                     = 137023,
     SPELL_MONK_BURST_OF_LIFE_TALENT                     = 399226,
     SPELL_MONK_BURST_OF_LIFE_HEAL                       = 399230,
     SPELL_MONK_CALMING_COALESCENCE                      = 388220,
@@ -54,6 +56,8 @@ enum MonkSpells
     SPELL_MONK_POWER_STRIKE_PROC                        = 129914,
     SPELL_MONK_POWER_STRIKE_ENERGIZE                    = 121283,
     SPELL_MONK_PRESSURE_POINTS                          = 450432,
+    SPELL_MONK_PRESS_THE_ADVANTAGE_COUNTER              = 418361,
+    SPELL_MONK_PRESS_THE_ADVANTAGE_DAMAGE               = 418360,
     SPELL_MONK_PROVOKE_SINGLE_TARGET                    = 116189,
     SPELL_MONK_PROVOKE_AOE                              = 118635,
     SPELL_MONK_NO_FEATHER_FALL                          = 79636,
@@ -75,6 +79,7 @@ enum MonkSpells
     SPELL_MONK_STAGGER_LIGHT                            = 124275,
     SPELL_MONK_STAGGER_MODERATE                         = 124274,
     SPELL_MONK_SURGING_MIST_HEAL                        = 116995,
+    SPELL_MONK_TIGER_PALM                               = 100780,
 };
 
 // 399226 - Burst of Life (attached to 116849 - Life Cocoon)
@@ -701,6 +706,142 @@ private:
     bool _granted = false;
 };
 
+// Brews: the monk family flag shared by the Brewmaster brews (Purifying, Celestial, Fortifying, Black Ox and Bonedust Brew,
+// Celestial Infusion) and the other specs' teas (DB2 SpellClassOptions, class mask word 1 0x200000)
+static std::vector<uint32> const& GetBrewSpellIds()
+{
+    static std::vector<uint32> const brews = []
+    {
+        std::vector<uint32> spellIds;
+        sSpellMgr->ForEachSpellInfo([&](SpellInfo const* spellInfo)
+        {
+            if (spellInfo->Difficulty == DIFFICULTY_NONE && spellInfo->SpellFamilyName == SPELLFAMILY_MONK && (spellInfo->SpellFamilyFlags[1] & 0x200000))
+                spellIds.push_back(spellInfo->Id);
+        });
+        return spellIds;
+    }();
+    return brews;
+}
+
+static void ReduceBrewCooldowns(Player* monk, Milliseconds cut)
+{
+    if (cut <= 0ms)
+        return;
+
+    // ModifyCooldown cuts the charge recovery too: brews sharing a charge category (Celestial Brew, Celestial Infusion) are cut once
+    std::vector<uint32> cutChargeCategories;
+    for (uint32 brewId : GetBrewSpellIds())
+    {
+        if (!monk->HasSpell(brewId))
+            continue;
+
+        SpellInfo const* brew = sSpellMgr->GetSpellInfo(brewId, DIFFICULTY_NONE);
+        if (!brew)
+            continue;
+
+        if (uint32 chargeCategory = brew->ChargeCategoryId)
+        {
+            if (std::find(cutChargeCategories.begin(), cutChargeCategories.end(), chargeCategory) != cutChargeCategories.end())
+                continue;
+
+            cutChargeCategories.push_back(chargeCategory);
+        }
+
+        monk->GetSpellHistory()->ModifyCooldown(brew, -cut);
+    }
+}
+
+// 121253 - Keg Smash
+// 100780 - Tiger Palm
+class spell_monk_reduce_brew_cooldowns : public SpellScript
+{
+public:
+    explicit spell_monk_reduce_brew_cooldowns(uint32 requiredSpellId, SpellEffIndex cutEffIndex)
+        : _requiredSpellId(requiredSpellId), _cutEffIndex(cutEffIndex) { }
+
+private:
+    bool Validate(SpellInfo const* spellInfo) override
+    {
+        return ValidateSpellInfo({ _requiredSpellId })
+            && ValidateSpellEffect({ { spellInfo->Id, _cutEffIndex } });
+    }
+
+    bool Load() override
+    {
+        Unit const* caster = GetCaster();
+        return caster->GetTypeId() == TYPEID_PLAYER && caster->HasAura(_requiredSpellId);
+    }
+
+    void HandleAfterCast()
+    {
+        Player* monk = GetCaster()->ToPlayer();
+        ReduceBrewCooldowns(monk, Seconds(GetSpellInfo()->GetEffect(_cutEffIndex).CalcValueAsInt(monk)));
+    }
+
+    void Register() override
+    {
+        AfterCast += SpellCastFn(spell_monk_reduce_brew_cooldowns::HandleAfterCast);
+    }
+
+    uint32 _requiredSpellId;
+    SpellEffIndex _cutEffIndex;
+};
+
+// 418359 - Press the Advantage
+class spell_monk_press_the_advantage : public AuraScript
+{
+    bool Validate(SpellInfo const* spellInfo) override
+    {
+        return ValidateSpellInfo({ SPELL_MONK_PRESS_THE_ADVANTAGE_COUNTER, SPELL_MONK_PRESS_THE_ADVANTAGE_DAMAGE, SPELL_MONK_TIGER_PALM })
+            && ValidateSpellEffect({ { spellInfo->Id, EFFECT_1 } });
+    }
+
+    // main hand auto attacks only
+    static bool CheckProc(AuraScript const&, ProcEventInfo const& eventInfo)
+    {
+        DamageInfo const* damageInfo = eventInfo.GetDamageInfo();
+        return damageInfo && damageInfo->GetAttackType() == BASE_ATTACK;
+    }
+
+    void HandleProc(AuraEffect const* aurEff, ProcEventInfo const& eventInfo)
+    {
+        // the counter is a self buff: the generic trigger would cast it at the swing's target
+        PreventDefaultAction();
+
+        Unit* monk = GetTarget();
+        Unit* target = eventInfo.GetActionTarget();
+
+        if (Player* player = monk->ToPlayer())
+            ReduceBrewCooldowns(player, Milliseconds(aurEff->GetAmountAsInt()));
+
+        CastSpellExtraArgs args = CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_FULL_MASK,
+            .TriggeringAura = aurEff
+        };
+
+        if (target)
+            monk->CastSpell(target, SPELL_MONK_PRESS_THE_ADVANTAGE_DAMAGE, args);
+
+        // after $418361u attacks, the next casts Tiger Palm
+        Aura* counter = monk->GetAura(SPELL_MONK_PRESS_THE_ADVANTAGE_COUNTER);
+        if (counter && counter->GetStackAmount() >= counter->CalcMaxStackAmount())
+        {
+            counter->Remove();
+            if (target)
+                monk->CastSpell(target, SPELL_MONK_TIGER_PALM, args);
+            return;
+        }
+
+        monk->CastSpell(monk, SPELL_MONK_PRESS_THE_ADVANTAGE_COUNTER, args);
+    }
+
+    void Register() override
+    {
+        DoCheckProc += AuraCheckProcFn(spell_monk_press_the_advantage::CheckProc);
+        OnEffectProc += AuraEffectProcFn(spell_monk_press_the_advantage::HandleProc, EFFECT_1, SPELL_AURA_PROC_TRIGGER_SPELL);
+    }
+};
+
 // 198898 - Song of Chi-Ji
 struct at_monk_song_of_chi_ji : AreaTriggerAI
 {
@@ -991,6 +1132,9 @@ void AddSC_monk_spell_scripts()
     RegisterSpellScript(spell_monk_rising_sun_kick);
     RegisterSpellScript(spell_monk_roll);
     RegisterSpellScript(spell_monk_roll_aura);
+    RegisterSpellScript(spell_monk_press_the_advantage);
+    RegisterSpellScriptWithArgs(spell_monk_reduce_brew_cooldowns, "spell_monk_keg_smash_brews", SPELL_MONK_SHUFFLE_PASSIVE, EFFECT_3);
+    RegisterSpellScriptWithArgs(spell_monk_reduce_brew_cooldowns, "spell_monk_tiger_palm_brews", SPELL_MONK_BREWMASTER_SPEC_AURA, EFFECT_2);
     RegisterSpellScript(spell_monk_save_them_all);
     RegisterSpellScriptWithArgs(spell_monk_shuffle_grant, "spell_monk_keg_smash_shuffle", SPELL_MONK_SHUFFLE_PASSIVE, SPELL_MONK_KEG_SMASH, EFFECT_5, EFFECT_1);
     RegisterSpellScriptWithArgs(spell_monk_shuffle_grant, "spell_monk_blackout_kick_shuffle", SPELL_MONK_MASTERY_ELUSIVE_BRAWLER, SPELL_MONK_BLACKOUT_KICK_BREWMASTER, EFFECT_1, EFFECT_0);
