@@ -100,6 +100,7 @@ enum DeathKnightSpells
     SPELL_DK_REAPER_OF_SOULS_PROC               = 469172,
     SPELL_DK_RECENTLY_USED_DEATH_STRIKE         = 180612,
     SPELL_DK_RUNIC_CORRUPTION                   = 51460,
+    SPELL_DK_RUNIC_EMPOWERMENT_ENERGIZE         = 193486,
     SPELL_DK_RUNIC_POWER_ENERGIZE               = 49088,
     SPELL_DK_RUNIC_RETURN                       = 61258,
     SPELL_DK_SANGUINE_GROUND_TALENT             = 391458,
@@ -1475,6 +1476,44 @@ class spell_dk_suppression : public AuraScript
     }
 };
 
+// 81229 - Runic Empowerment
+// each Runic Power spent has a $m1/10 % chance to grant a Rune
+class spell_dk_runic_empowerment : public AuraScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_DK_RUNIC_EMPOWERMENT_ENERGIZE });
+    }
+
+    static bool CheckProc(AuraScript const&, ProcEventInfo const& eventInfo)
+    {
+        Spell const* procSpell = eventInfo.GetProcSpell();
+        return procSpell && procSpell->GetPowerTypeCostAmount(POWER_RUNIC_POWER).value_or(0) > 0;
+    }
+
+    void HandleProc(AuraEffect const* aurEff, ProcEventInfo const& eventInfo)
+    {
+        // the DUMMY effect names no trigger spell
+        PreventDefaultAction();
+
+        // Runic Power is stored x10
+        float runicPowerSpent = eventInfo.GetProcSpell()->GetPowerTypeCostAmount(POWER_RUNIC_POWER).value_or(0) / 10.0f;
+        if (!roll_chance(runicPowerSpent * aurEff->GetAmountAsInt() / 10.0f))
+            return;
+
+        GetTarget()->CastSpell(GetTarget(), SPELL_DK_RUNIC_EMPOWERMENT_ENERGIZE, CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_FULL_MASK,
+            .TriggeringAura = aurEff
+        });
+    }
+
+    void Register() override
+    {
+        DoCheckProc += AuraCheckProcFn(spell_dk_runic_empowerment::CheckProc);
+        OnEffectProc += AuraEffectProcFn(spell_dk_runic_empowerment::HandleProc, EFFECT_0, SPELL_AURA_DUMMY);
+    }
+};
+
 // 242057 - Rune Empowered
 class spell_dk_t20_2p_rune_empowered : public AuraScript
 {
@@ -1701,6 +1740,7 @@ void AddSC_deathknight_spell_scripts()
     RegisterSpellScript(spell_dk_raise_dead);
     RegisterSpellScript(spell_dk_reaper_of_souls);
     RegisterSpellScript(spell_dk_rime);
+    RegisterSpellScript(spell_dk_runic_empowerment);
     RegisterSpellScriptWithArgs(spell_dk_soul_reaper, "spell_dk_soul_reaper", EFFECT_1, EFFECT_2);
     RegisterSpellScriptWithArgs(spell_dk_soul_reaper, "spell_dk_soul_reaper_reaper_of_souls", EFFECT_0, Optional<SpellEffIndex>());
     RegisterSpellScript(spell_dk_subduing_grasp);
