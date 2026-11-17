@@ -76,6 +76,7 @@ enum MageSpells
     SPELL_MAGE_FRENETIC_SPEED                    = 236060,
     SPELL_MAGE_FROST_NOVA                        = 122,
     SPELL_MAGE_GIRAFFE_FORM                      = 32816,
+    SPELL_MAGE_GLACIAL_SPIKE_DAMAGE              = 228600,
     SPELL_MAGE_HEAT_SHIMMER                      = 458964,
     SPELL_MAGE_HEATING_UP                        = 48107,
     SPELL_MAGE_HOT_STREAK                        = 48108,
@@ -992,6 +993,32 @@ class spell_mage_frostbolt : public SpellScript
     void Register() override
     {
         OnHit += SpellHitFn(spell_mage_frostbolt::HandleChilled);
+    }
+};
+
+// 199786 - Glacial Spike
+class spell_mage_glacial_spike : public SpellScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_MAGE_GLACIAL_SPIKE_DAMAGE, SPELL_MAGE_CHILLED });
+    }
+
+    // 12.x DB2: the spike's only effect is a DUMMY; its damage and slow are separate spells
+    void HandleHit(SpellEffIndex /*effIndex*/) const
+    {
+        Unit* caster = GetCaster();
+        Unit* target = GetHitUnit();
+        caster->CastSpell(target, SPELL_MAGE_GLACIAL_SPIKE_DAMAGE, CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_IGNORE_CAST_IN_PROGRESS | TRIGGERED_DONT_REPORT_CAST_ERROR,
+            .OriginalCastId = GetSpell()->m_castId
+        });
+        caster->CastSpell(target, SPELL_MAGE_CHILLED, TRIGGERED_IGNORE_CAST_IN_PROGRESS);
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_mage_glacial_spike::HandleHit, EFFECT_0, SPELL_EFFECT_DUMMY);
     }
 };
 
@@ -2152,6 +2179,7 @@ void AddSC_mage_spell_scripts()
     RegisterSpellScript(spell_mage_flurry);
     RegisterSpellScript(spell_mage_flurry_damage);
     RegisterSpellScript(spell_mage_frostbolt);
+    RegisterSpellScript(spell_mage_glacial_spike);
     RegisterSpellScript(spell_mage_heat_shimmer);
     RegisterSpellScript(spell_mage_heat_shimmer_remove);
     RegisterSpellScript(spell_mage_hot_streak);
