@@ -41,6 +41,7 @@ enum MonkSpells
     SPELL_MONK_BURST_OF_LIFE_HEAL                       = 399230,
     SPELL_MONK_CALMING_COALESCENCE                      = 388220,
     SPELL_MONK_COMBAT_CONDITIONING                      = 128595,
+    SPELL_MONK_COUNTERSTRIKE_BUFF                       = 383800,
     SPELL_MONK_CRACKLING_JADE_LIGHTNING_CHANNEL         = 117952,
     SPELL_MONK_CRACKLING_JADE_LIGHTNING_CHI_PROC        = 123333,
     SPELL_MONK_CRACKLING_JADE_LIGHTNING_KNOCKBACK       = 117962,
@@ -844,6 +845,27 @@ class spell_monk_press_the_advantage : public AuraScript
     }
 };
 
+// 383800 - Counterstrike
+class spell_monk_counterstrike : public AuraScript
+{
+    bool Validate(SpellInfo const* spellInfo) override
+    {
+        return ValidateSpellEffect({ { spellInfo->Id, EFFECT_1 } }) && spellInfo->GetEffect(EFFECT_1).IsAura(SPELL_AURA_DUMMY);
+    }
+
+    // effect 1 names Spinning Crane Kick as the spell the buff empowers, not a spell to cast: Tiger Palm or a Spinning Crane Kick
+    // tick (spell_proc) spends the charge, and nothing is cast
+    void HandleProc(AuraEffect const* /*aurEff*/, ProcEventInfo const& /*eventInfo*/)
+    {
+        PreventDefaultAction();
+    }
+
+    void Register() override
+    {
+        OnEffectProc += AuraEffectProcFn(spell_monk_counterstrike::HandleProc, EFFECT_1, SPELL_AURA_DUMMY);
+    }
+};
+
 // 198898 - Song of Chi-Ji
 struct at_monk_song_of_chi_ji : AreaTriggerAI
 {
@@ -1205,6 +1227,7 @@ class spell_monk_tigers_lust : public SpellScript
 void AddSC_monk_spell_scripts()
 {
     RegisterSpellScript(spell_monk_burst_of_life);
+    RegisterSpellScript(spell_monk_counterstrike);
     RegisterSpellScript(spell_monk_burst_of_life_heal);
     RegisterSpellScript(spell_monk_crackling_jade_lightning);
     RegisterSpellScript(spell_monk_crackling_jade_lightning_knockback_proc_aura);
