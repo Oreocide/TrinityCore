@@ -77,9 +77,12 @@ enum DeathKnightSpells
     SPELL_DK_FESTERING_WOUND                    = 194310,
     SPELL_DK_FROST                              = 137006,
     SPELL_DK_FROST_FEVER                        = 55095,
-    SPELL_DK_FROST_SCYTHE                       = 207230,
+    SPELL_DK_FROSTBANE                          = 1228433,
     SPELL_DK_FROST_SHIELD                       = 207203,
+    SPELL_DK_FROST_STRIKE                       = 49143,
+    SPELL_DK_FROST_STRIKE_2                     = 213793,
     SPELL_DK_GHOUL_BIRTH                        = 1217759,
+    SPELL_DK_GLACIAL_ADVANCE                    = 194913,
     SPELL_DK_GLYPH_OF_FOUL_MENAGERIE            = 58642,
     SPELL_DK_GLYPH_OF_THE_GEIST                 = 58640,
     SPELL_DK_GLYPH_OF_THE_SKELETON              = 146652,
@@ -1396,21 +1399,34 @@ class spell_dk_rime : public AuraScript
 {
     bool Validate(SpellInfo const* spellInfo) override
     {
-        return ValidateSpellEffect({ { spellInfo->Id, EFFECT_1 } }) && ValidateSpellInfo({ SPELL_DK_FROST_SCYTHE });
+        return ValidateSpellEffect({ { spellInfo->Id, EFFECT_1 } });
     }
 
+    // "Frost Strike and Glacial Advance have a $s2% chance": the casts only, not their triggered hits; Frostbane (455993's
+    // Frost Strike) also grants Rime in retail captures
     bool CheckProc(AuraEffect const* /*aurEff*/, ProcEventInfo& eventInfo)
     {
-        SpellEffectValue chance = GetSpellInfo()->GetEffect(EFFECT_1).CalcValue(GetTarget());
-        if (eventInfo.GetSpellInfo()->Id == SPELL_DK_FROST_SCYTHE)
-            chance /= 2.f;
+        SpellInfo const* spellInfo = eventInfo.GetSpellInfo();
+        if (!spellInfo)
+            return false;
 
-        return roll_chance(chance);
+        switch (spellInfo->Id)
+        {
+            case SPELL_DK_FROST_STRIKE:
+            case SPELL_DK_FROST_STRIKE_2:
+            case SPELL_DK_GLACIAL_ADVANCE:
+            case SPELL_DK_FROSTBANE:
+                break;
+            default:
+                return false;
+        }
+
+        return roll_chance(GetSpellInfo()->GetEffect(EFFECT_1).CalcValue(GetTarget()));
     }
 
     void Register() override
     {
-        DoCheckEffectProc += AuraCheckEffectProcFn(spell_dk_rime::CheckProc, EFFECT_0, SPELL_AURA_PROC_TRIGGER_SPELL);
+        DoCheckEffectProc += AuraCheckEffectProcFn(spell_dk_rime::CheckProc, EFFECT_0, SPELL_AURA_DUMMY);
     }
 };
 
