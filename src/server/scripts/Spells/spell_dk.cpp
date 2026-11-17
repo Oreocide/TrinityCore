@@ -1309,15 +1309,17 @@ class spell_dk_raise_dead : public SpellScript
         return ValidateSpellInfo({ SPELL_DK_RAISE_DEAD_SUMMON });
     }
 
-    void HandleDummy(SpellEffIndex /*effIndex*/)
+    // 12.x DB2: E0 triggers 1242866, a permanent marker with no summon that 46584 excludes, so every cast left no ghoul and
+    // blocked the next one; summon the ghoul instead of applying it
+    void HandleSummon(SpellEffIndex effIndex)
     {
-        uint32 spellId = SPELL_DK_RAISE_DEAD_SUMMON;
-        GetCaster()->CastSpell(nullptr, spellId, true);
+        PreventHitDefaultEffect(effIndex);
+        GetCaster()->CastSpell(nullptr, SPELL_DK_RAISE_DEAD_SUMMON, true);
     }
 
     void Register() override
     {
-        OnEffectHitTarget += SpellEffectFn(spell_dk_raise_dead::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
+        OnEffectLaunch += SpellEffectFn(spell_dk_raise_dead::HandleSummon, EFFECT_0, SPELL_EFFECT_TRIGGER_SPELL);
     }
 };
 
@@ -1618,14 +1620,20 @@ class spell_dk_t20_2p_rune_empowered : public AuraScript
 // 55233 - Vampiric Blood
 class spell_dk_vampiric_blood : public AuraScript
 {
+    bool Validate(SpellInfo const* spellInfo) override
+    {
+        return ValidateSpellEffect({ { spellInfo->Id, EFFECT_3 } });
+    }
+
+    // "increasing your maximum health by $s4%": E1 (base 0) gets E3's percent of maximum health
     void CalculateAmount(AuraEffect const* /*aurEff*/, SpellEffectValue& amount, bool& /*canBeRecalculated*/)
     {
-        amount = GetUnitOwner()->CountPctFromMaxHealth(amount);
+        amount = GetUnitOwner()->CountPctFromMaxHealth(GetEffectInfo(EFFECT_3).CalcValue(GetCaster()));
     }
 
     void Register() override
     {
-        DoEffectCalcAmount += AuraEffectCalcAmountFn(spell_dk_vampiric_blood::CalculateAmount, EFFECT_1, SPELL_AURA_MOD_INCREASE_HEALTH_2);
+        DoEffectCalcAmount += AuraEffectCalcAmountFn(spell_dk_vampiric_blood::CalculateAmount, EFFECT_1, SPELL_AURA_MOD_INCREASE_HEALTH);
     }
 };
 
