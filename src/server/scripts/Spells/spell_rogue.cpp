@@ -22,7 +22,9 @@
  */
 
 #include "ScriptMgr.h"
+#include "CellImpl.h"
 #include "Containers.h"
+#include "GridNotifiersImpl.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
 #include "Spell.h"
@@ -66,9 +68,9 @@ enum RogueSpells
     SPELL_ROGUE_INSTANT_POISON                      = 315584,
     SPELL_ROGUE_INSTANT_POISON_DAMAGE               = 315585,
     SPELL_ROGUE_KILLING_SPREE                       = 51690,
-    SPELL_ROGUE_KILLING_SPREE_TELEPORT              = 57840,
-    SPELL_ROGUE_KILLING_SPREE_WEAPON_DMG            = 57841,
-    SPELL_ROGUE_KILLING_SPREE_DMG_BUFF              = 61851,
+    SPELL_ROGUE_KILLING_SPREE_COMBO_POINTS          = 1235074,
+    SPELL_ROGUE_KILLING_SPREE_MAIN_HAND             = 57841,
+    SPELL_ROGUE_KILLING_SPREE_OFF_HAND              = 57842,
     SPELL_ROGUE_LEECHING_POISON_TALENT              = 280716,
     SPELL_ROGUE_LEECHING_POISON_AURA                = 108211,
     SPELL_ROGUE_MARKED_FOR_DEATH                    = 137619,
@@ -623,81 +625,61 @@ class spell_rog_improved_shiv : public SpellScript
 };
 
 // 51690 - Killing Spree
-class spell_rog_killing_spree_aura : public AuraScript
+class spell_rog_killing_spree : public AuraScript
 {
     bool Validate(SpellInfo const* /*spellInfo*/) override
     {
         return ValidateSpellInfo(
         {
-            SPELL_ROGUE_KILLING_SPREE_TELEPORT,
-            SPELL_ROGUE_KILLING_SPREE_WEAPON_DMG,
-            SPELL_ROGUE_KILLING_SPREE_DMG_BUFF
+            SPELL_ROGUE_KILLING_SPREE_COMBO_POINTS,
+            SPELL_ROGUE_KILLING_SPREE_MAIN_HAND,
+            SPELL_ROGUE_KILLING_SPREE_OFF_HAND
         });
     }
 
-    void HandleApply(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    // a random attackable enemy in line of sight within 10 yards; the main hand and off hand strikes alternate
+    void Strike(AuraEffect const* aurEff)
     {
-        GetTarget()->CastSpell(GetTarget(), SPELL_ROGUE_KILLING_SPREE_DMG_BUFF, true);
+        Unit* rogue = GetTarget();
+        SpellInfo const* strikeInfo = sSpellMgr->AssertSpellInfo(SPELL_ROGUE_KILLING_SPREE_MAIN_HAND, GetCastDifficulty());
+
+        std::vector<Unit*> targets;
+        Trinity::WorldObjectSpellAreaTargetCheck check({ 0.0f, 10.0f }, rogue, rogue, rogue, strikeInfo, TARGET_CHECK_ENEMY, nullptr, TARGET_OBJECT_TYPE_UNIT);
+        Trinity::UnitListSearcher searcher(rogue, targets, check);
+        Cell::VisitAllObjects(rogue, searcher, 10.0f);
+        std::erase_if(targets, [rogue](Unit const* target) { return !rogue->IsWithinLOSInMap(target); });
+        if (targets.empty())
+            return;
+
+        rogue->CastSpell(Trinity::Containers::SelectRandomContainerElement(targets),
+            _offHand ? SPELL_ROGUE_KILLING_SPREE_OFF_HAND : SPELL_ROGUE_KILLING_SPREE_MAIN_HAND, CastSpellExtraArgsInit{
+                .TriggerFlags = TRIGGERED_FULL_MASK,
+                .TriggeringAura = aurEff
+            });
+        _offHand = !_offHand;
     }
 
-    void HandleEffectPeriodic(AuraEffect const* /*aurEff*/)
+    void HandleApply(AuraEffect const* aurEff, AuraEffectHandleModes /*mode*/)
     {
-        while (!_targets.empty())
-        {
-            ObjectGuid guid = Trinity::Containers::SelectRandomContainerElement(_targets);
-            if (Unit* target = ObjectAccessor::GetUnit(*GetTarget(), guid))
-            {
-                GetTarget()->CastSpell(target, SPELL_ROGUE_KILLING_SPREE_TELEPORT, true);
-                GetTarget()->CastSpell(target, SPELL_ROGUE_KILLING_SPREE_WEAPON_DMG, true);
-                break;
-            }
-            else
-                _targets.remove(guid);
-        }
+        Strike(aurEff);
     }
 
-    void HandleRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    void HandleEffectPeriodic(AuraEffect const* aurEff)
     {
-        GetTarget()->RemoveAurasDueToSpell(SPELL_ROGUE_KILLING_SPREE_DMG_BUFF);
-    }
-
-    void Register() override
-    {
-        AfterEffectApply += AuraEffectApplyFn(spell_rog_killing_spree_aura::HandleApply, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY, AURA_EFFECT_HANDLE_REAL);
-        OnEffectPeriodic += AuraEffectPeriodicFn(spell_rog_killing_spree_aura::HandleEffectPeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
-        AfterEffectRemove += AuraEffectRemoveFn(spell_rog_killing_spree_aura::HandleRemove, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY, AURA_EFFECT_HANDLE_REAL);
-    }
-
-public:
-    void AddTarget(Unit* target)
-    {
-        _targets.push_back(target->GetGUID());
-    }
-
-private:
-    GuidList _targets;
-};
-
-class spell_rog_killing_spree : public SpellScript
-{
-    void FilterTargets(std::list<WorldObject*>& targets)
-    {
-        if (targets.empty() || GetCaster()->GetVehicleBase())
-            FinishCast(SPELL_FAILED_OUT_OF_RANGE);
-    }
-
-    void HandleDummy(SpellEffIndex /*effIndex*/)
-    {
-        if (Aura* aura = GetCaster()->GetAura(SPELL_ROGUE_KILLING_SPREE))
-            if (spell_rog_killing_spree_aura* script = aura->GetScript<spell_rog_killing_spree_aura>())
-                script->AddTarget(GetHitUnit());
+        Strike(aurEff);
+        GetTarget()->CastSpell(GetTarget(), SPELL_ROGUE_KILLING_SPREE_COMBO_POINTS, CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_FULL_MASK,
+            .TriggeringAura = aurEff
+        });
     }
 
     void Register() override
     {
-        OnObjectAreaTargetSelect += SpellObjectAreaTargetSelectFn(spell_rog_killing_spree::FilterTargets, EFFECT_1, TARGET_UNIT_DEST_AREA_ENEMY);
-        OnEffectHitTarget += SpellEffectFn(spell_rog_killing_spree::HandleDummy, EFFECT_1, SPELL_EFFECT_DUMMY);
+        AfterEffectApply += AuraEffectApplyFn(spell_rog_killing_spree::HandleApply, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY, AURA_EFFECT_HANDLE_REAL);
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_rog_killing_spree::HandleEffectPeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
     }
+
+    bool _offHand = false;
 };
 
 // 385627 - Kingsbane
@@ -1618,7 +1600,7 @@ void AddSC_rogue_spell_scripts()
     RegisterSpellScript(spell_rog_improved_garrote);
     RegisterSpellScript(spell_rog_improved_garrote_damage);
     RegisterSpellScript(spell_rog_improved_shiv);
-    RegisterSpellAndAuraScriptPair(spell_rog_killing_spree, spell_rog_killing_spree_aura);
+    RegisterSpellScript(spell_rog_killing_spree);
     RegisterSpellScript(spell_rog_kingsbane);
     RegisterSpellScript(spell_rog_leeching_poison);
     RegisterSpellScript(spell_rog_mastery_main_gauche);
