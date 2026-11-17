@@ -753,11 +753,16 @@ public:
 
         uint32 const minTime = _owner.GetGOInfo()->controlZone.minTime;
         uint32 const maxTime = _owner.GetGOInfo()->controlZone.maxTime;
-        uint32 const maxSuperiority = _owner.GetGOInfo()->controlZone.maxSuperiority;
+        uint32 const maxSuperiority = std::max(_owner.GetGOInfo()->controlZone.maxSuperiority, minSuperiority);
 
-        float const slope = static_cast<float>(minTime - maxTime) / static_cast<float>(std::max<uint32>(maxSuperiority - minSuperiority, 1));
-        float const intercept = static_cast<float>(maxTime) - slope * static_cast<float>(minSuperiority);
-        return slope * static_cast<float>(delta) + intercept;
+        // in float: minTime < maxTime (Eye of the Storm towers 90/180) underflowed as uint32 and made the capture take ~1e10 s; past the
+        // max superiority the time stays at minTime
+        float const minT = static_cast<float>(minTime);
+        float const maxT = static_cast<float>(maxTime);
+        float const span = static_cast<float>(std::max<uint32>(maxSuperiority - minSuperiority, 1));
+        float const slope = (minT - maxT) / span;
+        float const clamped = static_cast<float>(std::min(delta, maxSuperiority));
+        return std::max(std::min(minT, maxT), maxT + slope * (clamped - static_cast<float>(minSuperiority)));
     }
 
     void HandleUnitEnterExit(std::vector<Player*> const& newTargetList)
