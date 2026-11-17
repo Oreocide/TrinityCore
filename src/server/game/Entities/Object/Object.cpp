@@ -1704,7 +1704,7 @@ SpellEffectValue WorldObject::ApplyEffectModifiers(SpellInfo const* spellInfo, u
 int32 WorldObject::CalcSpellDuration(SpellInfo const* spellInfo, std::vector<SpellPowerCost> const* powerCosts) const
 {
     int32 minduration = spellInfo->GetDuration();
-    if (minduration <= 0)
+    if (minduration < 0)
         return minduration;
 
     int32 maxduration = spellInfo->GetMaxDuration();

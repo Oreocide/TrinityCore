@@ -4010,7 +4010,7 @@ void Spell::handle_immediate()
     // start channeling if applicable
     if (m_spellInfo->IsChanneled())
     {
-        int32 duration = m_spellInfo->GetDuration();
+        int32 duration = m_caster->CalcSpellDuration(m_spellInfo, &m_powerCost);
         if (duration > 0 || m_spellValue->Duration > 0)
         {
             if (!m_spellValue->Duration)
