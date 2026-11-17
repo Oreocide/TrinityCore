@@ -271,6 +271,7 @@ enum PriestSpells
     SPELL_PRIEST_VAMPIRIC_TOUCH                     = 34914,
     SPELL_PRIEST_VOIDFORM                           = 194249,
     SPELL_PRIEST_VOIDFORM_1                         = 210199,
+    SPELL_PRIEST_VOIDFORM_CAST                      = 228260,
     SPELL_PRIEST_VOID_VOLLEY                        = 1242173,
     SPELL_PRIEST_VOID_VOLLEY_DAMAGE                 = 1242189,
     SPELL_PRIEST_VOID_VOLLEY_OVERRIDE               = 1242171,
@@ -5493,6 +5494,28 @@ class spell_pri_void_volley : public SpellScript
     }
 };
 
+// 1230339 - Mindbender (talent)
+class spell_pri_mindbender_voidform : public AuraScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_PRIEST_VOIDFORM_CAST });
+    }
+
+    // "Casting Voidform summons a Mindbender": the DB2 proc (any harmful spell) and the class bit it would get from spell_proc
+    // (shared with Void Eruption and Dark Ascension) are both too wide
+    static bool CheckProc(AuraScript const&, ProcEventInfo const& eventInfo)
+    {
+        SpellInfo const* spellInfo = eventInfo.GetSpellInfo();
+        return spellInfo && spellInfo->Id == SPELL_PRIEST_VOIDFORM_CAST;
+    }
+
+    void Register() override
+    {
+        DoCheckProc += AuraCheckProcFn(spell_pri_mindbender_voidform::CheckProc);
+    }
+};
+
 // 228260 - Voidform
 class spell_pri_voidform : public SpellScript
 {
@@ -5793,4 +5816,5 @@ void AddSC_priest_spell_scripts()
     RegisterSpellScript(spell_pri_voidform_aura);
     RegisterSpellScript(spell_pri_whispering_shadows);
     RegisterSpellScript(spell_pri_whispering_shadows_effect);
+    RegisterSpellScript(spell_pri_mindbender_voidform);
 }

@@ -109,6 +109,7 @@ enum PaladinSpells
     SPELL_PALADIN_HOLY_SHOCK_DAMAGE              = 25912,
     SPELL_PALADIN_HOLY_SHOCK_HEALING             = 25914,
     SPELL_PALADIN_HOLY_LIGHT                     = 82326,
+    SPELL_PALADIN_INFUSION_OF_LIGHT              = 54149,
     SPELL_PALADIN_INFUSION_OF_LIGHT_ENERGIZE     = 356717,
     SPELL_PALADIN_IMMUNE_SHIELD_MARKER           = 61988, // Serverside
     SPELL_PALADIN_ITEM_HEALING_TRANCE            = 37706,
@@ -1275,6 +1276,27 @@ private:
     }
 };
 
+// 387808 - Divine Revelations
+class spell_pal_divine_revelations : public AuraScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_PALADIN_INFUSION_OF_LIGHT });
+    }
+
+    // "While empowered by Infusion of Light, ... Judgment refunds mana": Judgment does not spend Infusion of Light (its proc is
+    // Flash of Light / Holy Light), so the aura is still up when Judgment hits
+    bool CheckProc(ProcEventInfo& /*eventInfo*/)
+    {
+        return GetTarget()->HasAura(SPELL_PALADIN_INFUSION_OF_LIGHT);
+    }
+
+    void Register() override
+    {
+        DoCheckProc += AuraCheckProcFn(spell_pal_divine_revelations::CheckProc);
+    }
+};
+
 // 54149 - Infusion of Light
 class spell_pal_infusion_of_light : public AuraScript
 {
@@ -2415,4 +2437,5 @@ void AddSC_paladin_spell_scripts()
     RegisterSpellScript(spell_pal_valiant_crusade);
     RegisterSpellScript(spell_pal_wake_of_ashes);
     RegisterSpellScript(spell_pal_zeal);
+    RegisterSpellScript(spell_pal_divine_revelations);
 }
