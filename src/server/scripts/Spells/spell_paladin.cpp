@@ -1810,7 +1810,7 @@ class spell_pal_lights_guidance : public AuraScript
         if (!spellInfo)
             return false;
 
-        return spellInfo->Id == (GetTarget()->HasAura(SPELL_PALADIN_PROTECTION) ? SPELL_PALADIN_DIVINE_TOLL : SPELL_PALADIN_WAKE_OF_ASHES);
+        return spellInfo->Id == static_cast<uint32>(GetTarget()->HasAura(SPELL_PALADIN_PROTECTION) ? SPELL_PALADIN_DIVINE_TOLL : SPELL_PALADIN_WAKE_OF_ASHES);
     }
 
     void Register() override
