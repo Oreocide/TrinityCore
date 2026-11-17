@@ -500,6 +500,22 @@ class spell_evo_ebon_might : public SpellScript
     }
 };
 
+// 441181 - Menacing Presence
+class spell_evo_menacing_presence : public AuraScript
+{
+    // "Knocking enemies up or backwards reduces their damage done to you": only spells that knock back (Wing Buffet, Tail Swipe)
+    static bool CheckProc(AuraScript const&, ProcEventInfo const& eventInfo)
+    {
+        SpellInfo const* spellInfo = eventInfo.GetSpellInfo();
+        return spellInfo && (spellInfo->HasEffect(SPELL_EFFECT_KNOCK_BACK) || spellInfo->HasEffect(SPELL_EFFECT_KNOCK_BACK_DEST));
+    }
+
+    void Register() override
+    {
+        DoCheckProc += AuraCheckProcFn(spell_evo_menacing_presence::CheckProc);
+    }
+};
+
 // 357208 Fire Breath (Red)
 // 382266 Fire Breath (Red)
 class spell_evo_fire_breath : public SpellScript
@@ -1071,4 +1087,5 @@ void AddSC_evoker_spell_scripts()
     RegisterSpellScript(spell_evo_mastery_timewalker);
     RegisterSpellScript(spell_evo_shifting_sands);
     RegisterSpellScript(spell_evo_upheaval);
+    RegisterSpellScript(spell_evo_menacing_presence);
 }

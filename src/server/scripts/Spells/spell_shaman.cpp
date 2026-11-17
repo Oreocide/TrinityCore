@@ -151,6 +151,7 @@ enum ShamanSpells
     SPELL_SHAMAN_STORMSURGE_PROC                = 201846,
     SPELL_SHAMAN_STORMWEAVER_PVP_TALENT         = 410673,
     SPELL_SHAMAN_STORMWEAVER_PVP_TALENT_BUFF    = 410681,
+    SPELL_SHAMAN_SUNDERING                      = 197214,
     SPELL_SHAMAN_T29_2P_ELEMENTAL_DAMAGE_BUFF   = 394651,
     SPELL_SHAMAN_THORIMS_INVOCATION             = 384444,
     SPELL_SHAMAN_TIDAL_WAVES                    = 53390,
@@ -217,6 +218,34 @@ private:
     using EventInfoIterator = decltype(Sequence)::const_iterator;
     EventInfoIterator _itr;
     EventInfoIterator _end;
+};
+
+// 1218047 - Primordial Storm
+// 445034 - Lively Totems
+class spell_sha_proc_from_spell : public AuraScript
+{
+public:
+    explicit spell_sha_proc_from_spell(uint32 procSpellId) : _procSpellId(procSpellId) { }
+
+private:
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ _procSpellId });
+    }
+
+    // DB2 procs these on every successful cast; their tooltips name one spell ("after Sundering is cast", "Lava Lash has a chance")
+    bool CheckProc(ProcEventInfo& eventInfo)
+    {
+        SpellInfo const* spellInfo = eventInfo.GetSpellInfo();
+        return spellInfo && spellInfo->Id == _procSpellId;
+    }
+
+    void Register() override
+    {
+        DoCheckProc += AuraCheckProcFn(spell_sha_proc_from_spell::CheckProc);
+    }
+
+    uint32 _procSpellId;
 };
 
 // 273221 - Aftershock
@@ -3559,4 +3588,6 @@ void AddSC_shaman_spell_scripts()
     RegisterSpellScript(spell_sha_windveil);
     RegisterAreaTriggerAI(areatrigger_sha_arctic_snowstorm);
     RegisterAreaTriggerAI(areatrigger_sha_wind_rush_totem);
+    RegisterSpellScriptWithArgs(spell_sha_proc_from_spell, "spell_sha_primordial_storm_talent", SPELL_SHAMAN_SUNDERING);
+    RegisterSpellScriptWithArgs(spell_sha_proc_from_spell, "spell_sha_lively_totems", SPELL_SHAMAN_LAVA_LASH);
 }

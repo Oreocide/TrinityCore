@@ -48,6 +48,7 @@ enum WarlockSpells
     SPELL_WARLOCK_BILESCOURGE_BOMBERS               = 267211,
     SPELL_WARLOCK_BILESCOURGE_BOMBERS_MISSILE       = 267212,
     SPELL_WARLOCK_BILESCOURGE_BOMBERS_AREATRIGGER   = 282248,
+    SPELL_WARLOCK_BURN_TO_ASHES_BUFF                = 387154,
     SPELL_WARLOCK_CHANNEL_DEMONFIRE_ACTIVATOR       = 228312,
     SPELL_WARLOCK_CHANNEL_DEMONFIRE_DAMAGE          = 281362,
     SPELL_WARLOCK_CHANNEL_DEMONFIRE_SELECTOR        = 196449,
@@ -65,6 +66,7 @@ enum WarlockSpells
     SPELL_WARLOCK_DEVOUR_MAGIC_HEAL                 = 19658,
     SPELL_WARLOCK_DOOM_ENERGIZE                     = 193318,
     SPELL_WARLOCK_DRAIN_SOUL_ENERGIZE               = 205292,
+    SPELL_WARLOCK_DRAIN_SOUL_TALENT                 = 388667,
     SPELL_WARLOCK_FLAMESHADOW                       = 37379,
     SPELL_WARLOCK_GLYPH_OF_DEMON_TRAINING           = 56249,
     SPELL_WARLOCK_GLYPH_OF_SOUL_SWAP                = 56226,
@@ -88,6 +90,8 @@ enum WarlockSpells
     SPELL_WARLOCK_SHADOWBURN_ENERGIZE               = 245731,
     SPELL_WARLOCK_SHADOW_BOLT_ENERGIZE              = 194192,
     SPELL_WARLOCK_SHADOWFLAME                       = 37378,
+    SPELL_WARLOCK_SHADOW_EMBRACE_DRAIN_SOUL         = 32390,
+    SPELL_WARLOCK_SHADOW_EMBRACE_SHADOW_BOLT        = 453206,
     SPELL_WARLOCK_SHARD_INSTABILITY                 = 1260269,
     SPELL_WARLOCK_SIPHON_LIFE_HEAL                  = 453000,
     SPELL_WARLOCK_SOUL_FIRE_ENERGIZE                = 281490,
@@ -122,6 +126,66 @@ enum WarlockSpellVisuals
 };
 
 // 146739 - Corruption
+// 32388 - Shadow Embrace
+class spell_warl_shadow_embrace : public AuraScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_WARLOCK_SHADOW_EMBRACE_DRAIN_SOUL, SPELL_WARLOCK_SHADOW_EMBRACE_SHADOW_BOLT, SPELL_WARLOCK_DRAIN_SOUL_TALENT });
+    }
+
+    // "$?s388667[Drain Soul][Shadow Bolt] applies Shadow Embrace ... $?s388667[$32390s1%][$453206s2%]" (spell_proc keeps the two spells)
+    void HandleProc(AuraEffect const* aurEff, ProcEventInfo const& eventInfo)
+    {
+        PreventDefaultAction();
+
+        Unit* target = eventInfo.GetActionTarget();
+        if (!target)
+            return;
+
+        GetTarget()->CastSpell(target, GetTarget()->HasAura(SPELL_WARLOCK_DRAIN_SOUL_TALENT) ? SPELL_WARLOCK_SHADOW_EMBRACE_DRAIN_SOUL : SPELL_WARLOCK_SHADOW_EMBRACE_SHADOW_BOLT,
+            CastSpellExtraArgsInit{ .TriggerFlags = TRIGGERED_FULL_MASK, .TriggeringAura = aurEff });
+    }
+
+    void Register() override
+    {
+        OnEffectProc += AuraEffectProcFn(spell_warl_shadow_embrace::HandleProc, EFFECT_0, SPELL_AURA_DUMMY);
+    }
+};
+
+// 387153 - Burn to Ashes
+class spell_warl_burn_to_ashes : public AuraScript
+{
+    static constexpr flag128 ShadowburnClassMask = { 0x80, 0, 0, 0 };
+
+    bool Validate(SpellInfo const* spellInfo) override
+    {
+        return ValidateSpellInfo({ SPELL_WARLOCK_BURN_TO_ASHES_BUFF }) && ValidateSpellEffect({ { spellInfo->Id, EFFECT_2 } });
+    }
+
+    // "Chaos Bolt and Rain of Fire increase the damage of your next $s3 Incinerates ... Shadowburn ... your next Incinerate"
+    // (spell_proc keeps the three spells)
+    void HandleProc(AuraEffect const* aurEff, ProcEventInfo const& eventInfo)
+    {
+        PreventDefaultAction();
+
+        SpellInfo const* spellInfo = eventInfo.GetSpellInfo();
+        int32 stacks = spellInfo && spellInfo->IsAffected(SPELLFAMILY_WARLOCK, ShadowburnClassMask)
+            ? 1 : GetSpellInfo()->GetEffect(EFFECT_2).CalcValueAsInt(GetTarget());
+
+        for (int32 i = 0; i < stacks; ++i)
+            GetTarget()->CastSpell(GetTarget(), SPELL_WARLOCK_BURN_TO_ASHES_BUFF, CastSpellExtraArgsInit{
+                .TriggerFlags = TRIGGERED_FULL_MASK,
+                .TriggeringAura = aurEff
+            });
+    }
+
+    void Register() override
+    {
+        OnEffectProc += AuraEffectProcFn(spell_warl_burn_to_ashes::HandleProc, EFFECT_1, SPELL_AURA_DUMMY);
+    }
+};
+
 // 445474 - Wither
 class spell_warl_absolute_corruption : public SpellScript
 {
@@ -1938,4 +2002,6 @@ void AddSC_warlock_spell_scripts()
     RegisterSpellScript(spell_warl_unstable_affliction);
     RegisterSpellScript(spell_warl_vile_taint);
     RegisterSpellScript(spell_warl_volatile_agony);
+    RegisterSpellScript(spell_warl_burn_to_ashes);
+    RegisterSpellScript(spell_warl_shadow_embrace);
 }

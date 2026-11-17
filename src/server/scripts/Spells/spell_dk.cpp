@@ -43,6 +43,8 @@ enum DeathKnightSpells
     SPELL_DK_ARMY_SKELETON_TRANSFORM            = 127527,
     SPELL_DK_ARMY_SPIKED_GHOUL_TRANSFORM        = 127525,
     SPELL_DK_ARMY_SUPER_ZOMBIE_TRANSFORM        = 127526,
+    SPELL_DK_BIND_IN_DARKNESS_BUFF              = 443532,
+    SPELL_DK_BIND_IN_DARKNESS_TALENT            = 440031,
     SPELL_DK_BLINDING_SLEET_SLOW                = 317898,
     SPELL_DK_BLOOD                              = 137008,
     SPELL_DK_BLOODDRINKER_DEBUFF                = 458687,
@@ -1350,6 +1352,45 @@ class spell_dk_reaper_of_souls : public SpellScript
     }
 };
 
+// 440031 - Bind in Darkness
+class spell_dk_bind_in_darkness : public AuraScript
+{
+    // E0 (PROC_TRIGGER_SPELL) and E3 (DUMMY) name the "next Howling Blast deals Shadowfrost damage" buff 443532 with a DB2 proc on every
+    // successful cast; it comes with Rime instead (spell_dk_rime_bind_in_darkness), so the talent itself never procs
+    static bool CheckProc(AuraScript const&, ProcEventInfo const& /*eventInfo*/)
+    {
+        return false;
+    }
+
+    void Register() override
+    {
+        DoCheckProc += AuraCheckProcFn(spell_dk_bind_in_darkness::CheckProc);
+    }
+};
+
+// 59057 - Rime
+class spell_dk_rime_bind_in_darkness : public AuraScript
+{
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_DK_BIND_IN_DARKNESS_TALENT, SPELL_DK_BIND_IN_DARKNESS_BUFF });
+    }
+
+    // Rime empowered Howling Blast is Shadowfrost with Bind in Darkness: the buff comes with the Rime proc
+    // (retail: 93 aura rows of 443532 against 103 of the Rime buff 59052, 851 of the talent)
+    void AfterProc(AuraEffect const* /*aurEff*/, ProcEventInfo const& /*eventInfo*/) const
+    {
+        Unit* deathKnight = GetTarget();
+        if (deathKnight->HasAura(SPELL_DK_BIND_IN_DARKNESS_TALENT))
+            deathKnight->CastSpell(deathKnight, SPELL_DK_BIND_IN_DARKNESS_BUFF, CastSpellExtraArgsInit{ .TriggerFlags = TRIGGERED_FULL_MASK });
+    }
+
+    void Register() override
+    {
+        AfterEffectProc += AuraEffectProcFn(spell_dk_rime_bind_in_darkness::AfterProc, EFFECT_0, SPELL_AURA_DUMMY);
+    }
+};
+
 // 59057 - Rime
 class spell_dk_rime : public AuraScript
 {
@@ -1752,4 +1793,6 @@ void AddSC_deathknight_spell_scripts()
     RegisterSpellScript(spell_dk_will_of_the_necropolis);
 
     RegisterAreaTriggerAI(at_dk_death_and_decay);
+    RegisterSpellScript(spell_dk_bind_in_darkness);
+    RegisterSpellScript(spell_dk_rime_bind_in_darkness);
 }
