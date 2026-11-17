@@ -170,6 +170,7 @@ enum PriestSpells
     SPELL_PRIEST_MASTER_THE_DARKNESS                = 1253590,
     SPELL_PRIEST_MASTER_THE_DARKNESS_AURA           = 1253591,
     SPELL_PRIEST_MASTERY_GRACE                      = 271534,
+    SPELL_PRIEST_MINDBENDER_SUMMON                  = 200174,
     SPELL_PRIEST_MIND_BLAST                         = 8092,
     SPELL_PRIEST_MIND_DEVOURER                      = 373202,
     SPELL_PRIEST_MIND_DEVOURER_AURA                 = 373204,
@@ -5499,7 +5500,7 @@ class spell_pri_mindbender_voidform : public AuraScript
 {
     bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        return ValidateSpellInfo({ SPELL_PRIEST_VOIDFORM_CAST });
+        return ValidateSpellInfo({ SPELL_PRIEST_VOIDFORM_CAST, SPELL_PRIEST_MINDBENDER_SUMMON });
     }
 
     // "Casting Voidform summons a Mindbender": the DB2 proc (any harmful spell) and the class bit it would get from spell_proc
@@ -5510,9 +5511,31 @@ class spell_pri_mindbender_voidform : public AuraScript
         return spellInfo && spellInfo->Id == SPELL_PRIEST_VOIDFORM_CAST;
     }
 
+    // the summon (200174 effect 0, TARGET_DEST_TARGET_ENEMY) needs the enemy Voidform was cast at; the generic trigger would cast it
+    // at the proc's action target and fail
+    void HandleProc(AuraEffect const* aurEff, ProcEventInfo const& eventInfo)
+    {
+        PreventDefaultAction();
+
+        Unit* caster = GetTarget();
+        Unit* target = nullptr;
+        if (Spell const* voidform = eventInfo.GetProcSpell())
+            target = voidform->m_targets.GetUnitTarget();
+        if (!target)
+            target = caster->GetVictim();
+        if (!target)
+            return;
+
+        caster->CastSpell(target, SPELL_PRIEST_MINDBENDER_SUMMON, CastSpellExtraArgsInit{
+            .TriggerFlags = TRIGGERED_FULL_MASK,
+            .TriggeringAura = aurEff
+        });
+    }
+
     void Register() override
     {
         DoCheckProc += AuraCheckProcFn(spell_pri_mindbender_voidform::CheckProc);
+        OnEffectProc += AuraEffectProcFn(spell_pri_mindbender_voidform::HandleProc, EFFECT_0, SPELL_AURA_DUMMY);
     }
 };
 
