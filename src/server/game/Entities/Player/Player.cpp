@@ -7557,7 +7557,7 @@ void Player::UpdateArea(uint32 newArea)
     {
         UpdateCriteria(CriteriaType::EnterArea, newArea);
         sScenarioEventMgr->Trigger(ScenarioEventTriggerType::AreaEnter, newArea, this);
-        UpdateCriteria(CriteriaType::LeaveArea, oldArea);
+        UpdateCriteria(CriteriaType::LeaveArea, oldArea, newArea);
 
         // walking into or out of the garrison zone switches between the garrison map and its parent map
         if (_garrison)
