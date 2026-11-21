@@ -4462,6 +4462,23 @@ Pvp.FactionBalance.Pct20 = 0.8
 ###################################################################################################
 
 ###################################################################################################
+# COVENANT SETTINGS
+#
+#    Covenant.Enable
+#        Description: Enables the Shadowlands covenant join: the Shadowlands Covenant Map choice
+#                     (player choice 644), spell effect SET_COVENANT, saving the covenant in
+#                     character_covenant and the covenant preview packet.
+#                     When disabled these behave as before (nothing is set or saved).
+#                     The character_covenant table must exist whatever this is set to.
+#        Default:     0 - (Disabled)
+#                     1 - (Enabled)
+
+Covenant.Enable = 0
+
+#
+###################################################################################################
+
+###################################################################################################
 # LOAD SETTINGS
 #
 # These settings control content loading

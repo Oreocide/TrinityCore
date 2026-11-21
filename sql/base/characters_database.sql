@@ -705,6 +705,30 @@ LOCK TABLES `character_battleground_random` WRITE;
 UNLOCK TABLES;
 
 --
+-- Table structure for table `character_covenant`
+--
+
+DROP TABLE IF EXISTS `character_covenant`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `character_covenant` (
+  `guid` bigint unsigned NOT NULL DEFAULT '0' COMMENT 'Character Guid',
+  `covenantId` int NOT NULL DEFAULT '0' COMMENT 'Covenant.db2 ID',
+  `joinTime` bigint NOT NULL DEFAULT '0' COMMENT 'Unix time of the join',
+  PRIMARY KEY (`guid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `character_covenant`
+--
+
+LOCK TABLES `character_covenant` WRITE;
+/*!40000 ALTER TABLE `character_covenant` DISABLE KEYS */;
+/*!40000 ALTER TABLE `character_covenant` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `character_cuf_profiles`
 --
 

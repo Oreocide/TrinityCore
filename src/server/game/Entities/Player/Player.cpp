@@ -4187,6 +4187,10 @@ void Player::DeleteFromDB(ObjectGuid playerguid, uint32 accountId, bool updateRe
             stmt->setUInt64(0, guid);
             trans->Append(stmt);
 
+            stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CHARACTER_COVENANT);
+            stmt->setUInt64(0, guid);
+            trans->Append(stmt);
+
             sCharacterCache->DeleteCharacterCacheEntry(playerguid, name);
             break;
         }
@@ -18948,6 +18952,8 @@ bool Player::LoadFromDB(ObjectGuid guid, CharacterDatabaseQueryHolder const& hol
 
     _LoadPlayerData(holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_DATA_ELEMENTS), holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_DATA_FLAGS));
 
+    _LoadCovenant(holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_COVENANT));
+
     std::unique_ptr<Garrison> garrison = std::make_unique<Garrison>(this);
     if (garrison->LoadFromDB(holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_GARRISON),
         holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_GARRISON_BLUEPRINTS),
@@ -20572,6 +20578,34 @@ void Player::_LoadCharacterBankTabSettings(PreparedQueryResult result)
         AddDynamicUpdateFieldValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::CharacterBankTabSettings));
 }
 
+void Player::_LoadCovenant(PreparedQueryResult result)
+{
+    if (!result)
+        return;
+
+    // the row is kept while Covenant.Enable is off, the field is only restored when it is on
+    Field* fields = result->Fetch();
+    if (!sWorld->getBoolConfig(CONFIG_COVENANT_ENABLE))
+        return;
+
+    SetUpdateFieldValue(m_values.ModifyValue(&Player::m_playerData).ModifyValue(&UF::PlayerData::CovenantID), fields[0].GetInt32());
+    _covenantJoinTime = fields[1].GetInt64();
+}
+
+void Player::SetCovenant(int32 covenantId)
+{
+    if (covenantId < 0 || covenantId == GetCovenant())
+        return;
+
+    SetUpdateFieldValue(m_values.ModifyValue(&Player::m_playerData).ModifyValue(&UF::PlayerData::CovenantID), covenantId);
+    _covenantJoinTime = covenantId ? GameTime::GetGameTime() : 0;
+    _covenantNeedsSave = true;
+
+    // conditions on PlayerCondition.CovenantID / modifier trees 288 and 314 (phase areas, terrain swaps) may now change
+    if (IsInWorld())
+        PhasingHandler::OnConditionChange(this);
+}
+
 /*********************************************************/
 /***                   SAVE SYSTEM                     ***/
 /*********************************************************/
@@ -20949,6 +20983,7 @@ void Player::SaveToDB(LoginDatabaseTransaction loginTransaction, CharacterDataba
     _SaveCUFProfiles(trans);
     _SavePlayerData(trans);
     _SaveCharacterBankTabSettings(trans);
+    _SaveCovenant(trans);
     if (_garrison)
         _garrison->SaveToDB(trans);
 
@@ -21923,6 +21958,27 @@ void Player::_SaveCharacterBankTabSettings(CharacterDatabaseTransaction trans) c
         stmt->setInt32(5, *tabSetting.DepositFlags);
         trans->Append(stmt);
     }
+}
+
+void Player::_SaveCovenant(CharacterDatabaseTransaction trans)
+{
+    if (!_covenantNeedsSave)
+        return;
+
+    _covenantNeedsSave = false;
+
+    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CHARACTER_COVENANT);
+    stmt->setUInt64(0, GetGUID().GetCounter());
+    trans->Append(stmt);
+
+    if (!GetCovenant())
+        return;
+
+    stmt = CharacterDatabase.GetPreparedStatement(CHAR_INS_CHARACTER_COVENANT);
+    stmt->setUInt64(0, GetGUID().GetCounter());
+    stmt->setInt32(1, GetCovenant());
+    stmt->setInt64(2, _covenantJoinTime);
+    trans->Append(stmt);
 }
 
 void Player::outDebugValues() const

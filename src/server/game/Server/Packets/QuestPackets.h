@@ -808,6 +808,18 @@ namespace WorldPackets
             bool ShowChoicesAsColumns = false;
         };
 
+        // 5 bytes in retail: int32 + one bit. ChoiceID 0 clears whatever choice is open
+        class PlayerChoiceClear final : public ServerPacket
+        {
+        public:
+            explicit PlayerChoiceClear() : ServerPacket(SMSG_PLAYER_CHOICE_CLEAR, 4 + 1) { }
+
+            WorldPacket const* Write() override;
+
+            int32 ChoiceID = 0;
+            bool ForceClose = false;
+        };
+
         class ChoiceResponse final : public ClientPacket
         {
         public:

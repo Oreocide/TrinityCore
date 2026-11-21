@@ -17,6 +17,7 @@
 
 // This is where scripts' loading functions should be declared:
 void AddSC_covenant_spell_scripts();
+void AddSC_covenant_join();
 void AddSC_shadowlands_raid_portals();
 void AddSC_torghast_spell_scripts();
 void AddSC_instance_torghast();
@@ -67,6 +68,7 @@ void AddSC_instance_sepulcher_of_the_first_ones();
 void AddShadowlandsScripts()
 {
     AddSC_covenant_spell_scripts();
+    AddSC_covenant_join();
     AddSC_shadowlands_raid_portals();
     AddSC_torghast_spell_scripts();
     AddSC_instance_torghast();

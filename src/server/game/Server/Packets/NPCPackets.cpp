@@ -219,6 +219,14 @@ WorldPacket const* GossipComplete::Write()
     return &_worldPacket;
 }
 
+WorldPacket const* CovenantPreviewOpenNpc::Write()
+{
+    _worldPacket << NpcGUID;
+    _worldPacket << int32(CovenantID);
+
+    return &_worldPacket;
+}
+
 WorldPacket const* GossipPOI::Write()
 {
     _worldPacket << int32(ID);

@@ -1010,6 +1010,7 @@ enum PlayerLoginQueryIndex
     PLAYER_LOGIN_QUERY_LOAD_DATA_ELEMENTS,
     PLAYER_LOGIN_QUERY_LOAD_DATA_FLAGS,
     PLAYER_LOGIN_QUERY_LOAD_BANK_TAB_SETTINGS,
+    PLAYER_LOGIN_QUERY_LOAD_COVENANT,
     MAX_PLAYER_LOGIN_QUERY
 };
 
@@ -1334,6 +1335,10 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
 
         Gender GetNativeGender() const override { return Gender(*m_playerData->NativeSex); }
         void SetNativeGender(Gender gender) override { SetUpdateFieldValue(m_values.ModifyValue(&Player::m_playerData).ModifyValue(&UF::PlayerData::NativeSex), gender); }
+
+        // Covenant (Shadowlands): PlayerData.CovenantID, saved in character_covenant. Only used when Covenant.Enable is set
+        int32 GetCovenant() const { return *m_playerData->CovenantID; }
+        void SetCovenant(int32 covenantId);
 
         void setDeathState(DeathState s) override;                   // overwrite Unit::setDeathState
 
@@ -3163,6 +3168,7 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         void _LoadCUFProfiles(PreparedQueryResult result);
         void _LoadPlayerData(PreparedQueryResult elementsResult, PreparedQueryResult flagsResult);
         void _LoadCharacterBankTabSettings(PreparedQueryResult result);
+        void _LoadCovenant(PreparedQueryResult result);
 
         /*********************************************************/
         /***                   SAVE SYSTEM                     ***/
@@ -3194,6 +3200,7 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         void _SaveCUFProfiles(CharacterDatabaseTransaction trans);
         void _SavePlayerData(CharacterDatabaseTransaction trans);
         void _SaveCharacterBankTabSettings(CharacterDatabaseTransaction trans) const;
+        void _SaveCovenant(CharacterDatabaseTransaction trans);
 
         /*********************************************************/
         /***              ENVIRONMENTAL SYSTEM                 ***/
@@ -3445,6 +3452,9 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
 
         Trinity::Containers::FlatSet<uint32> _playerDataElementsNeedSave;
         Trinity::Containers::FlatSet<uint32> _playerDataFlagsNeedSave;
+
+        int64 _covenantJoinTime = 0;
+        bool _covenantNeedsSave = false;
 };
 
 TC_GAME_API void AddItemsSetItem(Player* player, Item const* item);

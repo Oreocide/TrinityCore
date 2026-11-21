@@ -452,6 +452,7 @@ class TC_GAME_API Spell
         void EffectGrantBattlePetExperience();
         void EffectLearnTransmogIllusion();
         void EffectSetChromieTime();
+        void EffectSetCovenant();
         void EffectModifyAuraStacks();
         void EffectModifyCooldown();
         void EffectModifyCooldowns();

@@ -836,6 +836,15 @@ ByteBuffer& operator<<(ByteBuffer& data, PlayerChoiceResponse const& playerChoic
     return data;
 }
 
+WorldPacket const* PlayerChoiceClear::Write()
+{
+    _worldPacket << int32(ChoiceID);
+    _worldPacket << Bits<1>(ForceClose);
+    _worldPacket.FlushBits();
+
+    return &_worldPacket;
+}
+
 WorldPacket const* DisplayPlayerChoice::Write()
 {
     _worldPacket << int32(ChoiceID);

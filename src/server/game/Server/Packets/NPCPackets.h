@@ -200,6 +200,18 @@ namespace WorldPackets
             bool SuppressSound = false;
         };
 
+        // opens the covenant preview of one covenant (nov18a: 17 bytes, packed guid + int32)
+        class CovenantPreviewOpenNpc final : public ServerPacket
+        {
+        public:
+            explicit CovenantPreviewOpenNpc() : ServerPacket(SMSG_COVENANT_PREVIEW_OPEN_NPC, 16 + 4) { }
+
+            WorldPacket const* Write() override;
+
+            ObjectGuid NpcGUID;
+            int32 CovenantID = 0;
+        };
+
         struct VendorItem
         {
             int32 MuID                      = 0;
