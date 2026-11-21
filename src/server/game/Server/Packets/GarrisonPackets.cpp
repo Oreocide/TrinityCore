@@ -615,4 +615,23 @@ WorldPacket const* GarrisonCollectionUpdateEntry::Write()
 
     return &_worldPacket;
 }
+
+WorldPacket const* CovenantRenownSendCatchupState::Write()
+{
+    _worldPacket.WriteBit(CatchupState);
+    _worldPacket.FlushBits();
+
+    return &_worldPacket;
+}
+
+WorldPacket const* CovenantCallingsAvailabilityResponse::Write()
+{
+    _worldPacket.WriteBit(AreCallingsUnlocked);
+    _worldPacket.FlushBits();
+    _worldPacket << uint32(BountyID.size());
+    for (int32 bountyId : BountyID)
+        _worldPacket << int32(bountyId);
+
+    return &_worldPacket;
+}
 }

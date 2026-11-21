@@ -294,6 +294,7 @@ DB2Storage<QuestSortEntry>                      sQuestSortStore("QuestSort.db2",
 DB2Storage<QuestV2Entry>                        sQuestV2Store("QuestV2.db2", &QuestV2LoadInfo::Instance);
 DB2Storage<QuestXPEntry>                        sQuestXPStore("QuestXP.db2", &QuestXpLoadInfo::Instance);
 DB2Storage<RandPropPointsEntry>                 sRandPropPointsStore("RandPropPoints.db2", &RandPropPointsLoadInfo::Instance);
+DB2Storage<RenownRewardsEntry>                  sRenownRewardsStore("RenownRewards.db2", &RenownRewardsLoadInfo::Instance);
 DB2Storage<RewardPackEntry>                     sRewardPackStore("RewardPack.db2", &RewardPackLoadInfo::Instance);
 DB2Storage<RewardPackXCurrencyTypeEntry>        sRewardPackXCurrencyTypeStore("RewardPackXCurrencyType.db2", &RewardPackXCurrencyTypeLoadInfo::Instance);
 DB2Storage<RewardPackXItemEntry>                sRewardPackXItemStore("RewardPackXItem.db2", &RewardPackXItemLoadInfo::Instance);
@@ -557,6 +558,7 @@ namespace
     std::unordered_map<std::pair<uint32, int32>, GarrTalentRankEntry const*> _garrTalentRanks;
     std::unordered_map<int32, SoulbindEntry const*> _soulbindsByGarrTalentTree;
     std::unordered_map<int32, SoulbindConduitItemEntry const*> _soulbindConduitItemsByItem;
+    std::unordered_map<uint32, std::vector<RenownRewardsEntry const*>> _renownRewardsByCovenant;
     SpecializationSpellsContainer _specializationSpellsBySpec;
     std::unordered_set<std::pair<int32, uint32>> _specsBySpecSet;
     std::unordered_set<uint8> _spellFamilyNames;
@@ -951,6 +953,7 @@ uint32 DB2Manager::LoadStores(std::string const& dataPath, LocaleConstant defaul
     LOAD_DB2(sQuestV2Store);
     LOAD_DB2(sQuestXPStore);
     LOAD_DB2(sRandPropPointsStore);
+    LOAD_DB2(sRenownRewardsStore);
     LOAD_DB2(sRewardPackStore);
     LOAD_DB2(sRewardPackXCurrencyTypeStore);
     LOAD_DB2(sRewardPackXItemStore);
@@ -1586,6 +1589,13 @@ void DB2Manager::IndexLoadedStores()
 
     for (SoulbindConduitItemEntry const* conduitItem : sSoulbindConduitItemStore)
         _soulbindConduitItemsByItem[conduitItem->ItemID] = conduitItem;
+
+    for (RenownRewardsEntry const* renownReward : sRenownRewardsStore)
+        _renownRewardsByCovenant[renownReward->CovenantID].push_back(renownReward);
+
+    // retail grants the rows of a level in ascending row id order (nov18b idx 46826 then 46835)
+    for (auto& [covenantId, rewards] : _renownRewardsByCovenant)
+        std::ranges::sort(rewards, {}, &RenownRewardsEntry::ID);
 
     for (SpecializationSpellsEntry const* specSpells : sSpecializationSpellsStore)
         _specializationSpellsBySpec[specSpells->SpecID].push_back(specSpells);
@@ -3114,6 +3124,11 @@ SoulbindEntry const* DB2Manager::GetSoulbindByGarrTalentTree(int32 garrTalentTre
 SoulbindConduitItemEntry const* DB2Manager::GetSoulbindConduitItemByItem(int32 itemId) const
 {
     return Trinity::Containers::MapGetValuePtr(_soulbindConduitItemsByItem, itemId);
+}
+
+std::vector<RenownRewardsEntry const*> const* DB2Manager::GetRenownRewards(uint32 covenantId) const
+{
+    return Trinity::Containers::MapGetValuePtr(_renownRewardsByCovenant, covenantId);
 }
 
 std::vector<SpecializationSpellsEntry const*> const* DB2Manager::GetSpecializationSpells(uint32 specId) const

@@ -4490,6 +4490,31 @@ Covenant.Enable = 0
 
 CovenantGarrison.Enable = 0
 
+#    Covenant.Renown.Enable
+#        Description: Enables covenant renown: CMSG_COVENANT_RENOWN_REQUEST_CATCHUP_STATE is answered
+#                     and, when the Renown currency (1822) reaches a new level, the reward rows of the
+#                     player's covenant for the levels crossed (RenownRewards.db2) are granted: the
+#                     reward quest (if it exists in quest_template) and the reward spell.
+#                     Requires Covenant.Enable = 1.
+#                     The hotfixes tables renown_rewards and renown_rewards_locale must exist
+#                     whatever this is set to.
+#                     When disabled these behave as before (the client opcode is ignored, nothing is granted).
+#        Default:     0 - (Disabled)
+#                     1 - (Enabled)
+
+Covenant.Renown.Enable = 0
+
+#    Covenant.Callings.Enable
+#        Description: Enables the covenant callings availability reply
+#                     (CMSG_REQUEST_COVENANT_CALLINGS): callings are reported unlocked for a player in a
+#                     covenant, with no callings listed (the daily calling selection is not implemented).
+#                     Requires Covenant.Enable = 1.
+#                     When disabled the client opcode is ignored as before.
+#        Default:     0 - (Disabled)
+#                     1 - (Enabled)
+
+Covenant.Callings.Enable = 0
+
 #
 ###################################################################################################
 

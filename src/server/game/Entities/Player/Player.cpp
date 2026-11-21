@@ -62,6 +62,7 @@
 #include "GameEventSender.h"
 #include "GameObjectAI.h"
 #include "CovenantGarrison.h"
+#include "CovenantRenown.h"
 #include "Garrison.h"
 #include "GarrisonMgr.h"
 #include "GitRevision.h"
@@ -7204,7 +7205,9 @@ void Player::ModifyCurrency(uint32 id, int32 amount, CurrencyGainSource gainSour
     if (itr->second.state != PLAYERCURRENCY_NEW)
         itr->second.state = PLAYERCURRENCY_CHANGED;
 
+    uint32 const oldQuantity = itr->second.Quantity;
     itr->second.Quantity += amount;
+    uint32 const newQuantity = itr->second.Quantity;
 
     if (amount > 0 && !ignoreCaps) // Ignore total values update for refund
     {
@@ -7252,6 +7255,10 @@ void Player::ModifyCurrency(uint32 id, int32 amount, CurrencyGainSource gainSour
     // TODO: FirstCraftOperationID, LastSpendTime & Toasts
 
     SendDirectMessage(packet.Write());
+
+    // renown level rewards follow the currency update (nov18b idx 46794 SET_CURRENCY, then the reward quests); the currency map may be modified by them
+    if (amount > 0 && id == CovenantRenown::CURRENCY_RENOWN)
+        CovenantRenown::GrantLevelRewards(this, oldQuantity, newQuantity);
 }
 
 void Player::AddCurrency(uint32 id, uint32 amount, CurrencyGainSource gainSource/* = CurrencyGainSource::Cheat*/)

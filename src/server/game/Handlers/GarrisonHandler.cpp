@@ -17,11 +17,13 @@
 
 #include "WorldSession.h"
 #include "CovenantGarrison.h"
+#include "CovenantRenown.h"
 #include "DB2Structure.h"
 #include "Garrison.h"
 #include "GarrisonPackets.h"
 #include "Log.h"
 #include "Player.h"
+#include "World.h"
 
 void WorldSession::HandleGetGarrisonInfo(WorldPackets::Garrison::GetGarrisonInfo& /*getGarrisonInfo*/)
 {
@@ -101,6 +103,28 @@ void WorldSession::HandleActivateSoulbind(WorldPackets::Garrison::ActivateSoulbi
     // SMSG_ACTIVATE_SOULBIND_FAILED was never captured, its layout is unknown: a refused activation is only logged
     if (!covenantGarrison->ActivateSoulbind(activateSoulbind.SoulbindID))
         TC_LOG_DEBUG("network", "WorldSession::HandleActivateSoulbind: {} cannot activate soulbind {}", _player->GetGUID().ToString(), activateSoulbind.SoulbindID);
+}
+
+void WorldSession::HandleCovenantRenownRequestCatchupState(WorldPackets::Garrison::CovenantRenownRequestCatchupState& /*covenantRenownRequestCatchupState*/)
+{
+    if (!CovenantRenown::IsRenownEnabled())
+        return;
+
+    WorldPackets::Garrison::CovenantRenownSendCatchupState catchupState;
+    catchupState.CatchupState = CovenantRenown::GetCatchupState(_player);
+    SendPacket(catchupState.Write());
+}
+
+void WorldSession::HandleRequestCovenantCallings(WorldPackets::Garrison::RequestCovenantCallings& /*requestCovenantCallings*/)
+{
+    if (!CovenantRenown::IsCallingsEnabled())
+        return;
+
+    // retail lists the BountyIDs of the callings on offer that the player does not carry (nov18b idx 186014: Bounty 185 = quest 60391, right after the
+    // quest was dropped); which callings are on offer each day is server data that no capture shows, so no calling is listed
+    WorldPackets::Garrison::CovenantCallingsAvailabilityResponse callings;
+    callings.AreCallingsUnlocked = CovenantRenown::AreCallingsUnlocked(_player);
+    SendPacket(callings.Write());
 }
 
 void WorldSession::HandleGarrisonResearchTalent(WorldPackets::Garrison::GarrisonResearchTalent& garrisonResearchTalent)

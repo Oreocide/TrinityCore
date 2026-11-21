@@ -231,6 +231,7 @@ TC_GAME_API extern DB2Storage<QuestMoneyRewardEntry>                sQuestMoneyR
 TC_GAME_API extern DB2Storage<QuestSortEntry>                       sQuestSortStore;
 TC_GAME_API extern DB2Storage<QuestXPEntry>                         sQuestXPStore;
 TC_GAME_API extern DB2Storage<RandPropPointsEntry>                  sRandPropPointsStore;
+TC_GAME_API extern DB2Storage<RenownRewardsEntry>                   sRenownRewardsStore;
 TC_GAME_API extern DB2Storage<RewardPackEntry>                      sRewardPackStore;
 TC_GAME_API extern DB2Storage<ScenarioEntry>                        sScenarioStore;
 TC_GAME_API extern DB2Storage<ScenarioStepEntry>                    sScenarioStepStore;
@@ -567,6 +568,7 @@ public:
     GarrTalentRankEntry const* GetGarrTalentRank(uint32 garrTalentId, int32 rank) const;
     SoulbindEntry const* GetSoulbindByGarrTalentTree(int32 garrTalentTreeId) const;
     SoulbindConduitItemEntry const* GetSoulbindConduitItemByItem(int32 itemId) const;
+    std::vector<RenownRewardsEntry const*> const* GetRenownRewards(uint32 covenantId) const;
     std::vector<SpecializationSpellsEntry const*> const* GetSpecializationSpells(uint32 specId) const;
     bool IsSpecSetMember(int32 specSetId, uint32 specId) const;
     static bool IsValidSpellFamiliyName(SpellFamilyNames family);

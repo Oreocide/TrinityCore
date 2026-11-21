@@ -3678,6 +3678,30 @@ struct RandPropPointsEntry
     std::array<uint32, 5> Good;
 };
 
+struct RenownRewardsEntry
+{
+    uint32 ID;
+    LocalizedString Name;
+    LocalizedString Description;
+    LocalizedString ToastDescription;
+    uint32 CovenantID;
+    int32 Level;
+    int32 Icon;
+    int32 Flags;
+    int32 UiOrder;
+    int32 ItemID;
+    int32 SpellID;
+    int32 MountID;
+    int32 TransmogID;
+    int32 TransmogSetID;
+    int32 CharTitlesID;
+    int32 GarrFollowerID;
+    int32 TransmogIllusionID;
+    int32 RewardType;
+    int32 QuestID;
+    int32 PlayerConditionID;
+};
+
 struct RewardPackEntry
 {
     uint32 ID;

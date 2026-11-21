@@ -357,6 +357,8 @@ namespace WorldPackets
         class GarrisonRequestBlueprintAndSpecializationData;
         class GarrisonGetMapData;
         class ActivateSoulbind;
+        class CovenantRenownRequestCatchupState;
+        class RequestCovenantCallings;
         class GarrisonResearchTalent;
         class GarrisonLearnTalent;
         class GarrisonSocketTalent;
@@ -1927,6 +1929,8 @@ class TC_GAME_API WorldSession
         void HandleGarrisonCheckUpgradeable(WorldPackets::Garrison::GarrisonCheckUpgradeable& garrisonCheckUpgradeable);
         void HandleUpgradeGarrison(WorldPackets::Garrison::UpgradeGarrison& upgradeGarrison);
         void HandleActivateSoulbind(WorldPackets::Garrison::ActivateSoulbind& activateSoulbind);
+        void HandleCovenantRenownRequestCatchupState(WorldPackets::Garrison::CovenantRenownRequestCatchupState& covenantRenownRequestCatchupState);
+        void HandleRequestCovenantCallings(WorldPackets::Garrison::RequestCovenantCallings& requestCovenantCallings);
         void HandleGarrisonResearchTalent(WorldPackets::Garrison::GarrisonResearchTalent& garrisonResearchTalent);
         void HandleGarrisonLearnTalent(WorldPackets::Garrison::GarrisonLearnTalent& garrisonLearnTalent);
         void HandleGarrisonSocketTalent(WorldPackets::Garrison::GarrisonSocketTalent& garrisonSocketTalent);

@@ -607,6 +607,43 @@ namespace WorldPackets
             int32 EntryID = 0;
             int32 Rank = 0;
         };
+
+        class CovenantRenownRequestCatchupState final : public ClientPacket
+        {
+        public:
+            explicit CovenantRenownRequestCatchupState(WorldPacket&& packet) : ClientPacket(CMSG_COVENANT_RENOWN_REQUEST_CATCHUP_STATE, std::move(packet)) { }
+
+            void Read() override { }
+        };
+
+        class CovenantRenownSendCatchupState final : public ServerPacket
+        {
+        public:
+            explicit CovenantRenownSendCatchupState() : ServerPacket(SMSG_COVENANT_RENOWN_SEND_CATCHUP_STATE, 1) { }
+
+            WorldPacket const* Write() override;
+
+            bool CatchupState = false;
+        };
+
+        class RequestCovenantCallings final : public ClientPacket
+        {
+        public:
+            explicit RequestCovenantCallings(WorldPacket&& packet) : ClientPacket(CMSG_REQUEST_COVENANT_CALLINGS, std::move(packet)) { }
+
+            void Read() override { }
+        };
+
+        class CovenantCallingsAvailabilityResponse final : public ServerPacket
+        {
+        public:
+            explicit CovenantCallingsAvailabilityResponse() : ServerPacket(SMSG_COVENANT_CALLINGS_AVAILABILITY_RESPONSE, 1 + 4) { }
+
+            WorldPacket const* Write() override;
+
+            bool AreCallingsUnlocked = false;
+            std::vector<int32> BountyID;
+        };
     }
 }
 

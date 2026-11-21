@@ -698,6 +698,8 @@ void World::LoadConfigSettings(bool reload)
         { .Name = "Load.Locales"sv, .DefaultValue = true, .Index = CONFIG_LOAD_LOCALES },
         { .Name = "Covenant.Enable"sv, .DefaultValue = false, .Index = CONFIG_COVENANT_ENABLE },
         { .Name = "CovenantGarrison.Enable"sv, .DefaultValue = false, .Index = CONFIG_COVENANT_GARRISON_ENABLE },
+        { .Name = "Covenant.Renown.Enable"sv, .DefaultValue = false, .Index = CONFIG_COVENANT_RENOWN_ENABLE },
+        { .Name = "Covenant.Callings.Enable"sv, .DefaultValue = false, .Index = CONFIG_COVENANT_CALLINGS_ENABLE },
     } };
 
     static constexpr ConfigOptionLoadDefinitionArray<uint32, INT_CONFIG_VALUE_COUNT> ints =
