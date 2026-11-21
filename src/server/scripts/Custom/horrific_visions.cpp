@@ -28,8 +28,17 @@
  * the Stormwind finale (Victory, Evacuation Protocol, final chests, scenario completion credit) and the exit.
  * District objectives, boss kits and mid-run summons are SmartAI (analysis/visions/fix_hv_stormwind_districts.sql).
  *
- * Not covered (no evidence yet, or the core lacks it): group entry, masks, madness effects, sanity orbs,
- * what happens at 0 sanity or on death, Research upgrades, the Orgrimmar districts and finale.
+ * 2026-11-19 (capture nov19a, 17-54-15: one run with all five masks to the finale, one run that reached 0 sanity):
+ *  - 0 sanity (idx 145903-148230): Mind Lost 297176 and Mind Collapse 316771 (INSTAKILL on self) in the same tick, the player is
+ *    dead (Health 0) under Suppress Resurrection 316769 (worn from the entry), Lost Mind 153118 shows its visage about 1 s later,
+ *    about 6.9 s after death Evacuation Protocol 302460 revives the player at full health (Health 411500) and plays conversation
+ *    11842, and 14.9 s after death Evacuation 311036 teleports to the exit chamber, as after the finale.
+ *  - Masks: the altar gossips put on one of the five Faceless Mask auras plus Faceless Masks 313471; Combat Multipliers 310233
+ *    is on every enemy from the first create (base points 0 in the spell; the +25 % health and damage per mask set here is
+ *    Medium: issue #37's oct27b read, the aura update of this capture carries no points).
+ *
+ * Not covered (no evidence yet, or the core lacks it): group entry, madness effects, sanity orbs, Dark Imagination's
+ * Manifestation of Fear summons, the Daredevil and Pained mask effects, Research upgrades, the Orgrimmar districts and finale.
  */
 
 #include "ScriptMgr.h"
@@ -84,8 +93,32 @@ namespace HorrificVision
         SPELL_SCENARIO_COMPLETE_CREDIT      = 316230, // KILL_CREDIT 162451, the last step's criterion
         SPELL_EXIT_VISION                   = 291330, // dummy, cast after the exit prompt 291611
         SPELL_MARKER_CORRUPTED_AREA         = 316232,
-        SPELL_MARKER_LOST_AREA              = 316233
+        SPELL_MARKER_LOST_AREA              = 316233,
+        SPELL_MIND_LOST                     = 297176, // dead-mind state at 0 sanity (nov19a idx 145907)
+        SPELL_MIND_COLLAPSE                 = 316771, // INSTAKILL on the caster, cast with Mind Lost (idx 145941)
+        SPELL_SUPPRESS_RESURRECTION         = 316769, // PREVENT_RESURRECTION + PREVENT_CORPSE_RELEASE, on the player from the entry
+        SPELL_EVACUATION_PROTOCOL           = 302460, // 6.9 s after death: revive, stun, conversation 11842 (idx 147041)
+        SPELL_PLAYER_EXITS_DUNGEON          = 297946, // SEND_GAME_EVENT 69263, cast with the evacuation (idx 147071)
+        SPELL_LOST_MINDS_VISAGE             = 297260, // cast by the player on Lost Mind: CLONE_CASTER
+        SPELL_FACELESS_MASKS                = 313471,
+        SPELL_MASK_BURNED_BRIDGE            = 313413,
+        SPELL_MASK_DAREDEVIL                = 313414,
+        SPELL_MASK_DARK_IMAGINATION         = 313415,
+        SPELL_MASK_LONG_NIGHT               = 313416,
+        SPELL_MASK_PAINED                   = 313417,
+        SPELL_COMBAT_MULTIPLIERS            = 310233  // on every enemy while a mask is worn: aura 133 (health %), 79 x2 (damage %)
     };
+
+    uint32 constexpr MaskSpells[] =
+    {
+        SPELL_MASK_BURNED_BRIDGE, SPELL_MASK_DAREDEVIL, SPELL_MASK_DARK_IMAGINATION, SPELL_MASK_LONG_NIGHT, SPELL_MASK_PAINED
+    };
+
+    // Measured 2026-11-19 (nov19a): death -> Evacuation Protocol 6908 ms, death -> Evacuation teleport 14914 ms.
+    Milliseconds constexpr MIND_LOST_VISAGE_DELAY = 1s;
+    Milliseconds constexpr MIND_LOST_EVACUATION_DELAY = 6908ms;
+    Milliseconds constexpr MIND_LOST_TELEPORT_DELAY = 8006ms;   // 14914 - 6908, after the evacuation protocol
+    int32 constexpr COMBAT_MULTIPLIER_PER_MASK = 25;            // percent, oct27b retail read (issue #37)
 
     enum Items : uint32
     {
@@ -105,7 +138,8 @@ namespace HorrificVision
         NPC_THERUM_DEEPFORGE                = 156577,
         NPC_SLAVEMASTER_ULROK               = 153541,
         NPC_OVERLORD_MATHIAS_SHAW           = 158157,
-        NPC_MAGISTER_UMBRIC                 = 158035
+        NPC_MAGISTER_UMBRIC                 = 158035,
+        NPC_LOST_MIND                       = 153118  // visage shown when the mind is lost (nov19a idx 146123)
     };
 
     enum GameObjects : uint32
@@ -253,12 +287,18 @@ namespace HorrificVision
             }
             if (!player->HasAura(SPELL_SANITY_LOSE_EVERY_SECOND))
                 player->CastSpell(player, SPELL_SANITY_LOSE_EVERY_SECOND, true);
+            // All the death/evacuation evidence is from Stormwind (311036 teleports to the Stormwind exit chamber only).
+            if (IsStormwind() && !player->HasAura(SPELL_SUPPRESS_RESURRECTION))
+                player->CastSpell(player, SPELL_SUPPRESS_RESURRECTION, true);
         }
 
         void OnPlayerLeave(Player* player) override
         {
             RemoveSanity(player);
+            player->RemoveAurasDueToSpell(SPELL_SUPPRESS_RESURRECTION);
+            RemoveMasks(player);
             _drainCarry.erase(player->GetGUID());
+            _mindLost.erase(player->GetGUID());
         }
 
         void OnCreatureCreate(Creature* creature) override
@@ -267,6 +307,8 @@ namespace HorrificVision
 
             if (creature->GetEntry() == NPC_ALLERIA_WINDRUNNER)
                 _alleriaGUID = creature->GetGUID();
+
+            ApplyCombatMultipliers(creature);
 
             if (!creature->GetSpawnId() || !_markedSpawns.insert(creature->GetSpawnId()).second)
                 return;
@@ -356,11 +398,17 @@ namespace HorrificVision
             return uint32(whole);
         }
 
-        void UpdateStage(Player* player) const
+        void UpdateStage(Player* player)
         {
             uint32 maxPower = player->GetMaxPower(POWER_ALTERNATE_POWER);
             if (!maxPower)
                 return;
+
+            if (!player->GetPower(POWER_ALTERNATE_POWER))
+            {
+                OnSanityDepleted(player);
+                return;
+            }
 
             uint32 pct = uint32(player->GetPower(POWER_ALTERNATE_POWER)) * 100 / maxPower;
             uint32 stage = pct >= STAGE_PARANOID_PCT ? SPELL_UNSETTLED : (pct >= STAGE_TERRIFIED_PCT ? SPELL_PARANOID : SPELL_TERRIFIED);
@@ -374,6 +422,14 @@ namespace HorrificVision
         void Update(uint32 diff) override
         {
             _events.Update(diff);
+
+            _maskPoll += diff;
+            if (_maskPoll >= 1000)
+            {
+                _maskPoll = 0;
+                RefreshMasks();
+                CheckPlayerDeaths();
+            }
 
             while (uint32 eventId = _events.ExecuteEvent())
             {
@@ -404,6 +460,136 @@ namespace HorrificVision
         {
             for (uint32 spellId : { SPELL_SANITY_LOSE_EVERY_SECOND, SPELL_SANITY_POWER_BAR, SPELL_UNSETTLED, SPELL_PARANOID, SPELL_TERRIFIED })
                 player->RemoveAurasDueToSpell(spellId);
+        }
+
+        static uint32 CountMasks(Player const* player)
+        {
+            uint32 count = 0;
+            for (uint32 spellId : MaskSpells)
+                if (player->HasAura(spellId))
+                    ++count;
+            return count;
+        }
+
+        static void RemoveMasks(Player* player)
+        {
+            for (uint32 spellId : MaskSpells)
+                player->RemoveAurasDueToSpell(spellId);
+            player->RemoveAurasDueToSpell(SPELL_FACELESS_MASKS);
+        }
+
+        // Combat Multipliers is on every enemy from the first create, masks or not (nov19a idx 48441, before the first mask at 50389).
+        // The aura update carries no points (PointsCount 0), so the per-mask amount is NOT read from this capture: +25 % per mask is
+        // the oct27b read in issue #37 (Medium).
+        void ApplyCombatMultipliers(Creature* creature) const
+        {
+            if (!creature->IsAlive() || creature->IsPet() || creature->IsControlledByPlayer())
+                return;
+
+            bool hostile = false;
+            for (MapReference const& ref : instance->GetPlayers())
+                if (Player* player = ref.GetSource())
+                {
+                    hostile = creature->IsHostileTo(player);
+                    break;
+                }
+            if (!hostile)
+                return;
+
+            int32 percent = COMBAT_MULTIPLIER_PER_MASK * int32(_maskCount);
+            CastSpellExtraArgs args(TRIGGERED_FULL_MASK);
+            for (uint8 i = 0; i < 3; ++i)
+                args.AddSpellMod(SpellValueMod(SPELLVALUE_BASE_POINT0 + i), percent);
+            creature->RemoveAurasDueToSpell(SPELL_COMBAT_MULTIPLIERS);
+            creature->CastSpell(creature, SPELL_COMBAT_MULTIPLIERS, args);
+        }
+
+        // Once a second: the masks worn change from the lobby altars; re-scale (or remove) the multiplier on every spawned enemy.
+        void RefreshMasks()
+        {
+            uint32 count = 0;
+            for (MapReference const& ref : instance->GetPlayers())
+                if (Player* player = ref.GetSource())
+                {
+                    uint32 worn = CountMasks(player);
+                    count = std::max(count, worn);
+                    if (!worn)
+                        player->RemoveAurasDueToSpell(SPELL_FACELESS_MASKS);
+                }
+
+            if (count == _maskCount)
+                return;
+
+            _maskCount = count;
+            for (auto const& [spawnId, creature] : instance->GetCreatureBySpawnIdStore())
+                if (creature && creature->IsInWorld())
+                    ApplyCombatMultipliers(creature);
+        }
+
+        // 0 sanity: the mind is lost and the player dies (Mind Collapse), then an Evacuation Protocol revives and removes them.
+        void OnSanityDepleted(Player* player)
+        {
+            BeginMindLost(player, true);
+        }
+
+        // Every other death in the vision (inference, only the 0-sanity death was captured): 316769 blocks release and
+        // resurrection, so without this path a player killed by a mob would be stuck dead. Same revive-and-evacuate flow.
+        void CheckPlayerDeaths()
+        {
+            for (MapReference const& ref : instance->GetPlayers())
+                if (Player* player = ref.GetSource())
+                    if (!player->IsAlive())
+                        BeginMindLost(player, false);
+        }
+
+        void BeginMindLost(Player* player, bool collapse)
+        {
+            if (!IsStormwind() || _finaleStarted || !_mindLost.insert(player->GetGUID()).second)
+                return;
+
+            RemoveSanity(player);
+            if (collapse)
+            {
+                // Not from inside the drain spell's own hit: the death happens on the player's next update.
+                player->m_Events.AddEventAtOffset([player]()
+                {
+                    player->CastSpell(player, SPELL_MIND_LOST, true);
+                    player->CastSpell(player, SPELL_MIND_COLLAPSE, true);
+                }, 1ms);
+            }
+
+            Position pos = player->GetPosition();
+
+            // Lost Mind shows the player's own visage (the player casts 297260, aura 247 clone caster, on it, idx 146123-146135) and
+            // is gone when the evacuation starts (retail: 302460's DESPAWN_SUMMON, idx 147041). Passive and untargetable: its
+            // template has no behaviour of its own.
+            player->m_Events.AddEventAtOffset([player, pos]()
+            {
+                if (!IsVisionMap(player->GetMapId()) || !sObjectMgr->GetCreatureTemplate(NPC_LOST_MIND))
+                    return;
+                if (TempSummon* visage = player->SummonCreature(NPC_LOST_MIND, pos, TEMPSUMMON_TIMED_DESPAWN, MIND_LOST_EVACUATION_DELAY - MIND_LOST_VISAGE_DELAY))
+                {
+                    visage->SetReactState(REACT_PASSIVE);
+                    visage->SetImmuneToAll(true);
+                    player->CastSpell(visage, SPELL_LOST_MINDS_VISAGE, true);
+                }
+            }, MIND_LOST_VISAGE_DELAY);
+
+            player->m_Events.AddEventAtOffset([player]()
+            {
+                if (!IsVisionMap(player->GetMapId()))
+                    return;
+                if (!player->IsAlive())
+                    player->ResurrectPlayer(1.0f);
+                player->CastSpell(player, SPELL_EVACUATION_PROTOCOL, true);
+                player->CastSpell(player, SPELL_PLAYER_EXITS_DUNGEON, true);
+            }, MIND_LOST_EVACUATION_DELAY);
+
+            player->m_Events.AddEventAtOffset([player]()
+            {
+                if (IsVisionMap(player->GetMapId()))
+                    player->CastSpell(player, SPELL_EVACUATION_STORMWIND, true);
+            }, MIND_LOST_EVACUATION_DELAY + MIND_LOST_TELEPORT_DELAY);
         }
 
         // Alleria died: the bar goes away, Victory starts the 14 s Evacuation Protocol, then the exit-chamber teleport.
@@ -448,6 +634,9 @@ namespace HorrificVision
         std::unordered_set<ObjectGuid::LowType> _markedSpawns;
         std::vector<std::pair<Position, Madness>> _areaMarkers;
         std::unordered_map<ObjectGuid, float> _drainCarry;
+        std::unordered_set<ObjectGuid> _mindLost;
+        uint32 _maskPoll = 0;
+        uint32 _maskCount = 0;
     };
 
     instance_horrific_vision_script* GetVisionInstance(WorldObject const* object)
