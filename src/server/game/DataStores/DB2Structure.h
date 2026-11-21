@@ -1869,6 +1869,44 @@ struct GarrAbilityEntry
     int32 Flags;
 };
 
+struct GarrAutoCombatantEntry
+{
+    uint32 ID;
+    int32 HealthBase;
+    int32 HealthGainPerLevel;
+    int32 AttackBase;
+    int32 AttackGainPerLevel;
+    int32 AttackSpellID;
+    int32 AbilitySpellID;
+    int32 AbilitySpellID2;
+    int32 PassiveSpellID;
+    int32 Role;
+};
+
+struct GarrAutoSpellEntry
+{
+    uint32 ID;
+    LocalizedString Name;
+    LocalizedString Description;
+    int32 Cooldown;
+    int32 Duration;
+    int32 Flags;
+    int32 SchoolMask;
+    int32 IconFileDataID;
+};
+
+struct GarrAutoSpellEffectEntry
+{
+    uint32 ID;
+    uint32 SpellID;
+    uint8 EffectIndex;
+    uint8 Effect;
+    float Points;
+    uint8 TargetType;
+    int32 Flags;
+    int32 Period;
+};
+
 struct GarrBuildingEntry
 {
     uint32 ID;
@@ -1917,6 +1955,19 @@ struct GarrClassSpecEntry
     uint16 GarrFollItemSetID;
     uint8 FollowerClassLimit;
     int32 Flags;
+};
+
+struct GarrEncounterEntry
+{
+    uint32 ID;
+    LocalizedString Name;
+    int32 CreatureID;
+    int32 PortraitFileDataID;
+    uint32 UiTextureKitID;
+    float UiAnimScale;
+    float UiAnimHeight;
+    int32 Flags;
+    int32 AutoCombatantID;
 };
 
 struct GarrFollowerEntry
@@ -2009,6 +2060,16 @@ struct GarrMissionEntry
     float AutoMissionScalar;
     int32 AutoMissionScalarCurveID;
     int32 AutoCombatantEnvCasterID;
+};
+
+struct GarrMissionXEncounterEntry
+{
+    uint32 ID;
+    uint32 GarrEncounterID;
+    uint32 GarrEncounterSetID;
+    uint8 OrderIndex;
+    int8 BoardIndex;
+    uint32 GarrMissionID;
 };
 
 struct GarrPlotEntry

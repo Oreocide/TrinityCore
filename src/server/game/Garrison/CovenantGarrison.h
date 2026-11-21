@@ -63,7 +63,8 @@ enum CovenantGarrisonCollectionType : int32
  *  - collection type 1: the conduits the player owns, with their rank
  *  - followers (heroes, type 123) and missions of the command table (CovenantGarrison.Missions.Enable): the mission lifecycle
  *    Offered (0) -> InProgress (1) -> Complete (2) -> Rewarded (6), persisted in character_covenant_follower / _mission / _mission_follower.
- *    There is no auto-combat (M6): a mission has a fixed result, followers take no damage.
+ *    The fight is the auto-combat of AutoCombat.h (CovenantGarrison.Missions.AutoCombat.Enable) when every rule it needs is pinned by the captures,
+ *    otherwise the mission has a fixed result and followers take no damage.
  * Only created when Covenant.Enable and CovenantGarrison.Enable are both set.
  */
 class TC_GAME_API CovenantGarrison
@@ -191,6 +192,8 @@ private:
     void GiveFollowerXp(WorldPackets::Garrison::GarrisonFollower& follower, uint32 xp, time_t completionTime);
     void GrantMissionRewards(CovenantMissionTemplate const& missionTemplate);
     void SendStartMissionError(int32 error) const;
+    // CovenantGarrison.Missions.AutoCombat.Enable: runs the engine and sends SMSG_GARRISON_COMPLETE_MISSION_RESULT; false = not pinned, nothing was sent or changed
+    bool RunAutoCombat(Mission& mission, int32 missionRecId);
     // the first mission(s) of the chain (covenant_mission_chain PrevMissionID 0), once the player is in a covenant
     void OfferInitialMissions(bool send);
 

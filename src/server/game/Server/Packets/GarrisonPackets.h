@@ -19,6 +19,7 @@
 #define TRINITYCORE_GARRISON_PACKETS_H
 
 #include "Packet.h"
+#include "AutoCombat.h"
 #include "ItemPacketsCommon.h"
 #include "ObjectGuid.h"
 #include "Optional.h"
@@ -752,6 +753,22 @@ namespace WorldPackets
             int32 MissionRecID = 0;
             int32 Result = 0;
             std::vector<GarrisonMissionFollowerHealth> Followers;
+        };
+
+        // SMSG_GARRISON_COMPLETE_MISSION_RESULT, layout and rules: analysis/core_design/m6/COMBAT_LOG.md
+        class GarrisonCompleteMissionResult final : public ServerPacket
+        {
+        public:
+            explicit GarrisonCompleteMissionResult() : ServerPacket(SMSG_GARRISON_COMPLETE_MISSION_RESULT, 100 + 4 + 1 + 4 + 4 + 5 * 24 + 4000) { }
+
+            WorldPacket const* Write() override;
+
+            int32 Result = 0;
+            GarrisonMission Mission;
+            int32 MissionRecID = 0;
+            uint8 UnknownByte = 0;      // one byte before the follower count, 0xE3 / 0x03 / 0xF7 in the captures: not understood
+            std::vector<GarrisonMissionFollowerHealth> Followers;   // health after the fight, ordered by DbID
+            AutoCombat::Result Combat;
         };
 
         class GarrisonAddMissionResult final : public ServerPacket

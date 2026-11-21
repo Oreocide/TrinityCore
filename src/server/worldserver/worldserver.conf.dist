@@ -4545,6 +4545,18 @@ CovenantGarrison.Missions.Enable = 0
 
 CovenantGarrison.Missions.AutoRoll = 0
 
+#    CovenantGarrison.Missions.AutoCombat.Enable
+#        Description: Runs the adventure auto-combat engine (AutoCombat.cpp) at CMSG_GARRISON_COMPLETE_MISSION and
+#                     sends SMSG_GARRISON_COMPLETE_MISSION_RESULT with the combat log; the followers' health after the
+#                     fight comes from it. The engine only knows what the three tutorial missions of the nov18c capture
+#                     (2174, 2295, 2175) show: any fight that needs a rule they do not show is refused and then takes
+#                     the CovenantGarrison.Missions.AutoRoll path (or stays on the mission screen when that is 0).
+#                     Requires CovenantGarrison.Missions.Enable = 1.
+#        Default:     0 - (Disabled)
+#                     1 - (Enabled)
+
+CovenantGarrison.Missions.AutoCombat.Enable = 0
+
 #
 ###################################################################################################
 

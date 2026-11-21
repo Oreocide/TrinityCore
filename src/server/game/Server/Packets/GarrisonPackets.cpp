@@ -734,6 +734,43 @@ WorldPacket const* GarrisonMissionBonusRollResult::Write()
     return &_worldPacket;
 }
 
+namespace
+{
+    // feeds the shared log serialiser of AutoCombat.h into the packet
+    struct CombatLogWriter
+    {
+        ByteBuffer& Buffer;
+        void Put8(uint8 value) { Buffer << value; }
+        void Put32(uint32 value) { Buffer << value; }
+    };
+}
+
+WorldPacket const* GarrisonCompleteMissionResult::Write()
+{
+    _worldPacket << int32(Result);
+    _worldPacket << Mission;
+    _worldPacket << int32(MissionRecID);
+    _worldPacket << uint8(UnknownByte);
+    _worldPacket << Size<uint32>(Followers);
+    _worldPacket << uint32(Combat.Rounds.size());
+    for (GarrisonMissionFollowerHealth const& follower : Followers)
+    {
+        _worldPacket << uint64(follower.DbID);
+        _worldPacket << int32(follower.Health);
+        _worldPacket << follower.HealingTimestamp;
+        _worldPacket << int32(0);
+    }
+
+    CombatLogWriter writer{ _worldPacket };
+    AutoCombat::WriteRounds(Combat, writer);
+
+    _worldPacket << Bits<1>(true);    // 0xC0 in the three captures, all won; which bit is which is not pinned
+    _worldPacket << Bits<1>(true);
+    _worldPacket.FlushBits();
+
+    return &_worldPacket;
+}
+
 WorldPacket const* GarrisonAddMissionResult::Write()
 {
     _worldPacket << uint8(GarrTypeID);

@@ -710,6 +710,22 @@ void HotfixDatabaseConnection::DoPrepareStatements()
     PREPARE_LOCALE_STMT(HOTFIX_SEL_GARR_ABILITY, "SELECT ID, Name_lang, Description_lang FROM garr_ability_locale WHERE (`VerifiedBuild` > 0) = ?"
         " AND locale = ?", CONNECTION_SYNCH);
 
+    // GarrAutoCombatant.db2
+    PrepareStatement(HOTFIX_SEL_GARR_AUTO_COMBATANT, "SELECT ID, HealthBase, HealthGainPerLevel, AttackBase, AttackGainPerLevel, AttackSpellID, AbilitySpellID, "
+        "AbilitySpellID2, PassiveSpellID, Role FROM garr_auto_combatant WHERE (`VerifiedBuild` > 0) = ?", CONNECTION_SYNCH);
+    PREPARE_MAX_ID_STMT(HOTFIX_SEL_GARR_AUTO_COMBATANT, "SELECT MAX(ID) + 1 FROM garr_auto_combatant", CONNECTION_SYNCH);
+
+    // GarrAutoSpell.db2
+    PrepareStatement(HOTFIX_SEL_GARR_AUTO_SPELL, "SELECT ID, Name, Description, Cooldown, Duration, Flags, SchoolMask, IconFileDataID FROM garr_auto_spell"
+        " WHERE (`VerifiedBuild` > 0) = ?", CONNECTION_SYNCH);
+    PREPARE_MAX_ID_STMT(HOTFIX_SEL_GARR_AUTO_SPELL, "SELECT MAX(ID) + 1 FROM garr_auto_spell", CONNECTION_SYNCH);
+    PREPARE_LOCALE_STMT(HOTFIX_SEL_GARR_AUTO_SPELL, "SELECT ID, Name_lang, Description_lang FROM garr_auto_spell_locale WHERE (`VerifiedBuild` > 0) = ? AND locale = ?", CONNECTION_SYNCH);
+
+    // GarrAutoSpellEffect.db2
+    PrepareStatement(HOTFIX_SEL_GARR_AUTO_SPELL_EFFECT, "SELECT ID, SpellID, EffectIndex, Effect, Points, TargetType, Flags, Period FROM garr_auto_spell_effect"
+        " WHERE (`VerifiedBuild` > 0) = ?", CONNECTION_SYNCH);
+    PREPARE_MAX_ID_STMT(HOTFIX_SEL_GARR_AUTO_SPELL_EFFECT, "SELECT MAX(ID) + 1 FROM garr_auto_spell_effect", CONNECTION_SYNCH);
+
     // GarrBuilding.db2
     PrepareStatement(HOTFIX_SEL_GARR_BUILDING, "SELECT ID, HordeName, AllianceName, Description, Tooltip, GarrTypeID, BuildingType, "
         "HordeGameObjectID, AllianceGameObjectID, GarrSiteID, UpgradeLevel, BuildSeconds, CurrencyTypeID, CurrencyQty, HordeUiTextureKitID, "
@@ -730,6 +746,12 @@ void HotfixDatabaseConnection::DoPrepareStatements()
     PREPARE_MAX_ID_STMT(HOTFIX_SEL_GARR_CLASS_SPEC, "SELECT MAX(ID) + 1 FROM garr_class_spec", CONNECTION_SYNCH);
     PREPARE_LOCALE_STMT(HOTFIX_SEL_GARR_CLASS_SPEC, "SELECT ID, ClassSpec_lang, ClassSpecMale_lang, ClassSpecFemale_lang FROM garr_class_spec_locale"
         " WHERE (`VerifiedBuild` > 0) = ? AND locale = ?", CONNECTION_SYNCH);
+
+    // GarrEncounter.db2
+    PrepareStatement(HOTFIX_SEL_GARR_ENCOUNTER, "SELECT ID, Name, CreatureID, PortraitFileDataID, UiTextureKitID, UiAnimScale, UiAnimHeight, Flags, AutoCombatantID"
+        " FROM garr_encounter WHERE (`VerifiedBuild` > 0) = ?", CONNECTION_SYNCH);
+    PREPARE_MAX_ID_STMT(HOTFIX_SEL_GARR_ENCOUNTER, "SELECT MAX(ID) + 1 FROM garr_encounter", CONNECTION_SYNCH);
+    PREPARE_LOCALE_STMT(HOTFIX_SEL_GARR_ENCOUNTER, "SELECT ID, Name_lang FROM garr_encounter_locale WHERE (`VerifiedBuild` > 0) = ? AND locale = ?", CONNECTION_SYNCH);
 
     // GarrFollower.db2
     PrepareStatement(HOTFIX_SEL_GARR_FOLLOWER, "SELECT ID, HordeSourceText, AllianceSourceText, TitleName, GarrTypeID, GarrFollowerTypeID, "
@@ -761,6 +783,11 @@ void HotfixDatabaseConnection::DoPrepareStatements()
     PREPARE_MAX_ID_STMT(HOTFIX_SEL_GARR_MISSION, "SELECT MAX(ID) + 1 FROM garr_mission", CONNECTION_SYNCH);
     PREPARE_LOCALE_STMT(HOTFIX_SEL_GARR_MISSION, "SELECT ID, Name_lang, Location_lang, Description_lang FROM garr_mission_locale"
         " WHERE (`VerifiedBuild` > 0) = ? AND locale = ?", CONNECTION_SYNCH);
+
+    // GarrMissionXEncounter.db2
+    PrepareStatement(HOTFIX_SEL_GARR_MISSION_X_ENCOUNTER, "SELECT ID, GarrEncounterID, GarrEncounterSetID, OrderIndex, BoardIndex, GarrMissionID"
+        " FROM garr_mission_x_encounter WHERE (`VerifiedBuild` > 0) = ?", CONNECTION_SYNCH);
+    PREPARE_MAX_ID_STMT(HOTFIX_SEL_GARR_MISSION_X_ENCOUNTER, "SELECT MAX(ID) + 1 FROM garr_mission_x_encounter", CONNECTION_SYNCH);
 
     // GarrPlot.db2
     PrepareStatement(HOTFIX_SEL_GARR_PLOT, "SELECT ID, Name, PlotType, HordeConstructObjID, AllianceConstructObjID, Flags, UpgradeRequirement1, "

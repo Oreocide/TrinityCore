@@ -16,6 +16,7 @@
  */
 
 #include "CovenantGarrison.h"
+#include "AutoCombat.h"
 #include "CovenantMissionData.h"
 #include "ConditionMgr.h"
 #include "DB2Stores.h"
@@ -25,20 +26,78 @@
 #include "GarrisonPackets.h"
 #include "Log.h"
 #include "Player.h"
+#include "Util.h"
 #include "World.h"
 #include <algorithm>
+#include <map>
 #include <set>
 
 /*
  * Command table missions of the covenant garrison (type 111), M5. Layouts and orders come from the nov18c capture
- * (analysis/core_design/m5/PACKETS_nov18c_raw.md). Not done here: the auto-combat (M6) and therefore SMSG_GARRISON_COMPLETE_MISSION_RESULT,
- * whose body carries the combat log and is not pinned: a mission is completed server side but the client gets no completion reply.
+ * (analysis/core_design/m5/PACKETS_nov18c_raw.md). The auto-combat (M6, CovenantGarrison.Missions.AutoCombat.Enable) answers CMSG_GARRISON_COMPLETE_MISSION with
+ * SMSG_GARRISON_COMPLETE_MISSION_RESULT only for fights whose every rule the nov18c capture pins (AutoCombat.h); any other mission is completed server side
+ * and the client gets no completion reply (or the AutoRoll path).
  */
+
 
 namespace
 {
     // StartTime of a mission that was not started, as retail sends it (01/01/0001)
     constexpr time_t MISSION_NOT_STARTED = -62169984000LL;
+
+    // spells of the auto-combat as the engine wants them (GarrAutoSpell + GarrAutoSpellEffect), built once
+    std::map<int32, AutoCombat::Spell> const& GetAutoCombatSpells()
+    {
+        static std::map<int32, AutoCombat::Spell> const spells = []
+        {
+            std::map<int32, AutoCombat::Spell> result;
+            for (GarrAutoSpellEntry const* entry : sGarrAutoSpellStore)
+            {
+                AutoCombat::Spell& spell = result[int32(entry->ID)];
+                spell.Id = int32(entry->ID);
+                spell.Cooldown = entry->Cooldown;
+                spell.Duration = entry->Duration;
+                spell.SchoolMask = uint32(entry->SchoolMask);
+            }
+
+            for (GarrAutoSpellEffectEntry const* entry : sGarrAutoSpellEffectStore)
+            {
+                auto itr = result.find(int32(entry->SpellID));
+                if (itr == result.end())
+                    continue;
+
+                AutoCombat::SpellEffect& effect = itr->second.Effects.emplace_back();
+                effect.EffectIndex = entry->EffectIndex;
+                effect.Effect = entry->Effect;
+                effect.Points = entry->Points;
+                effect.TargetType = entry->TargetType;
+            }
+
+            for (auto& [id, spell] : result)
+                std::sort(spell.Effects.begin(), spell.Effects.end(), [](AutoCombat::SpellEffect const& a, AutoCombat::SpellEffect const& b) { return a.EffectIndex < b.EffectIndex; });
+
+            return result;
+        }();
+
+        return spells;
+    }
+
+    bool MakeCombatant(GarrAutoCombatantEntry const* combatant, int board, uint32 level, int32 health, AutoCombat::Combatant& out)
+    {
+        if (!combatant)
+            return false;
+
+        out.Board = int8(board);
+        out.Role = uint8(combatant->Role);
+        out.Attack = combatant->AttackBase + combatant->AttackGainPerLevel * int32(level);
+        out.MaxHealth = combatant->HealthBase + combatant->HealthGainPerLevel * int32(level);
+        out.Health = health < 0 ? out.MaxHealth : health;
+        out.AttackSpell = combatant->AttackSpellID;
+        for (int32 ability : { combatant->AbilitySpellID, combatant->AbilitySpellID2 })
+            if (ability)
+                out.Abilities.push_back(ability);
+        return true;
+    }
 }
 
 bool CovenantGarrison::AreMissionsEnabled()
@@ -441,6 +500,98 @@ void CovenantGarrison::StartMission(WorldPackets::Garrison::GarrisonStartMission
     SendStartConditionUpdate();
 }
 
+bool CovenantGarrison::RunAutoCombat(Mission& mission, int32 missionRecId)
+{
+    GarrMissionEntry const* missionEntry = sGarrMissionStore.LookupEntry(missionRecId);
+    if (!missionEntry)
+        return false;
+
+    // what the captures pin about the enemy side: AutoMissionScalar 1.0 without a curve (enemy level 1), no environment effect
+    if (missionEntry->AutoMissionScalar != 1.0f || missionEntry->AutoMissionScalarCurveID || missionEntry->AutoCombatantEnvCasterID || missionEntry->EnvGarrMechanicID)
+    {
+        TC_LOG_DEBUG("entities.player", "CovenantGarrison::RunAutoCombat: mission {} is outside what the captures pin (scalar {}, curve {}, env caster {}, env mechanic {})",
+            missionRecId, missionEntry->AutoMissionScalar, missionEntry->AutoMissionScalarCurveID, missionEntry->AutoCombatantEnvCasterID, missionEntry->EnvGarrMechanicID);
+        return false;
+    }
+
+    std::vector<AutoCombat::Combatant> combatants;
+    for (MissionFollower const& participant : mission.Followers)
+    {
+        GarrFollowerEntry const* followerEntry = sGarrFollowerStore.LookupEntry(participant.GarrFollowerID);
+        GarrAutoCombatantEntry const* combatant = followerEntry ? sGarrAutoCombatantStore.LookupEntry(followerEntry->AutoCombatantID) : nullptr;
+        AutoCombat::Combatant& unit = combatants.emplace_back();
+        if (!MakeCombatant(combatant, participant.BoardIndex, participant.Level, participant.Health, unit) || participant.BoardIndex < 0 || participant.BoardIndex > 4 || combatant->PassiveSpellID)
+        {
+            TC_LOG_DEBUG("entities.player", "CovenantGarrison::RunAutoCombat: follower {} of mission {} has no usable combatant (passive spells are not pinned)", participant.GarrFollowerID, missionRecId);
+            return false;
+        }
+    }
+
+    for (GarrMissionXEncounterEntry const* encounterRow : sGarrMissionXEncounterStore)
+    {
+        if (encounterRow->GarrMissionID != uint32(missionRecId))
+            continue;
+
+        GarrEncounterEntry const* encounter = sGarrEncounterStore.LookupEntry(encounterRow->GarrEncounterID);
+        GarrAutoCombatantEntry const* combatant = encounter ? sGarrAutoCombatantStore.LookupEntry(encounter->AutoCombatantID) : nullptr;
+        AutoCombat::Combatant& unit = combatants.emplace_back();
+        if (!MakeCombatant(combatant, encounterRow->BoardIndex, 1, -1, unit) || encounterRow->BoardIndex < 5 || encounterRow->BoardIndex > 12 || combatant->PassiveSpellID)
+        {
+            TC_LOG_DEBUG("entities.player", "CovenantGarrison::RunAutoCombat: encounter {} of mission {} has no usable combatant", encounterRow->GarrEncounterID, missionRecId);
+            return false;
+        }
+    }
+
+    std::map<int32, AutoCombat::Spell> const& spells = GetAutoCombatSpells();
+    AutoCombat::Result combat = AutoCombat::Run(std::move(combatants), [&spells](int32 spellId) -> AutoCombat::Spell const*
+    {
+        auto itr = spells.find(spellId);
+        return itr != spells.end() ? &itr->second : nullptr;
+    });
+
+    if (!combat.IsPinned())
+    {
+        for (std::string const& reason : combat.Unpinned)
+            TC_LOG_DEBUG("entities.player", "CovenantGarrison::RunAutoCombat: mission {} not run: {}", missionRecId, reason);
+        return false;
+    }
+
+    // a hero at 0 health would mean a follower death, which the captures do not show
+    for (MissionFollower const& participant : mission.Followers)
+        if (!participant.IsTroop && combat.FinalHealth[participant.BoardIndex] <= 0)
+        {
+            TC_LOG_DEBUG("entities.player", "CovenantGarrison::RunAutoCombat: mission {} would kill hero {}: not pinned", missionRecId, participant.DbID);
+            return false;
+        }
+
+    time_t now = GameTime::GetGameTime();
+    WorldPackets::Garrison::GarrisonCompleteMissionResult result;
+    result.Result = 0;
+    result.Mission = mission.PacketInfo;
+    result.MissionRecID = missionRecId;
+    // the byte before the follower count is 0xE3 / 0x03 / 0xF7 in the captures and not understood: 0x03 = the two low bits all three share (human client test, COMBAT_LOG.md)
+    result.UnknownByte = 0x03;
+    for (MissionFollower& participant : mission.Followers)
+    {
+        participant.Health = combat.FinalHealth[participant.BoardIndex];
+        if (!participant.IsTroop)
+            _followers[participant.DbID].Health = participant.Health;
+
+        WorldPackets::Garrison::GarrisonMissionFollowerHealth& health = result.Followers.emplace_back();
+        health.DbID = participant.DbID;
+        health.Health = participant.Health;
+        health.HealingTimestamp = now;
+    }
+    std::sort(result.Followers.begin(), result.Followers.end(), [](auto const& a, auto const& b) { return a.DbID < b.DbID; });
+    result.Combat = std::move(combat);
+    _missionsNeedSave = true;
+
+    WorldPacket const* packet = result.Write();
+    _owner->SendDirectMessage(packet);
+    TC_LOG_DEBUG("entities.player", "CovenantGarrison::RunAutoCombat: mission {} result sent ({} rounds): {}", missionRecId, result.Combat.Rounds.size(), ByteArrayToHexStr(*packet));
+    return true;
+}
+
 void CovenantGarrison::CompleteMission(int32 missionRecId)
 {
     if (!AreMissionsEnabled())
@@ -468,7 +619,10 @@ void CovenantGarrison::CompleteMission(int32 missionRecId)
     _owner->UpdateCriteria(CriteriaType::SucceedAnyGarrisonMissionWithFollowerType, FOLLOWER_TYPE_COVENANT_SANCTUM);
     SendStartConditionUpdate();
 
-    // retail answers with SMSG_GARRISON_COMPLETE_MISSION_RESULT here (1836 / 3210 / 2337 bytes: the auto-combat log, M6); its body is not pinned
+    // retail answers with SMSG_GARRISON_COMPLETE_MISSION_RESULT here (the auto-combat log, analysis/core_design/m6/COMBAT_LOG.md)
+    if (sWorld->getBoolConfig(CONFIG_COVENANT_GARRISON_MISSIONS_AUTO_COMBAT) && RunAutoCombat(*mission, missionRecId))
+        return;
+
     if (sWorld->getBoolConfig(CONFIG_COVENANT_GARRISON_MISSIONS_AUTO_ROLL))
     {
         // the client only asks for the bonus roll after that result: do it now so the followers are freed and the chain goes on

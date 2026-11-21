@@ -703,6 +703,7 @@ void World::LoadConfigSettings(bool reload)
         { .Name = "Covenant.Callings.Enable"sv, .DefaultValue = false, .Index = CONFIG_COVENANT_CALLINGS_ENABLE },
         { .Name = "CovenantGarrison.Missions.Enable"sv, .DefaultValue = false, .Index = CONFIG_COVENANT_GARRISON_MISSIONS_ENABLE },
         { .Name = "CovenantGarrison.Missions.AutoRoll"sv, .DefaultValue = false, .Index = CONFIG_COVENANT_GARRISON_MISSIONS_AUTO_ROLL },
+        { .Name = "CovenantGarrison.Missions.AutoCombat.Enable"sv, .DefaultValue = false, .Index = CONFIG_COVENANT_GARRISON_MISSIONS_AUTO_COMBAT },
     } };
 
     static constexpr ConfigOptionLoadDefinitionArray<uint32, INT_CONFIG_VALUE_COUNT> ints =
