@@ -478,6 +478,135 @@ namespace WorldPackets
             uint32 Result = 0;
             uint32 GarrSiteLevelID = 0;
         };
+        class ActivateSoulbind final : public ClientPacket
+        {
+        public:
+            explicit ActivateSoulbind(WorldPacket&& packet) : ClientPacket(CMSG_ACTIVATE_SOULBIND, std::move(packet)) { }
+
+            void Read() override;
+
+            int32 SoulbindID = 0;
+        };
+
+        class GarrisonAddSpecGroups final : public ServerPacket
+        {
+        public:
+            explicit GarrisonAddSpecGroups() : ServerPacket(SMSG_GARRISON_ADD_SPEC_GROUPS) { }
+
+            WorldPacket const* Write() override;
+
+            uint8 GarrTypeID = 0;
+            std::vector<GarrisonSpecGroup> SpecGroups;
+        };
+
+        class GarrisonResearchTalent final : public ClientPacket
+        {
+        public:
+            explicit GarrisonResearchTalent(WorldPacket&& packet) : ClientPacket(CMSG_GARRISON_RESEARCH_TALENT, std::move(packet)) { }
+
+            void Read() override;
+
+            ObjectGuid NPCTalentGuid; // empty for the soulbind (Forge of Bonds) trees
+            int32 GarrTalentID = 0;
+            int32 Flags = 0;
+            bool IsTemporary = false;
+        };
+
+        class GarrisonResearchTalentResult final : public ServerPacket
+        {
+        public:
+            explicit GarrisonResearchTalentResult() : ServerPacket(SMSG_GARRISON_RESEARCH_TALENT_RESULT) { }
+
+            WorldPacket const* Write() override;
+
+            int32 Result = 0;
+            uint8 GarrTypeID = 0;
+            GarrisonTalent Talent;
+            bool DontAlert = false;
+        };
+
+        class GarrisonTalentCompleted final : public ServerPacket
+        {
+        public:
+            explicit GarrisonTalentCompleted() : ServerPacket(SMSG_GARRISON_TALENT_COMPLETED, 1 + 4 + 4 + 4) { }
+
+            WorldPacket const* Write() override;
+
+            uint8 GarrTypeID = 0;
+            int32 GarrTalentID = 0;
+            int32 GarrTalentRank = 0;
+            int32 Flags = 0;
+        };
+
+        class GarrisonLearnTalent final : public ClientPacket
+        {
+        public:
+            explicit GarrisonLearnTalent(WorldPacket&& packet) : ClientPacket(CMSG_GARRISON_LEARN_TALENT, std::move(packet)) { }
+
+            void Read() override;
+
+            int32 SoulbindID = 0; // inferred: the capture sent 7 = the active soulbind (Pelagos); not validated
+            int32 GarrTalentID = 0;
+        };
+
+        class GarrisonSwitchTalentTreeBranch final : public ServerPacket
+        {
+        public:
+            explicit GarrisonSwitchTalentTreeBranch() : ServerPacket(SMSG_GARRISON_SWITCH_TALENT_TREE_BRANCH) { }
+
+            WorldPacket const* Write() override;
+
+            uint8 GarrTypeID = 0;
+            std::vector<GarrisonTalent> Talents;
+        };
+
+        struct GarrisonSocketTalentEntry
+        {
+            int32 GarrTalentID = 0;
+            int32 SoulbindConduitID = 0; // 0 empties the socket
+        };
+
+        class GarrisonSocketTalent final : public ClientPacket
+        {
+        public:
+            explicit GarrisonSocketTalent(WorldPacket&& packet) : ClientPacket(CMSG_GARRISON_SOCKET_TALENT, std::move(packet)) { }
+
+            void Read() override;
+
+            int32 GarrTalentTreeID = 0;
+            std::vector<GarrisonSocketTalentEntry> Sockets;
+        };
+
+        struct GarrisonSocketChange
+        {
+            int32 GarrTalentID = 0;
+            Optional<GarrisonTalentSocketData> Socket;
+        };
+
+        class GarrisonApplyTalentSocketDataChanges final : public ServerPacket
+        {
+        public:
+            explicit GarrisonApplyTalentSocketDataChanges() : ServerPacket(SMSG_GARRISON_APPLY_TALENT_SOCKET_DATA_CHANGES) { }
+
+            WorldPacket const* Write() override;
+
+            uint8 GarrTypeID = 0;
+            std::vector<GarrisonSocketChange> Changed;
+            std::vector<int32> Cleared;
+        };
+
+        class GarrisonCollectionUpdateEntry final : public ServerPacket
+        {
+        public:
+            explicit GarrisonCollectionUpdateEntry() : ServerPacket(SMSG_GARRISON_COLLECTION_UPDATE_ENTRY, 1 + 4 + 4 + 4) { }
+
+            WorldPacket const* Write() override;
+
+            uint8 GarrTypeID = 0;
+            int32 Type = 0;
+            int32 EntryID = 0;
+            int32 Rank = 0;
+        };
     }
 }
 

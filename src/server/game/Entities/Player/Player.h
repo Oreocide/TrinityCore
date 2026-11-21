@@ -80,6 +80,7 @@ class CinematicMgr;
 class Creature;
 class DynamicObject;
 class Garrison;
+class CovenantGarrison;
 class Group;
 class Guild;
 class Item;
@@ -1011,6 +1012,9 @@ enum PlayerLoginQueryIndex
     PLAYER_LOGIN_QUERY_LOAD_DATA_FLAGS,
     PLAYER_LOGIN_QUERY_LOAD_BANK_TAB_SETTINGS,
     PLAYER_LOGIN_QUERY_LOAD_COVENANT,
+    PLAYER_LOGIN_QUERY_LOAD_COVENANT_SOULBIND_SPEC,
+    PLAYER_LOGIN_QUERY_LOAD_GARRISON_TALENTS,
+    PLAYER_LOGIN_QUERY_LOAD_GARRISON_COLLECTIONS,
     MAX_PLAYER_LOGIN_QUERY
 };
 
@@ -1339,6 +1343,9 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         // Covenant (Shadowlands): PlayerData.CovenantID, saved in character_covenant. Only used when Covenant.Enable is set
         int32 GetCovenant() const { return *m_playerData->CovenantID; }
         void SetCovenant(int32 covenantId);
+        // PlayerData.SoulbindID: the soulbind of the current specialization (CovenantGarrison.Enable)
+        int32 GetSoulbind() const { return *m_playerData->SoulbindID; }
+        void SetSoulbind(int32 soulbindId);
 
         void setDeathState(DeathState s) override;                   // overwrite Unit::setDeathState
 
@@ -2881,6 +2888,7 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         void CreateGarrison(uint32 garrSiteId);
         void DeleteGarrison();
         Garrison* GetGarrison() const { return _garrison.get(); }
+        CovenantGarrison* GetCovenantGarrison() const { return _covenantGarrison.get(); }
 
         bool IsAdvancedCombatLoggingEnabled() const { return _advancedCombatLoggingEnabled; }
         void SetAdvancedCombatLogging(bool enabled) { _advancedCombatLoggingEnabled = enabled; }
@@ -3417,6 +3425,7 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         uint32 _activeCheats;
 
         std::unique_ptr<Garrison> _garrison;
+        std::unique_ptr<CovenantGarrison> _covenantGarrison;
 
         bool _advancedCombatLoggingEnabled;
 

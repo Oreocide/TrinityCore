@@ -697,6 +697,7 @@ void World::LoadConfigSettings(bool reload)
         { .Name = "Loot.EnableAELoot"sv, .DefaultValue = true, .Index = CONFIG_ENABLE_AE_LOOT },
         { .Name = "Load.Locales"sv, .DefaultValue = true, .Index = CONFIG_LOAD_LOCALES },
         { .Name = "Covenant.Enable"sv, .DefaultValue = false, .Index = CONFIG_COVENANT_ENABLE },
+        { .Name = "CovenantGarrison.Enable"sv, .DefaultValue = false, .Index = CONFIG_COVENANT_GARRISON_ENABLE },
     } };
 
     static constexpr ConfigOptionLoadDefinitionArray<uint32, INT_CONFIG_VALUE_COUNT> ints =

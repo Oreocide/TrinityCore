@@ -16,9 +16,11 @@
  */
 
 #include "WorldSession.h"
+#include "CovenantGarrison.h"
 #include "DB2Structure.h"
 #include "Garrison.h"
 #include "GarrisonPackets.h"
+#include "Log.h"
 #include "Player.h"
 
 void WorldSession::HandleGetGarrisonInfo(WorldPackets::Garrison::GetGarrisonInfo& /*getGarrisonInfo*/)
@@ -28,6 +30,10 @@ void WorldSession::HandleGetGarrisonInfo(WorldPackets::Garrison::GetGarrisonInfo
 
     if (Garrison* garrison = _player->GetGarrison())
         garrison->BuildInfoPacket(garrisonInfo.Garrisons.emplace_back());
+
+    // the type-111 entry retail appends after the WoD one (CovenantGarrison.Enable)
+    if (CovenantGarrison* covenantGarrison = _player->GetCovenantGarrison())
+        covenantGarrison->AppendToInfoResult(garrisonInfo);
 
     SendPacket(garrisonInfo.Write());
 }
@@ -84,4 +90,53 @@ void WorldSession::HandleUpgradeGarrison(WorldPackets::Garrison::UpgradeGarrison
 
     if (Garrison* garrison = _player->GetGarrison())
         garrison->Upgrade(true);
+}
+
+void WorldSession::HandleActivateSoulbind(WorldPackets::Garrison::ActivateSoulbind& activateSoulbind)
+{
+    CovenantGarrison* covenantGarrison = _player->GetCovenantGarrison();
+    if (!covenantGarrison)
+        return;
+
+    // SMSG_ACTIVATE_SOULBIND_FAILED was never captured, its layout is unknown: a refused activation is only logged
+    if (!covenantGarrison->ActivateSoulbind(activateSoulbind.SoulbindID))
+        TC_LOG_DEBUG("network", "WorldSession::HandleActivateSoulbind: {} cannot activate soulbind {}", _player->GetGUID().ToString(), activateSoulbind.SoulbindID);
+}
+
+void WorldSession::HandleGarrisonResearchTalent(WorldPackets::Garrison::GarrisonResearchTalent& garrisonResearchTalent)
+{
+    CovenantGarrison* covenantGarrison = _player->GetCovenantGarrison();
+    if (!covenantGarrison)
+        return;
+
+    // the soulbind trees are researched without an npc (empty guid, Forge of Bonds); npc research is the sanctum, not handled
+    if (!garrisonResearchTalent.NPCTalentGuid.IsEmpty())
+        return;
+
+    if (!covenantGarrison->ResearchTalent(garrisonResearchTalent.GarrTalentID))
+        TC_LOG_DEBUG("network", "WorldSession::HandleGarrisonResearchTalent: {} cannot research garrison talent {}", _player->GetGUID().ToString(), garrisonResearchTalent.GarrTalentID);
+}
+
+void WorldSession::HandleGarrisonLearnTalent(WorldPackets::Garrison::GarrisonLearnTalent& garrisonLearnTalent)
+{
+    CovenantGarrison* covenantGarrison = _player->GetCovenantGarrison();
+    if (!covenantGarrison)
+        return;
+
+    if (!covenantGarrison->LearnTalent(garrisonLearnTalent.GarrTalentID))
+        TC_LOG_DEBUG("network", "WorldSession::HandleGarrisonLearnTalent: {} cannot learn garrison talent {}", _player->GetGUID().ToString(), garrisonLearnTalent.GarrTalentID);
+}
+
+void WorldSession::HandleGarrisonSocketTalent(WorldPackets::Garrison::GarrisonSocketTalent& garrisonSocketTalent)
+{
+    CovenantGarrison* covenantGarrison = _player->GetCovenantGarrison();
+    if (!covenantGarrison)
+        return;
+
+    std::vector<std::pair<int32, int32>> sockets;
+    sockets.reserve(garrisonSocketTalent.Sockets.size());
+    for (WorldPackets::Garrison::GarrisonSocketTalentEntry const& socket : garrisonSocketTalent.Sockets)
+        sockets.emplace_back(socket.GarrTalentID, socket.SoulbindConduitID);
+
+    covenantGarrison->SocketTalents(garrisonSocketTalent.GarrTalentTreeID, sockets);
 }

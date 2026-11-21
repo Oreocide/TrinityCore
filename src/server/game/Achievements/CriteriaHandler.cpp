@@ -22,6 +22,7 @@
 #include "Battleground.h"
 #include "CollectionMgr.h"
 #include "Creature.h"
+#include "CovenantGarrison.h"
 #include "DB2Stores.h"
 #include "DatabaseEnv.h"
 #include "DisableMgr.h"
@@ -3722,8 +3723,14 @@ bool CriteriaHandler::ModifierSatisfied(ModifierTreeEntry const* modifier, uint6
                 return false;
             break;
         }
-        case ModifierTreeType::PlayerHasSoulbindConduitRankEqualOrGreaterThan: // 307 NYI
-            return false;
+        case ModifierTreeType::PlayerHasSoulbindConduitRankEqualOrGreaterThan: // 307
+        {
+            // conduit {reqValue} at rank {secondaryAsset} or higher (the collection's rank, 1 = first rank); needs CovenantGarrison.Enable
+            CovenantGarrison* covenantGarrison = referencePlayer->GetCovenantGarrison();
+            if (!covenantGarrison || !covenantGarrison->HasConduitAtRank(reqValue, secondaryAsset))
+                return false;
+            break;
+        }
         case ModifierTreeType::PlayerSpellShapeshiftFormCreatureDisplayInfoSelection: // 308
         {
             ShapeshiftFormModelData const* formModelData = sDB2Manager.GetShapeshiftFormModelData(referencePlayer->GetRace(), referencePlayer->GetNativeGender(), secondaryAsset);
@@ -3740,8 +3747,14 @@ bool CriteriaHandler::ModifierSatisfied(ModifierTreeEntry const* modifier, uint6
                 return false;
             break;
         }
-        case ModifierTreeType::PlayerSoulbindConduitCountAtRankEqualOrGreaterThan: // 309 NYI
-            return false;
+        case ModifierTreeType::PlayerSoulbindConduitCountAtRankEqualOrGreaterThan: // 309
+        {
+            // at least {reqValue} conduits at rank {secondaryAsset} or higher ("Requires 3 Conduits added to the Forge of Bonds": 3, rank 1); needs CovenantGarrison.Enable
+            CovenantGarrison* covenantGarrison = referencePlayer->GetCovenantGarrison();
+            if (!covenantGarrison || covenantGarrison->CountConduitsAtRank(secondaryAsset) < reqValue)
+                return false;
+            break;
+        }
         case ModifierTreeType::PlayerIsRestrictedAccount: // 310
             return false;
         case ModifierTreeType::PlayerIsFlying: // 311

@@ -453,6 +453,7 @@ class TC_GAME_API Spell
         void EffectLearnTransmogIllusion();
         void EffectSetChromieTime();
         void EffectSetCovenant();
+        void EffectLearnSoulbindConduit();
         void EffectModifyAuraStacks();
         void EffectModifyCooldown();
         void EffectModifyCooldowns();

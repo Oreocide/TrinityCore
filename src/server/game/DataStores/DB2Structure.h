@@ -2050,6 +2050,67 @@ struct GarrSiteLevelPlotInstEntry
     uint8 UiMarkerSize;
 };
 
+struct GarrTalentEntry
+{
+    LocalizedString Name;
+    LocalizedString Description;
+    uint32 ID;
+    uint32 GarrTalentTreeID;
+    int8 Tier;
+    int8 UiOrder;
+    int32 IconFileDataID;
+    uint32 PlayerConditionID;
+    uint32 GarrAbilityID;
+    int32 Flags;
+    int32 TalentType;
+    int32 PrerequisiteTalentID;
+    int32 ResearchCostSource;
+    int32 ActiveDurationSecs;
+    int32 GarrTalentSocketPropertiesID;
+};
+
+struct GarrTalentRankEntry
+{
+    uint32 ID;
+    int32 Rank;
+    int32 PerkSpellID;
+    int32 PerkPlayerConditionID;
+    float Points;
+    int32 ResearchCost;
+    int32 ResearchCostCurrencyTypesID;
+    int32 ResearchGoldCost;
+    int32 ResearchDurationSecs;
+    int32 RespecCost;
+    int32 RespecCostCurrencyTypesID;
+    int32 RespecGoldCost;
+    int32 RespecDurationSecs;
+    int32 AlternateResearchCost;
+    int32 AlternateResearchCostCurrencyTypesID;
+    int32 AlternateResearchGoldCost;
+    int32 AlternateResearchDurationSecs;
+    uint32 GarrTalentID;
+};
+
+struct GarrTalentResearchEntry
+{
+    uint32 ID;
+    int32 GoldCost;
+    int32 CurrencyTypesID;
+    int32 CurrencyTypesCost;
+    int32 DurationSecs;
+    int32 RespecGoldCost;
+    int32 RespecCurrencyTypesID;
+    int32 RespecCurrencyTypesCost;
+    int32 RespecDurationSecs;
+};
+
+struct GarrTalentSocketPropertiesEntry
+{
+    uint32 ID;
+    int32 GarrTalentSocketType;
+    int32 GarrTalentSocketSubtype;
+};
+
 struct GarrTalentTreeEntry
 {
     uint32 ID;
@@ -3776,6 +3837,33 @@ struct SkillRaceClassInfoEntry
     int8 MinLevel;
     int16 SkillTierID;
     Trinity::RaceMask<int32, 2> RaceMask;
+};
+
+struct SoulbindEntry
+{
+    uint32 ID;
+    LocalizedString Name;
+    int32 CovenantID;
+    int32 GarrTalentTreeID;
+    int32 CreatureID;
+    int32 GarrFollowerID;
+    int32 PlayerConditionID;
+};
+
+struct SoulbindConduitEntry
+{
+    uint32 ID;
+    uint8 ConduitType;
+    int32 CovenantID;
+    int32 SpecSetID;
+    int32 Flags;
+};
+
+struct SoulbindConduitItemEntry
+{
+    uint32 ID;
+    int32 ItemID;
+    int32 ConduitID;
 };
 
 struct SoulbindConduitRankEntry

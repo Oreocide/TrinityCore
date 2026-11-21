@@ -29,6 +29,7 @@
 #include "CombatPackets.h"
 #include "Common.h"
 #include "Conversation.h"
+#include "CovenantGarrison.h"
 #include "Creature.h"
 #include "CreatureAI.h"
 #include "CreatureTextMgr.h"
@@ -371,7 +372,7 @@ NonDefaultConstructible<SpellEffectHandlerFn> SpellEffectHandlers[TOTAL_SPELL_EF
     &Spell::EffectNULL,                                     //278 SPELL_EFFECT_278
     &Spell::EffectNULL,                                     //279 SPELL_EFFECT_LEARN_GARR_TALENT
     &Spell::EffectUnused,                                   //280 SPELL_EFFECT_280
-    &Spell::EffectNULL,                                     //281 SPELL_EFFECT_LEARN_SOULBIND_CONDUIT
+    &Spell::EffectLearnSoulbindConduit,                     //281 SPELL_EFFECT_LEARN_SOULBIND_CONDUIT
     &Spell::EffectNULL,                                     //282 SPELL_EFFECT_CONVERT_ITEMS_TO_CURRENCY
     &Spell::EffectSkipCampaign,                             //283 SPELL_EFFECT_COMPLETE_CAMPAIGN
     &Spell::EffectSendChatMessage,                          //284 SPELL_EFFECT_SEND_CHAT_MESSAGE
@@ -2499,6 +2500,31 @@ void Spell::EffectSetCovenant()
 
     // MiscValue is the Covenant id (0 clears it, spell 338503)
     player->SetCovenant(effectInfo->MiscValue);
+}
+
+void Spell::EffectLearnSoulbindConduit()
+{
+    if (effectHandleMode != SPELL_EFFECT_HANDLE_HIT_TARGET)
+        return;
+
+    if (!sWorld->getBoolConfig(CONFIG_COVENANT_ENABLE) || !sWorld->getBoolConfig(CONFIG_COVENANT_GARRISON_ENABLE))
+        return;
+
+    Player* player = unitTarget ? unitTarget->ToPlayer() : nullptr;
+    if (!player)
+        return;
+
+    CovenantGarrison* covenantGarrison = player->GetCovenantGarrison();
+    if (!covenantGarrison)
+        return;
+
+    // the only spell with this effect is 341427 "Learning", cast by the conduit item (nov18b idx 181772: the caster is an Item); the item names the conduit
+    uint32 itemId = m_CastItem ? m_CastItem->GetEntry() : m_castItemEntry;
+    SoulbindConduitItemEntry const* conduitItem = itemId ? sDB2Manager.GetSoulbindConduitItemByItem(itemId) : nullptr;
+    if (!conduitItem)
+        return;
+
+    covenantGarrison->AddConduit(conduitItem->ConduitID);
 }
 
 void Spell::EffectTradeSkill()

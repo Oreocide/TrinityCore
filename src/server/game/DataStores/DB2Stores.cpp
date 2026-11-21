@@ -161,6 +161,10 @@ DB2Storage<GarrPlotBuildingEntry>               sGarrPlotBuildingStore("GarrPlot
 DB2Storage<GarrPlotInstanceEntry>               sGarrPlotInstanceStore("GarrPlotInstance.db2", &GarrPlotInstanceLoadInfo::Instance);
 DB2Storage<GarrSiteLevelEntry>                  sGarrSiteLevelStore("GarrSiteLevel.db2", &GarrSiteLevelLoadInfo::Instance);
 DB2Storage<GarrSiteLevelPlotInstEntry>          sGarrSiteLevelPlotInstStore("GarrSiteLevelPlotInst.db2", &GarrSiteLevelPlotInstLoadInfo::Instance);
+DB2Storage<GarrTalentEntry>                     sGarrTalentStore("GarrTalent.db2", &GarrTalentLoadInfo::Instance);
+DB2Storage<GarrTalentRankEntry>                 sGarrTalentRankStore("GarrTalentRank.db2", &GarrTalentRankLoadInfo::Instance);
+DB2Storage<GarrTalentResearchEntry>             sGarrTalentResearchStore("GarrTalentResearch.db2", &GarrTalentResearchLoadInfo::Instance);
+DB2Storage<GarrTalentSocketPropertiesEntry>     sGarrTalentSocketPropertiesStore("GarrTalentSocketProperties.db2", &GarrTalentSocketPropertiesLoadInfo::Instance);
 DB2Storage<GarrTalentTreeEntry>                 sGarrTalentTreeStore("GarrTalentTree.db2", &GarrTalentTreeLoadInfo::Instance);
 DB2Storage<GemPropertiesEntry>                  sGemPropertiesStore("GemProperties.db2", &GemPropertiesLoadInfo::Instance);
 DB2Storage<GlobalCurveEntry>                    sGlobalCurveStore("GlobalCurve.db2", &GlobalCurveLoadInfo::Instance);
@@ -304,6 +308,9 @@ DB2Storage<SkillLineEntry>                      sSkillLineStore("SkillLine.db2",
 DB2Storage<SkillLineAbilityEntry>               sSkillLineAbilityStore("SkillLineAbility.db2", &SkillLineAbilityLoadInfo::Instance);
 DB2Storage<SkillLineXTraitTreeEntry>            sSkillLineXTraitTreeStore("SkillLineXTraitTree.db2", &SkillLineXTraitTreeLoadInfo::Instance);
 DB2Storage<SkillRaceClassInfoEntry>             sSkillRaceClassInfoStore("SkillRaceClassInfo.db2", &SkillRaceClassInfoLoadInfo::Instance);
+DB2Storage<SoulbindEntry>                       sSoulbindStore("Soulbind.db2", &SoulbindLoadInfo::Instance);
+DB2Storage<SoulbindConduitEntry>                sSoulbindConduitStore("SoulbindConduit.db2", &SoulbindConduitLoadInfo::Instance);
+DB2Storage<SoulbindConduitItemEntry>            sSoulbindConduitItemStore("SoulbindConduitItem.db2", &SoulbindConduitItemLoadInfo::Instance);
 DB2Storage<SoulbindConduitRankEntry>            sSoulbindConduitRankStore("SoulbindConduitRank.db2", &SoulbindConduitRankLoadInfo::Instance);
 DB2Storage<SoundKitEntry>                       sSoundKitStore("SoundKit.db2", &SoundKitLoadInfo::Instance);
 DB2Storage<SpecializationSpellsEntry>           sSpecializationSpellsStore("SpecializationSpells.db2", &SpecializationSpellsLoadInfo::Instance);
@@ -546,6 +553,10 @@ namespace
     std::unordered_map<uint32, std::vector<SkillLineAbilityEntry const*>> _skillLineAbilitiesBySkillupSkill;
     SkillRaceClassInfoContainer _skillRaceClassInfoBySkill;
     std::unordered_map<std::pair<int32, int32>, SoulbindConduitRankEntry const*> _soulbindConduitRanks;
+    std::unordered_map<uint32, std::vector<GarrTalentEntry const*>> _garrTalentsByTree;
+    std::unordered_map<std::pair<uint32, int32>, GarrTalentRankEntry const*> _garrTalentRanks;
+    std::unordered_map<int32, SoulbindEntry const*> _soulbindsByGarrTalentTree;
+    std::unordered_map<int32, SoulbindConduitItemEntry const*> _soulbindConduitItemsByItem;
     SpecializationSpellsContainer _specializationSpellsBySpec;
     std::unordered_set<std::pair<int32, uint32>> _specsBySpecSet;
     std::unordered_set<uint8> _spellFamilyNames;
@@ -807,6 +818,10 @@ uint32 DB2Manager::LoadStores(std::string const& dataPath, LocaleConstant defaul
     LOAD_DB2(sGarrPlotInstanceStore);
     LOAD_DB2(sGarrSiteLevelStore);
     LOAD_DB2(sGarrSiteLevelPlotInstStore);
+    LOAD_DB2(sGarrTalentStore);
+    LOAD_DB2(sGarrTalentRankStore);
+    LOAD_DB2(sGarrTalentResearchStore);
+    LOAD_DB2(sGarrTalentSocketPropertiesStore);
     LOAD_DB2(sGarrTalentTreeStore);
     LOAD_DB2(sGemPropertiesStore);
     LOAD_DB2(sGlobalCurveStore);
@@ -950,6 +965,9 @@ uint32 DB2Manager::LoadStores(std::string const& dataPath, LocaleConstant defaul
     LOAD_DB2(sSkillLineAbilityStore);
     LOAD_DB2(sSkillLineXTraitTreeStore);
     LOAD_DB2(sSkillRaceClassInfoStore);
+    LOAD_DB2(sSoulbindStore);
+    LOAD_DB2(sSoulbindConduitStore);
+    LOAD_DB2(sSoulbindConduitItemStore);
     LOAD_DB2(sSoulbindConduitRankStore);
     LOAD_DB2(sSoundKitStore);
     LOAD_DB2(sSpecializationSpellsStore);
@@ -1556,6 +1574,18 @@ void DB2Manager::IndexLoadedStores()
 
     for (SoulbindConduitRankEntry const* soulbindConduitRank : sSoulbindConduitRankStore)
         _soulbindConduitRanks[{ soulbindConduitRank->SoulbindConduitID, soulbindConduitRank->RankIndex }] = soulbindConduitRank;
+
+    for (GarrTalentEntry const* garrTalent : sGarrTalentStore)
+        _garrTalentsByTree[garrTalent->GarrTalentTreeID].push_back(garrTalent);
+
+    for (GarrTalentRankEntry const* garrTalentRank : sGarrTalentRankStore)
+        _garrTalentRanks[{ uint32(garrTalentRank->GarrTalentID), garrTalentRank->Rank }] = garrTalentRank;
+
+    for (SoulbindEntry const* soulbind : sSoulbindStore)
+        _soulbindsByGarrTalentTree[soulbind->GarrTalentTreeID] = soulbind;
+
+    for (SoulbindConduitItemEntry const* conduitItem : sSoulbindConduitItemStore)
+        _soulbindConduitItemsByItem[conduitItem->ItemID] = conduitItem;
 
     for (SpecializationSpellsEntry const* specSpells : sSpecializationSpellsStore)
         _specializationSpellsBySpec[specSpells->SpecID].push_back(specSpells);
@@ -3064,6 +3094,26 @@ std::vector<SkillRaceClassInfoEntry const*> DB2Manager::GetSkillRaceClassInfo(ui
 SoulbindConduitRankEntry const* DB2Manager::GetSoulbindConduitRank(int32 soulbindConduitId, int32 rank) const
 {
     return Trinity::Containers::MapGetValuePtr(_soulbindConduitRanks, { soulbindConduitId, rank });
+}
+
+std::vector<GarrTalentEntry const*> const* DB2Manager::GetGarrTalentsByTree(uint32 garrTalentTreeId) const
+{
+    return Trinity::Containers::MapGetValuePtr(_garrTalentsByTree, garrTalentTreeId);
+}
+
+GarrTalentRankEntry const* DB2Manager::GetGarrTalentRank(uint32 garrTalentId, int32 rank) const
+{
+    return Trinity::Containers::MapGetValuePtr(_garrTalentRanks, { garrTalentId, rank });
+}
+
+SoulbindEntry const* DB2Manager::GetSoulbindByGarrTalentTree(int32 garrTalentTreeId) const
+{
+    return Trinity::Containers::MapGetValuePtr(_soulbindsByGarrTalentTree, garrTalentTreeId);
+}
+
+SoulbindConduitItemEntry const* DB2Manager::GetSoulbindConduitItemByItem(int32 itemId) const
+{
+    return Trinity::Containers::MapGetValuePtr(_soulbindConduitItemsByItem, itemId);
 }
 
 std::vector<SpecializationSpellsEntry const*> const* DB2Manager::GetSpecializationSpells(uint32 specId) const

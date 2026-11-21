@@ -24,6 +24,7 @@
  */
 
 #include "ScriptMgr.h"
+#include "CovenantGarrison.h"
 #include "DB2Stores.h"
 #include "GameObject.h"
 #include "GameObjectAI.h"
@@ -161,6 +162,10 @@ private:
         RemoveOtherCovenantSpells(player, covenant);
 
         player->AddCurrency(CURRENCY_SOULBIND_CONDUIT_ENERGY, SOULBIND_CONDUIT_ENERGY_ON_JOIN, CurrencyGainSource::Script);
+
+        // retail pushes SMSG_GET_GARRISON_INFO_RESULT unsolicited at the end of the join (nov18a idx 134556); needs CovenantGarrison.Enable
+        if (CovenantGarrison* covenantGarrison = player->GetCovenantGarrison())
+            covenantGarrison->SendInfo();
     }
 };
 

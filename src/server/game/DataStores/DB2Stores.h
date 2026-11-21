@@ -124,6 +124,10 @@ TC_GAME_API extern DB2Storage<GarrPlotBuildingEntry>                sGarrPlotBui
 TC_GAME_API extern DB2Storage<GarrPlotInstanceEntry>                sGarrPlotInstanceStore;
 TC_GAME_API extern DB2Storage<GarrSiteLevelEntry>                   sGarrSiteLevelStore;
 TC_GAME_API extern DB2Storage<GarrSiteLevelPlotInstEntry>           sGarrSiteLevelPlotInstStore;
+TC_GAME_API extern DB2Storage<GarrTalentEntry>                      sGarrTalentStore;
+TC_GAME_API extern DB2Storage<GarrTalentRankEntry>                  sGarrTalentRankStore;
+TC_GAME_API extern DB2Storage<GarrTalentResearchEntry>              sGarrTalentResearchStore;
+TC_GAME_API extern DB2Storage<GarrTalentSocketPropertiesEntry>      sGarrTalentSocketPropertiesStore;
 TC_GAME_API extern DB2Storage<GarrTalentTreeEntry>                  sGarrTalentTreeStore;
 TC_GAME_API extern DB2Storage<GemPropertiesEntry>                   sGemPropertiesStore;
 TC_GAME_API extern DB2Storage<GlyphPropertiesEntry>                 sGlyphPropertiesStore;
@@ -236,6 +240,9 @@ TC_GAME_API extern DB2Storage<ServerMessagesEntry>                  sServerMessa
 TC_GAME_API extern DB2Storage<SkillLineAbilityEntry>                sSkillLineAbilityStore;
 TC_GAME_API extern DB2Storage<SkillLineXTraitTreeEntry>             sSkillLineXTraitTreeStore;
 TC_GAME_API extern DB2Storage<SkillRaceClassInfoEntry>              sSkillRaceClassInfoStore;
+TC_GAME_API extern DB2Storage<SoulbindEntry>                        sSoulbindStore;
+TC_GAME_API extern DB2Storage<SoulbindConduitEntry>                 sSoulbindConduitStore;
+TC_GAME_API extern DB2Storage<SoulbindConduitItemEntry>             sSoulbindConduitItemStore;
 TC_GAME_API extern DB2Storage<SoundKitEntry>                        sSoundKitStore;
 TC_GAME_API extern DB2Storage<SpellAuraOptionsEntry>                sSpellAuraOptionsStore;
 TC_GAME_API extern DB2Storage<SpellAuraRestrictionsEntry>           sSpellAuraRestrictionsStore;
@@ -556,6 +563,10 @@ public:
     SkillRaceClassInfoEntry const* GetSkillRaceClassInfo(uint32 skill, uint8 race, uint8 class_) const;
     std::vector<SkillRaceClassInfoEntry const*> GetSkillRaceClassInfo(uint32 skill) const;
     SoulbindConduitRankEntry const* GetSoulbindConduitRank(int32 soulbindConduitId, int32 rank) const;
+    std::vector<GarrTalentEntry const*> const* GetGarrTalentsByTree(uint32 garrTalentTreeId) const;
+    GarrTalentRankEntry const* GetGarrTalentRank(uint32 garrTalentId, int32 rank) const;
+    SoulbindEntry const* GetSoulbindByGarrTalentTree(int32 garrTalentTreeId) const;
+    SoulbindConduitItemEntry const* GetSoulbindConduitItemByItem(int32 itemId) const;
     std::vector<SpecializationSpellsEntry const*> const* GetSpecializationSpells(uint32 specId) const;
     bool IsSpecSetMember(int32 specSetId, uint32 specId) const;
     static bool IsValidSpellFamiliyName(SpellFamilyNames family);

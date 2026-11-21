@@ -780,6 +780,31 @@ void HotfixDatabaseConnection::DoPrepareStatements()
         " FROM garr_site_level_plot_inst WHERE (`VerifiedBuild` > 0) = ?", CONNECTION_SYNCH);
     PREPARE_MAX_ID_STMT(HOTFIX_SEL_GARR_SITE_LEVEL_PLOT_INST, "SELECT MAX(ID) + 1 FROM garr_site_level_plot_inst", CONNECTION_SYNCH);
 
+    // GarrTalent.db2
+    PrepareStatement(HOTFIX_SEL_GARR_TALENT, "SELECT Name, Description, ID, GarrTalentTreeID, Tier, UiOrder, IconFileDataID, PlayerConditionID, GarrAbilityID, "
+        "Flags, TalentType, PrerequisiteTalentID, ResearchCostSource, ActiveDurationSecs, GarrTalentSocketPropertiesID FROM garr_talent"
+        " WHERE (`VerifiedBuild` > 0) = ?", CONNECTION_SYNCH);
+    PREPARE_MAX_ID_STMT(HOTFIX_SEL_GARR_TALENT, "SELECT MAX(ID) + 1 FROM garr_talent", CONNECTION_SYNCH);
+    PREPARE_LOCALE_STMT(HOTFIX_SEL_GARR_TALENT, "SELECT ID, Name_lang, Description_lang FROM garr_talent_locale WHERE (`VerifiedBuild` > 0) = ? AND locale = ?", CONNECTION_SYNCH);
+
+    // GarrTalentRank.db2
+    PrepareStatement(HOTFIX_SEL_GARR_TALENT_RANK, "SELECT ID, `Rank`, PerkSpellID, PerkPlayerConditionID, Points, ResearchCost, ResearchCostCurrencyTypesID, "
+        "ResearchGoldCost, ResearchDurationSecs, RespecCost, RespecCostCurrencyTypesID, RespecGoldCost, RespecDurationSecs, AlternateResearchCost, "
+        "AlternateResearchCostCurrencyTypesID, AlternateResearchGoldCost, AlternateResearchDurationSecs, GarrTalentID FROM garr_talent_rank"
+        " WHERE (`VerifiedBuild` > 0) = ?", CONNECTION_SYNCH);
+    PREPARE_MAX_ID_STMT(HOTFIX_SEL_GARR_TALENT_RANK, "SELECT MAX(ID) + 1 FROM garr_talent_rank", CONNECTION_SYNCH);
+
+    // GarrTalentResearch.db2
+    PrepareStatement(HOTFIX_SEL_GARR_TALENT_RESEARCH, "SELECT ID, GoldCost, CurrencyTypesID, CurrencyTypesCost, DurationSecs, RespecGoldCost, "
+        "RespecCurrencyTypesID, RespecCurrencyTypesCost, RespecDurationSecs FROM garr_talent_research"
+        " WHERE (`VerifiedBuild` > 0) = ?", CONNECTION_SYNCH);
+    PREPARE_MAX_ID_STMT(HOTFIX_SEL_GARR_TALENT_RESEARCH, "SELECT MAX(ID) + 1 FROM garr_talent_research", CONNECTION_SYNCH);
+
+    // GarrTalentSocketProperties.db2
+    PrepareStatement(HOTFIX_SEL_GARR_TALENT_SOCKET_PROPERTIES, "SELECT ID, GarrTalentSocketType, GarrTalentSocketSubtype FROM garr_talent_socket_properties"
+        " WHERE (`VerifiedBuild` > 0) = ?", CONNECTION_SYNCH);
+    PREPARE_MAX_ID_STMT(HOTFIX_SEL_GARR_TALENT_SOCKET_PROPERTIES, "SELECT MAX(ID) + 1 FROM garr_talent_socket_properties", CONNECTION_SYNCH);
+
     // GarrTalentTree.db2
     PrepareStatement(HOTFIX_SEL_GARR_TALENT_TREE, "SELECT ID, Name, GarrTypeID, ClassID, MaxTiers, UiOrder, Flags, UiTextureKitID, "
         "GarrTalentTreeType, PlayerConditionID, FeatureTypeIndex, FeatureSubtypeIndex, CurrencyID FROM garr_talent_tree"
@@ -1564,6 +1589,22 @@ void HotfixDatabaseConnection::DoPrepareStatements()
     PrepareStatement(HOTFIX_SEL_SKILL_RACE_CLASS_INFO, "SELECT ID, SkillID, ClassMask, Flags, Availability, MinLevel, SkillTierID, RaceMask1, "
         "RaceMask2 FROM skill_race_class_info WHERE (`VerifiedBuild` > 0) = ?", CONNECTION_SYNCH);
     PREPARE_MAX_ID_STMT(HOTFIX_SEL_SKILL_RACE_CLASS_INFO, "SELECT MAX(ID) + 1 FROM skill_race_class_info", CONNECTION_SYNCH);
+
+    // Soulbind.db2
+    PrepareStatement(HOTFIX_SEL_SOULBIND, "SELECT ID, Name, CovenantID, GarrTalentTreeID, CreatureID, GarrFollowerID, PlayerConditionID FROM soulbind"
+        " WHERE (`VerifiedBuild` > 0) = ?", CONNECTION_SYNCH);
+    PREPARE_MAX_ID_STMT(HOTFIX_SEL_SOULBIND, "SELECT MAX(ID) + 1 FROM soulbind", CONNECTION_SYNCH);
+    PREPARE_LOCALE_STMT(HOTFIX_SEL_SOULBIND, "SELECT ID, Name_lang FROM soulbind_locale WHERE (`VerifiedBuild` > 0) = ? AND locale = ?", CONNECTION_SYNCH);
+
+    // SoulbindConduit.db2
+    PrepareStatement(HOTFIX_SEL_SOULBIND_CONDUIT, "SELECT ID, ConduitType, CovenantID, SpecSetID, Flags FROM soulbind_conduit"
+        " WHERE (`VerifiedBuild` > 0) = ?", CONNECTION_SYNCH);
+    PREPARE_MAX_ID_STMT(HOTFIX_SEL_SOULBIND_CONDUIT, "SELECT MAX(ID) + 1 FROM soulbind_conduit", CONNECTION_SYNCH);
+
+    // SoulbindConduitItem.db2
+    PrepareStatement(HOTFIX_SEL_SOULBIND_CONDUIT_ITEM, "SELECT ID, ItemID, ConduitID FROM soulbind_conduit_item"
+        " WHERE (`VerifiedBuild` > 0) = ?", CONNECTION_SYNCH);
+    PREPARE_MAX_ID_STMT(HOTFIX_SEL_SOULBIND_CONDUIT_ITEM, "SELECT MAX(ID) + 1 FROM soulbind_conduit_item", CONNECTION_SYNCH);
 
     // SoulbindConduitRank.db2
     PrepareStatement(HOTFIX_SEL_SOULBIND_CONDUIT_RANK, "SELECT ID, RankIndex, SpellID, AuraPointsOverride, SoulbindConduitID"

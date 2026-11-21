@@ -4475,6 +4475,21 @@ Pvp.FactionBalance.Pct20 = 0.8
 
 Covenant.Enable = 0
 
+#    CovenantGarrison.Enable
+#        Description: Enables the Shadowlands covenant garrison (garrison type 111) next to the WoD
+#                     garrison: soulbinds (CMSG_ACTIVATE_SOULBIND, the node research of the soulbind
+#                     trees, branch picks), conduits (spell effect LEARN_SOULBIND_CONDUIT, the conduit
+#                     collection, sockets) and the type-111 entry of SMSG_GET_GARRISON_INFO_RESULT.
+#                     Requires Covenant.Enable = 1.
+#                     The character_covenant_soulbind_spec, character_garrison_talent and
+#                     character_garrison_collection tables and the hotfixes tables garr_talent*,
+#                     soulbind* must exist whatever this is set to.
+#                     When disabled these behave as before (the client opcodes are ignored).
+#        Default:     0 - (Disabled)
+#                     1 - (Enabled)
+
+CovenantGarrison.Enable = 0
+
 #
 ###################################################################################################
 

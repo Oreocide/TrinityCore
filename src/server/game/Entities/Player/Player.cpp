@@ -61,6 +61,7 @@
 #include "GameEventMgr.h"
 #include "GameEventSender.h"
 #include "GameObjectAI.h"
+#include "CovenantGarrison.h"
 #include "Garrison.h"
 #include "GarrisonMgr.h"
 #include "GitRevision.h"
@@ -4190,6 +4191,8 @@ void Player::DeleteFromDB(ObjectGuid playerguid, uint32 accountId, bool updateRe
             stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CHARACTER_COVENANT);
             stmt->setUInt64(0, guid);
             trans->Append(stmt);
+
+            CovenantGarrison::DeleteFromDB(guid, trans);
 
             sCharacterCache->DeleteCharacterCacheEntry(playerguid, name);
             break;
@@ -18962,6 +18965,15 @@ bool Player::LoadFromDB(ObjectGuid guid, CharacterDatabaseQueryHolder const& hol
         holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_GARRISON_FOLLOWER_ABILITIES)))
         _garrison = std::move(garrison);
 
+    if (sWorld->getBoolConfig(CONFIG_COVENANT_ENABLE) && sWorld->getBoolConfig(CONFIG_COVENANT_GARRISON_ENABLE))
+    {
+        _covenantGarrison = std::make_unique<CovenantGarrison>(this);
+        _covenantGarrison->LoadFromDB(holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_COVENANT_SOULBIND_SPEC),
+            holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_GARRISON_TALENTS),
+            holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_GARRISON_COLLECTIONS));
+        _covenantGarrison->OnLogin();
+    }
+
     _InitHonorLevelOnLoadFromDB(fields.honor, fields.honorLevel);
 
     _restMgr->LoadRestBonus(REST_TYPE_HONOR, fields.honorRestState, fields.honorRestBonus);
@@ -20606,6 +20618,18 @@ void Player::SetCovenant(int32 covenantId)
         PhasingHandler::OnConditionChange(this);
 }
 
+void Player::SetSoulbind(int32 soulbindId)
+{
+    if (soulbindId < 0 || soulbindId == GetSoulbind())
+        return;
+
+    SetUpdateFieldValue(m_values.ModifyValue(&Player::m_playerData).ModifyValue(&UF::PlayerData::SoulbindID), soulbindId);
+
+    // conditions on modifier tree 291 (has active soulbind) may now change
+    if (IsInWorld())
+        PhasingHandler::OnConditionChange(this);
+}
+
 /*********************************************************/
 /***                   SAVE SYSTEM                     ***/
 /*********************************************************/
@@ -20986,6 +21010,8 @@ void Player::SaveToDB(LoginDatabaseTransaction loginTransaction, CharacterDataba
     _SaveCovenant(trans);
     if (_garrison)
         _garrison->SaveToDB(trans);
+    if (_covenantGarrison)
+        _covenantGarrison->SaveToDB(trans);
 
     // check if stats should only be saved on logout
     // save stats can be out of transaction

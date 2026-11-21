@@ -729,6 +729,30 @@ LOCK TABLES `character_covenant` WRITE;
 UNLOCK TABLES;
 
 --
+-- Table structure for table `character_covenant_soulbind_spec`
+--
+
+DROP TABLE IF EXISTS `character_covenant_soulbind_spec`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `character_covenant_soulbind_spec` (
+  `guid` bigint unsigned NOT NULL DEFAULT '0' COMMENT 'Character Guid',
+  `chrSpecializationId` int NOT NULL DEFAULT '0' COMMENT 'ChrSpecialization.db2 ID',
+  `soulbindId` int NOT NULL DEFAULT '0' COMMENT 'Soulbind.db2 ID',
+  PRIMARY KEY (`guid`,`chrSpecializationId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `character_covenant_soulbind_spec`
+--
+
+LOCK TABLES `character_covenant_soulbind_spec` WRITE;
+/*!40000 ALTER TABLE `character_covenant_soulbind_spec` DISABLE KEYS */;
+/*!40000 ALTER TABLE `character_covenant_soulbind_spec` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `character_cuf_profiles`
 --
 
@@ -1017,6 +1041,32 @@ LOCK TABLES `character_garrison_buildings` WRITE;
 UNLOCK TABLES;
 
 --
+-- Table structure for table `character_garrison_collection`
+--
+
+DROP TABLE IF EXISTS `character_garrison_collection`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `character_garrison_collection` (
+  `guid` bigint unsigned NOT NULL DEFAULT '0' COMMENT 'Character Guid',
+  `garrTypeId` int NOT NULL DEFAULT '0' COMMENT 'GarrType.db2 ID',
+  `collectionType` int NOT NULL DEFAULT '0' COMMENT '1 = soulbind conduits',
+  `entryId` int NOT NULL DEFAULT '0',
+  `rank` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`guid`,`garrTypeId`,`collectionType`,`entryId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `character_garrison_collection`
+--
+
+LOCK TABLES `character_garrison_collection` WRITE;
+/*!40000 ALTER TABLE `character_garrison_collection` DISABLE KEYS */;
+/*!40000 ALTER TABLE `character_garrison_collection` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `character_garrison_follower_abilities`
 --
 
@@ -1073,6 +1123,35 @@ CREATE TABLE `character_garrison_followers` (
 LOCK TABLES `character_garrison_followers` WRITE;
 /*!40000 ALTER TABLE `character_garrison_followers` DISABLE KEYS */;
 /*!40000 ALTER TABLE `character_garrison_followers` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `character_garrison_talent`
+--
+
+DROP TABLE IF EXISTS `character_garrison_talent`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `character_garrison_talent` (
+  `guid` bigint unsigned NOT NULL DEFAULT '0' COMMENT 'Character Guid',
+  `garrTypeId` int NOT NULL DEFAULT '0' COMMENT 'GarrType.db2 ID',
+  `garrTalentId` int NOT NULL DEFAULT '0' COMMENT 'GarrTalent.db2 ID',
+  `rank` int NOT NULL DEFAULT '0',
+  `researchStartTime` bigint NOT NULL DEFAULT '0',
+  `flags` int NOT NULL DEFAULT '0' COMMENT 'GarrisonTalentFlag',
+  `socketConduitId` int NOT NULL DEFAULT '0' COMMENT 'SoulbindConduit.db2 ID, 0 = empty socket',
+  `socketConduitRank` int NOT NULL DEFAULT '0' COMMENT 'SoulbindConduitRank.db2 RankIndex',
+  PRIMARY KEY (`guid`,`garrTypeId`,`garrTalentId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `character_garrison_talent`
+--
+
+LOCK TABLES `character_garrison_talent` WRITE;
+/*!40000 ALTER TABLE `character_garrison_talent` DISABLE KEYS */;
+/*!40000 ALTER TABLE `character_garrison_talent` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --

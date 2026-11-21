@@ -850,6 +850,15 @@ void CharacterDatabaseConnection::DoPrepareStatements()
     PrepareStatement(CHAR_SEL_CHARACTER_COVENANT, "SELECT covenantId, joinTime FROM character_covenant WHERE guid = ?", CONNECTION_ASYNC);
     PrepareStatement(CHAR_DEL_CHARACTER_COVENANT, "DELETE FROM character_covenant WHERE guid = ?", CONNECTION_ASYNC);
     PrepareStatement(CHAR_INS_CHARACTER_COVENANT, "INSERT INTO character_covenant (guid, covenantId, joinTime) VALUES (?, ?, ?)", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_SEL_CHARACTER_COVENANT_SOULBIND_SPEC, "SELECT chrSpecializationId, soulbindId FROM character_covenant_soulbind_spec WHERE guid = ?", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_DEL_CHARACTER_COVENANT_SOULBIND_SPEC, "DELETE FROM character_covenant_soulbind_spec WHERE guid = ?", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_INS_CHARACTER_COVENANT_SOULBIND_SPEC, "INSERT INTO character_covenant_soulbind_spec (guid, chrSpecializationId, soulbindId) VALUES (?, ?, ?)", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_SEL_CHARACTER_GARRISON_TALENT, "SELECT garrTypeId, garrTalentId, `rank`, researchStartTime, flags, socketConduitId, socketConduitRank FROM character_garrison_talent WHERE guid = ?", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_DEL_CHARACTER_GARRISON_TALENT, "DELETE FROM character_garrison_talent WHERE guid = ?", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_INS_CHARACTER_GARRISON_TALENT, "INSERT INTO character_garrison_talent (guid, garrTypeId, garrTalentId, `rank`, researchStartTime, flags, socketConduitId, socketConduitRank) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_SEL_CHARACTER_GARRISON_COLLECTION, "SELECT garrTypeId, collectionType, entryId, `rank` FROM character_garrison_collection WHERE guid = ?", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_DEL_CHARACTER_GARRISON_COLLECTION, "DELETE FROM character_garrison_collection WHERE guid = ?", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_INS_CHARACTER_GARRISON_COLLECTION, "INSERT INTO character_garrison_collection (guid, garrTypeId, collectionType, entryId, `rank`) VALUES (?, ?, ?, ?, ?)", CONNECTION_ASYNC);
 }
 
 CharacterDatabaseConnection::CharacterDatabaseConnection(MySQLConnectionInfo const& connInfo, ConnectionFlags connectionFlags) : MySQLConnection(connInfo, connectionFlags)

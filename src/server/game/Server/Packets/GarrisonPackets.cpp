@@ -509,4 +509,110 @@ WorldPacket const* GarrisonUpgradeResult::Write()
 
     return &_worldPacket;
 }
+
+void ActivateSoulbind::Read()
+{
+    _worldPacket >> SoulbindID;
+}
+
+WorldPacket const* GarrisonAddSpecGroups::Write()
+{
+    _worldPacket << uint8(GarrTypeID);
+    _worldPacket << Size<uint32>(SpecGroups);
+    for (GarrisonSpecGroup const& specGroup : SpecGroups)
+        _worldPacket << specGroup;
+
+    return &_worldPacket;
+}
+
+void GarrisonResearchTalent::Read()
+{
+    _worldPacket >> NPCTalentGuid;
+    _worldPacket >> GarrTalentID;
+    _worldPacket >> Flags;
+    IsTemporary = _worldPacket.ReadBit();
+}
+
+WorldPacket const* GarrisonResearchTalentResult::Write()
+{
+    _worldPacket << int32(Result);
+    _worldPacket << uint8(GarrTypeID);
+    _worldPacket << Talent;
+    _worldPacket << Bits<1>(DontAlert);
+    _worldPacket.FlushBits();
+
+    return &_worldPacket;
+}
+
+WorldPacket const* GarrisonTalentCompleted::Write()
+{
+    _worldPacket << uint8(GarrTypeID);
+    _worldPacket << int32(GarrTalentID);
+    _worldPacket << int32(GarrTalentRank);
+    _worldPacket << int32(Flags);
+
+    return &_worldPacket;
+}
+
+void GarrisonLearnTalent::Read()
+{
+    _worldPacket >> SoulbindID;
+    _worldPacket >> GarrTalentID;
+}
+
+WorldPacket const* GarrisonSwitchTalentTreeBranch::Write()
+{
+    _worldPacket << uint8(GarrTypeID);
+    _worldPacket << Size<uint32>(Talents);
+    for (GarrisonTalent const& talent : Talents)
+        _worldPacket << talent;
+
+    return &_worldPacket;
+}
+
+void GarrisonSocketTalent::Read()
+{
+    _worldPacket >> GarrTalentTreeID;
+    uint32 count = _worldPacket.read<uint32>();
+    if (count > 64)
+        throw PacketArrayMaxCapacityException(count, 64);
+
+    Sockets.resize(count);
+    for (GarrisonSocketTalentEntry& socket : Sockets)
+    {
+        _worldPacket >> socket.GarrTalentID;
+        _worldPacket >> socket.SoulbindConduitID;
+    }
+}
+
+WorldPacket const* GarrisonApplyTalentSocketDataChanges::Write()
+{
+    _worldPacket << uint8(GarrTypeID);
+    _worldPacket << Size<uint32>(Changed);
+    _worldPacket << Size<uint32>(Cleared);
+
+    for (GarrisonSocketChange const& change : Changed)
+    {
+        _worldPacket << int32(change.GarrTalentID);
+        _worldPacket << OptionalInit(change.Socket);
+        _worldPacket.FlushBits();
+        if (change.Socket)
+            _worldPacket << *change.Socket;
+    }
+
+    for (int32 garrTalentId : Cleared)
+        _worldPacket << int32(garrTalentId);
+
+    return &_worldPacket;
+}
+
+WorldPacket const* GarrisonCollectionUpdateEntry::Write()
+{
+    _worldPacket << uint8(GarrTypeID);
+    _worldPacket << int32(Type);
+    _worldPacket << int32(EntryID);
+    _worldPacket << int32(Rank);
+
+    return &_worldPacket;
+}
 }
