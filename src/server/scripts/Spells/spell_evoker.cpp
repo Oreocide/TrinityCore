@@ -559,15 +559,47 @@ class spell_evo_fire_breath_damage : public SpellScript
             && spellInfo->GetEffect(EFFECT_1).IsAura(SPELL_AURA_PERIODIC_DAMAGE); // the periodic part the upfront bonus is taken from
     }
 
-    void AddBonusUpfrontDamage(SpellEffectInfo const& /*spellEffectInfo*/, Unit const* victim, int32& /*damage*/, int32& flatMod, float& /*pctMod*/) const
+    void AddBonusUpfrontDamage(SpellEffectInfo const& /*spellEffectInfo*/, Unit const* victim, int32& /*damage*/, int32& flatMod, float& pctMod) const
     {
         spell_evo_fire_breath::data const* params = std::any_cast<spell_evo_fire_breath::data>(&GetSpell()->m_customArg);
-        if (!params)
+        if (!params || params->EmpowerLevel <= 1)
             return;
 
-        // damage is done after aura is applied, grab periodic amount
-        if (AuraEffect const* fireBreath = victim->GetAuraEffect(GetSpellInfo()->Id, EFFECT_1, GetCaster()->GetGUID()))
-            flatMod += fireBreath->GetEstimatedAmount().value_or(fireBreath->GetAmount()) * (params->EmpowerLevel - 1) * 3;
+        // the upfront damage is calculated at launch, before the periodic aura exists on the target,
+        // so calculate the tick and its hasted period the way the aura will
+        Unit* caster = GetCaster();
+        SpellInfo const* spellInfo = GetSpellInfo();
+        SpellEffectInfo const& periodicEffect = spellInfo->GetEffect(EFFECT_1);
+        Player* modOwner = caster->GetSpellModOwner();
+
+        int32 period = periodicEffect.ApplyAuraPeriod;
+        if (modOwner)
+            modOwner->ApplySpellMod(spellInfo, SpellModOp::Period, period);
+        if (spellInfo->HasAttribute(SPELL_ATTR5_SPELL_HASTE_AFFECTS_PERIODIC))
+            period = int32(period * caster->m_unitData->ModCastingSpeed);
+        if (period <= 0)
+            return;
+
+        int32 tick = caster->SpellDamageBonusDone(const_cast<Unit*>(victim), spellInfo, int32(periodicEffect.CalcValue(caster, nullptr, victim)), DOT, periodicEffect);
+
+        // each empower level past the first takes 6 seconds off the periodic damage and deals it upfront instead,
+        // so the number of ticks moved depends on the hasted period
+        double movedDamage = double(tick) * (params->EmpowerLevel - 1) * 6000.0 / period;
+
+        // the tick already includes the caster's damage done bonuses, flatMod gets them again (pctMod and HealingAndDamage spell mods)
+        double doneMultiplier = pctMod;
+        if (modOwner)
+        {
+            int32 flat = 0;
+            float pct = 1.0f;
+            modOwner->GetSpellModValues(spellInfo, SpellModOp::HealingAndDamage, nullptr, movedDamage, &flat, &pct);
+            doneMultiplier *= pct;
+        }
+
+        if (doneMultiplier <= 0.0)
+            return;
+
+        flatMod += int32(movedDamage / doneMultiplier);
     }
 
     void Register() override
