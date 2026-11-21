@@ -17,6 +17,7 @@
 
 #include "CovenantGarrison.h"
 #include "CharacterDatabase.h"
+#include "CovenantMissionData.h"
 #include "ConditionMgr.h"
 #include "DB2Stores.h"
 #include "DB2Structure.h"
@@ -32,7 +33,8 @@ CovenantGarrison::CovenantGarrison(Player* owner) : _owner(owner)
 {
 }
 
-void CovenantGarrison::LoadFromDB(PreparedQueryResult specResult, PreparedQueryResult talentResult, PreparedQueryResult collectionResult)
+void CovenantGarrison::LoadFromDB(PreparedQueryResult specResult, PreparedQueryResult talentResult, PreparedQueryResult collectionResult,
+    PreparedQueryResult followerResult, PreparedQueryResult missionResult, PreparedQueryResult missionFollowerResult)
 {
     if (specResult)
     {
@@ -81,9 +83,128 @@ void CovenantGarrison::LoadFromDB(PreparedQueryResult specResult, PreparedQueryR
         }
         while (collectionResult->NextRow());
     }
+
+    if (!AreMissionsEnabled())
+        return;
+
+    if (followerResult)
+    {
+        do
+        {
+            Field* fields = followerResult->Fetch();
+            uint64 dbId = fields[0].GetUInt64();
+            if (!sGarrFollowerStore.LookupEntry(fields[1].GetUInt32()))
+            {
+                TC_LOG_ERROR("entities.player", "Player {} has an unknown garrison follower {} in character_covenant_follower, skipped", _owner->GetGUID().ToString(), fields[1].GetUInt32());
+                continue;
+            }
+
+            WorldPackets::Garrison::GarrisonFollower& follower = _followers[dbId];
+            follower.DbID = dbId;
+            follower.GarrFollowerID = fields[1].GetUInt32();
+            follower.Quality = fields[2].GetUInt8();
+            follower.FollowerLevel = fields[3].GetUInt32();
+            follower.ItemLevelWeapon = fields[4].GetUInt32();
+            follower.ItemLevelArmor = fields[5].GetUInt32();
+            follower.Xp = fields[6].GetUInt32();
+            follower.Durability = fields[7].GetUInt32();
+            follower.Health = fields[8].GetInt32();
+            follower.HealingTimestamp = time_t(fields[9].GetInt64());
+            follower.CurrentMissionID = fields[10].GetUInt32();
+            follower.FollowerStatus = fields[11].GetUInt32();
+            follower.BoardIndex = -1;
+            _lastDbId = std::max(_lastDbId, dbId);
+        }
+        while (followerResult->NextRow());
+    }
+
+    if (missionResult)
+    {
+        do
+        {
+            Field* fields = missionResult->Fetch();
+            uint64 dbId = fields[0].GetUInt64();
+            if (!sGarrMissionStore.LookupEntry(fields[1].GetUInt32()))
+            {
+                TC_LOG_ERROR("entities.player", "Player {} has an unknown garrison mission {} in character_covenant_mission, skipped", _owner->GetGUID().ToString(), fields[1].GetUInt32());
+                continue;
+            }
+
+            Mission& mission = _missions[dbId];
+            mission.PacketInfo.DbID = dbId;
+            mission.PacketInfo.MissionRecID = fields[1].GetInt32();
+            mission.PacketInfo.OfferTime = time_t(fields[2].GetInt64());
+            mission.PacketInfo.OfferDuration = Seconds(fields[3].GetInt64());
+            mission.PacketInfo.StartTime = time_t(fields[4].GetInt64());
+            mission.PacketInfo.TravelDuration = Seconds(fields[5].GetInt64());
+            mission.PacketInfo.MissionDuration = Seconds(fields[6].GetInt64());
+            mission.PacketInfo.MissionState = fields[7].GetInt32();
+            mission.PacketInfo.SuccessChance = fields[8].GetInt32();
+            mission.PacketInfo.Flags = fields[9].GetUInt32();
+            mission.PacketInfo.MissionScalar = fields[10].GetFloat();
+            _lastDbId = std::max(_lastDbId, dbId);
+        }
+        while (missionResult->NextRow());
+    }
+
+    if (missionFollowerResult)
+    {
+        do
+        {
+            Field* fields = missionFollowerResult->Fetch();
+            auto itr = _missions.find(fields[0].GetUInt64());
+            if (itr == _missions.end())
+                continue;
+
+            MissionFollower& follower = itr->second.Followers.emplace_back();
+            follower.DbID = fields[1].GetUInt64();
+            follower.GarrFollowerID = fields[2].GetUInt32();
+            follower.IsTroop = fields[3].GetUInt8() != 0;
+            follower.Level = fields[4].GetUInt32();
+            follower.BoardIndex = fields[5].GetInt8();
+            follower.Health = fields[6].GetInt32();
+            _lastDbId = std::max(_lastDbId, follower.DbID);
+        }
+        while (missionFollowerResult->NextRow());
+    }
+
+    // heroes on a running mission keep the board they were sent to
+    for (auto const& [missionDbId, mission] : _missions)
+    {
+        if (mission.PacketInfo.MissionState != MISSION_STATE_IN_PROGRESS)
+            continue;
+
+        for (MissionFollower const& missionFollower : mission.Followers)
+        {
+            auto itr = _followers.find(missionFollower.DbID);
+            if (!missionFollower.IsTroop && itr != _followers.end())
+                itr->second.BoardIndex = int8(missionFollower.BoardIndex);
+        }
+    }
+
+    // a hero that points at a mission that is not in progress any more (hand edited data) is freed
+    for (auto& [dbId, follower] : _followers)
+    {
+        if (!follower.CurrentMissionID)
+            continue;
+
+        bool onMission = std::ranges::any_of(_missions, [&](auto const& entry)
+        {
+            Mission const& mission = entry.second;
+            return mission.PacketInfo.MissionRecID == int32(follower.CurrentMissionID) && mission.PacketInfo.MissionState == MISSION_STATE_IN_PROGRESS;
+        });
+        if (!onMission)
+            follower.CurrentMissionID = 0;
+    }
 }
 
 void CovenantGarrison::DeleteFromDB(uint64 guid, CharacterDatabaseTransaction trans)
+{
+    DeleteSoulbindRows(guid, trans);
+    DeleteMissionRows(guid, trans);
+}
+
+void CovenantGarrison::DeleteSoulbindRows(uint64 guid, CharacterDatabaseTransaction trans)
 {
     CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CHARACTER_COVENANT_SOULBIND_SPEC);
     stmt->setUInt64(0, guid);
@@ -98,15 +219,89 @@ void CovenantGarrison::DeleteFromDB(uint64 guid, CharacterDatabaseTransaction tr
     trans->Append(stmt);
 }
 
+void CovenantGarrison::DeleteMissionRows(uint64 guid, CharacterDatabaseTransaction trans)
+{
+    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CHARACTER_COVENANT_FOLLOWER);
+    stmt->setUInt64(0, guid);
+    trans->Append(stmt);
+
+    stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CHARACTER_COVENANT_MISSION);
+    stmt->setUInt64(0, guid);
+    trans->Append(stmt);
+
+    stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CHARACTER_COVENANT_MISSION_FOLLOWER);
+    stmt->setUInt64(0, guid);
+    trans->Append(stmt);
+}
+
 void CovenantGarrison::SaveToDB(CharacterDatabaseTransaction trans)
 {
+    uint64 guid = _owner->GetGUID().GetCounter();
+
+    if (_missionsNeedSave)
+    {
+        _missionsNeedSave = false;
+        DeleteMissionRows(guid, trans);
+
+        for (auto const& [dbId, follower] : _followers)
+        {
+            CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_INS_CHARACTER_COVENANT_FOLLOWER);
+            stmt->setUInt64(0, guid);
+            stmt->setUInt64(1, dbId);
+            stmt->setUInt32(2, follower.GarrFollowerID);
+            stmt->setUInt8(3, uint8(follower.Quality));
+            stmt->setUInt32(4, follower.FollowerLevel);
+            stmt->setUInt32(5, follower.ItemLevelWeapon);
+            stmt->setUInt32(6, follower.ItemLevelArmor);
+            stmt->setUInt32(7, follower.Xp);
+            stmt->setUInt32(8, follower.Durability);
+            stmt->setInt32(9, follower.Health);
+            stmt->setInt64(10, int64(time_t(follower.HealingTimestamp)));
+            stmt->setUInt32(11, follower.CurrentMissionID);
+            stmt->setUInt32(12, follower.FollowerStatus);
+            trans->Append(stmt);
+        }
+
+        for (auto const& [dbId, mission] : _missions)
+        {
+            WorldPackets::Garrison::GarrisonMission const& info = mission.PacketInfo;
+            CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_INS_CHARACTER_COVENANT_MISSION);
+            stmt->setUInt64(0, guid);
+            stmt->setUInt64(1, dbId);
+            stmt->setUInt32(2, info.MissionRecID);
+            stmt->setInt64(3, int64(time_t(info.OfferTime)));
+            stmt->setInt64(4, int64(Seconds(info.OfferDuration).count()));
+            stmt->setInt64(5, int64(time_t(info.StartTime)));
+            stmt->setInt64(6, int64(Seconds(info.TravelDuration).count()));
+            stmt->setInt64(7, int64(Seconds(info.MissionDuration).count()));
+            stmt->setInt32(8, info.MissionState);
+            stmt->setInt32(9, info.SuccessChance);
+            stmt->setUInt32(10, info.Flags);
+            stmt->setFloat(11, info.MissionScalar);
+            trans->Append(stmt);
+
+            for (MissionFollower const& follower : mission.Followers)
+            {
+                stmt = CharacterDatabase.GetPreparedStatement(CHAR_INS_CHARACTER_COVENANT_MISSION_FOLLOWER);
+                stmt->setUInt64(0, guid);
+                stmt->setUInt64(1, dbId);
+                stmt->setUInt64(2, follower.DbID);
+                stmt->setUInt32(3, follower.GarrFollowerID);
+                stmt->setUInt8(4, follower.IsTroop ? 1 : 0);
+                stmt->setUInt32(5, follower.Level);
+                stmt->setInt8(6, int8(follower.BoardIndex));
+                stmt->setInt32(7, follower.Health);
+                trans->Append(stmt);
+            }
+        }
+    }
+
     if (!_needsSave)
         return;
 
     _needsSave = false;
 
-    uint64 guid = _owner->GetGUID().GetCounter();
-    DeleteFromDB(guid, trans);
+    DeleteSoulbindRows(guid, trans);
 
     for (auto const& [specId, soulbindId] : _specGroups)
     {
@@ -147,6 +342,12 @@ void CovenantGarrison::OnLogin()
 {
     auto itr = _specGroups.find(int32(_owner->GetPrimarySpecialization()));
     _owner->SetSoulbind(itr != _specGroups.end() ? itr->second : 0);
+
+    if (AreMissionsEnabled())
+    {
+        RemoveExpiredMissions();
+        OfferInitialMissions(false);
+    }
 }
 
 int32 CovenantGarrison::GetActiveSoulbind() const
@@ -195,6 +396,29 @@ void CovenantGarrison::BuildInfoPacket(WorldPackets::Garrison::GarrisonInfo& inf
         specGroup.ChrSpecializationID = specId;
         specGroup.SoulbindID = soulbindId;
     }
+
+    if (!AreMissionsEnabled())
+        return;
+
+    for (auto const& [dbId, follower] : _followers)
+        info.Followers.push_back(&follower);
+
+    // the info packet carries the rewards in its own lists, the mission blocks have none; the four vectors must stay the same size
+    for (auto const& [dbId, mission] : _missions)
+    {
+        if (mission.PacketInfo.MissionState != MISSION_STATE_OFFERED && mission.PacketInfo.MissionState != MISSION_STATE_IN_PROGRESS
+            && mission.PacketInfo.MissionState != MISSION_STATE_COMPLETE)
+            continue;
+
+        info.Missions.push_back(&mission.PacketInfo);
+        std::vector<WorldPackets::Garrison::GarrisonMissionReward>& rewards = info.MissionRewards.emplace_back();
+        if (CovenantMissionTemplate const* missionTemplate = CovenantMissionData::GetMissionTemplate(mission.PacketInfo.MissionRecID))
+            for (CovenantMissionReward const& reward : missionTemplate->Rewards)
+                FillMissionReward(reward, rewards.emplace_back());
+
+        info.MissionOvermaxRewards.emplace_back();
+        info.CanStartMission.push_back(CanStartMission(mission));
+    }
 }
 
 void CovenantGarrison::AppendToInfoResult(WorldPackets::Garrison::GetGarrisonInfoResult& result) const
@@ -205,8 +429,10 @@ void CovenantGarrison::AppendToInfoResult(WorldPackets::Garrison::GetGarrisonInf
     result.FollowerSoftCaps = { { 4, 6 }, { 1, 20 }, { 2, 6 }, { 22, 30 }, { 123, 100 } };
 }
 
-void CovenantGarrison::SendInfo() const
+void CovenantGarrison::SendInfo()
 {
+    OfferInitialMissions(false);
+
     WorldPackets::Garrison::GetGarrisonInfoResult garrisonInfo;
     garrisonInfo.FactionIndex = Garrison::GetFaction(_owner->GetTeam());
 

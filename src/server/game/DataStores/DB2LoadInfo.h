@@ -2293,6 +2293,20 @@ struct GarrFollowerLoadInfo
     static constexpr DB2LoadInfo Instance{ Fields, 34, &GarrFollowerMeta::Instance, HOTFIX_SEL_GARR_FOLLOWER };
 };
 
+struct GarrFollowerLevelXPLoadInfo
+{
+    static constexpr DB2FieldMeta Fields[5] =
+    {
+        { .IsSigned = false, .Type = FT_INT, .Name = "ID" },
+        { .IsSigned = false, .Type = FT_BYTE, .Name = "GarrFollowerTypeID" },
+        { .IsSigned = false, .Type = FT_BYTE, .Name = "FollowerLevel" },
+        { .IsSigned = false, .Type = FT_SHORT, .Name = "XpToNextLevel" },
+        { .IsSigned = false, .Type = FT_SHORT, .Name = "ShipmentXP" },
+    };
+
+    static constexpr DB2LoadInfo Instance{ Fields, 5, &GarrFollowerLevelXPMeta::Instance, HOTFIX_SEL_GARR_FOLLOWER_LEVEL_XP };
+};
+
 struct GarrFollowerXAbilityLoadInfo
 {
     static constexpr DB2FieldMeta Fields[5] =

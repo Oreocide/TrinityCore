@@ -54,6 +54,7 @@
 #include "GameObjectModel.h"
 #include "GameTables.h"
 #include "GameTime.h"
+#include "CovenantMissionData.h"
 #include "GarrisonMgr.h"
 #include "GitRevision.h"
 #include "GridNotifiersImpl.h"
@@ -700,6 +701,8 @@ void World::LoadConfigSettings(bool reload)
         { .Name = "CovenantGarrison.Enable"sv, .DefaultValue = false, .Index = CONFIG_COVENANT_GARRISON_ENABLE },
         { .Name = "Covenant.Renown.Enable"sv, .DefaultValue = false, .Index = CONFIG_COVENANT_RENOWN_ENABLE },
         { .Name = "Covenant.Callings.Enable"sv, .DefaultValue = false, .Index = CONFIG_COVENANT_CALLINGS_ENABLE },
+        { .Name = "CovenantGarrison.Missions.Enable"sv, .DefaultValue = false, .Index = CONFIG_COVENANT_GARRISON_MISSIONS_ENABLE },
+        { .Name = "CovenantGarrison.Missions.AutoRoll"sv, .DefaultValue = false, .Index = CONFIG_COVENANT_GARRISON_MISSIONS_AUTO_ROLL },
     } };
 
     static constexpr ConfigOptionLoadDefinitionArray<uint32, INT_CONFIG_VALUE_COUNT> ints =
@@ -1927,6 +1930,8 @@ bool World::SetInitialWorldSettings()
 
     TC_LOG_INFO("server.loading", "Loading garrison info...");
     sGarrisonMgr.Initialize();
+
+    CovenantMissionData::Load();                                // CovenantGarrison.Missions.Enable: mission templates, offer chains and follower data
 
     ///- Handle outdated emails (delete/return)
     TC_LOG_INFO("server.loading", "Returning old mails...");

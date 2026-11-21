@@ -859,6 +859,15 @@ void CharacterDatabaseConnection::DoPrepareStatements()
     PrepareStatement(CHAR_SEL_CHARACTER_GARRISON_COLLECTION, "SELECT garrTypeId, collectionType, entryId, `rank` FROM character_garrison_collection WHERE guid = ?", CONNECTION_ASYNC);
     PrepareStatement(CHAR_DEL_CHARACTER_GARRISON_COLLECTION, "DELETE FROM character_garrison_collection WHERE guid = ?", CONNECTION_ASYNC);
     PrepareStatement(CHAR_INS_CHARACTER_GARRISON_COLLECTION, "INSERT INTO character_garrison_collection (guid, garrTypeId, collectionType, entryId, `rank`) VALUES (?, ?, ?, ?, ?)", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_SEL_CHARACTER_COVENANT_FOLLOWER, "SELECT dbId, garrFollowerId, quality, followerLevel, itemLevelWeapon, itemLevelArmor, xp, durability, health, healingTimestamp, currentMissionId, status FROM character_covenant_follower WHERE guid = ?", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_DEL_CHARACTER_COVENANT_FOLLOWER, "DELETE FROM character_covenant_follower WHERE guid = ?", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_INS_CHARACTER_COVENANT_FOLLOWER, "INSERT INTO character_covenant_follower (guid, dbId, garrFollowerId, quality, followerLevel, itemLevelWeapon, itemLevelArmor, xp, durability, health, healingTimestamp, currentMissionId, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_SEL_CHARACTER_COVENANT_MISSION, "SELECT dbId, missionId, offerTime, offerDuration, startTime, travelDuration, missionDuration, state, successChance, flags, scalar FROM character_covenant_mission WHERE guid = ?", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_DEL_CHARACTER_COVENANT_MISSION, "DELETE FROM character_covenant_mission WHERE guid = ?", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_INS_CHARACTER_COVENANT_MISSION, "INSERT INTO character_covenant_mission (guid, dbId, missionId, offerTime, offerDuration, startTime, travelDuration, missionDuration, state, successChance, flags, scalar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_SEL_CHARACTER_COVENANT_MISSION_FOLLOWER, "SELECT missionDbId, followerDbId, garrFollowerId, isTroop, followerLevel, boardIndex, health FROM character_covenant_mission_follower WHERE guid = ?", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_DEL_CHARACTER_COVENANT_MISSION_FOLLOWER, "DELETE FROM character_covenant_mission_follower WHERE guid = ?", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_INS_CHARACTER_COVENANT_MISSION_FOLLOWER, "INSERT INTO character_covenant_mission_follower (guid, missionDbId, followerDbId, garrFollowerId, isTroop, followerLevel, boardIndex, health) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", CONNECTION_ASYNC);
 }
 
 CharacterDatabaseConnection::CharacterDatabaseConnection(MySQLConnectionInfo const& connInfo, ConnectionFlags connectionFlags) : MySQLConnection(connInfo, connectionFlags)

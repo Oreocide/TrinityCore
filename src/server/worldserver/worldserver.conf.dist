@@ -4515,6 +4515,36 @@ Covenant.Renown.Enable = 0
 
 Covenant.Callings.Enable = 0
 
+#    CovenantGarrison.Missions.Enable
+#        Description: Enables the command table missions of the covenant garrison (type 111): hero followers
+#                     (spell effect ADD_GARRISON_FOLLOWER for type-111 followers), the tutorial mission chain
+#                     and its offers, CMSG_GARRISON_START_MISSION, CMSG_GARRISON_COMPLETE_MISSION and
+#                     CMSG_GARRISON_MISSION_BONUS_ROLL, follower XP and the mission/follower parts of
+#                     SMSG_GET_GARRISON_INFO_RESULT. There is no auto-combat yet: followers take no damage.
+#                     Requires Covenant.Enable = 1 and CovenantGarrison.Enable = 1.
+#                     The characters tables character_covenant_follower, character_covenant_mission and
+#                     character_covenant_mission_follower and the hotfixes table garr_follower_level_xp must
+#                     exist whatever this is set to; the world tables covenant_mission_template,
+#                     covenant_mission_reward, covenant_mission_chain and covenant_follower_template are only
+#                     read when this is 1.
+#                     When disabled the covenant garrison behaves exactly as without missions.
+#        Default:     0 - (Disabled)
+#                     1 - (Enabled)
+
+CovenantGarrison.Missions.Enable = 0
+
+#    CovenantGarrison.Missions.AutoRoll
+#        Description: Finishes a mission at CMSG_GARRISON_COMPLETE_MISSION without waiting for the client's
+#                     CMSG_GARRISON_MISSION_BONUS_ROLL: the bonus roll result, follower XP, rewards and the
+#                     next offers are sent at once. Needed while SMSG_GARRISON_COMPLETE_MISSION_RESULT (the
+#                     auto-combat result screen, not implemented) is not sent: the client never asks for the
+#                     bonus roll without it, and the followers would stay on the mission.
+#                     Requires CovenantGarrison.Missions.Enable = 1.
+#        Default:     0 - (Disabled)
+#                     1 - (Enabled)
+
+CovenantGarrison.Missions.AutoRoll = 0
+
 #
 ###################################################################################################
 

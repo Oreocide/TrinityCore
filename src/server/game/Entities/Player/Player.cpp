@@ -18977,7 +18977,10 @@ bool Player::LoadFromDB(ObjectGuid guid, CharacterDatabaseQueryHolder const& hol
         _covenantGarrison = std::make_unique<CovenantGarrison>(this);
         _covenantGarrison->LoadFromDB(holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_COVENANT_SOULBIND_SPEC),
             holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_GARRISON_TALENTS),
-            holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_GARRISON_COLLECTIONS));
+            holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_GARRISON_COLLECTIONS),
+            holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_COVENANT_FOLLOWERS),
+            holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_COVENANT_MISSIONS),
+            holder.GetPreparedResult(PLAYER_LOGIN_QUERY_LOAD_COVENANT_MISSION_FOLLOWERS));
         _covenantGarrison->OnLogin();
     }
 

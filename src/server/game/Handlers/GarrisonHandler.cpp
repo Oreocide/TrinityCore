@@ -164,3 +164,59 @@ void WorldSession::HandleGarrisonSocketTalent(WorldPackets::Garrison::GarrisonSo
 
     covenantGarrison->SocketTalents(garrisonSocketTalent.GarrTalentTreeID, sockets);
 }
+
+void WorldSession::HandleOpenMissionNpc(WorldPackets::Garrison::OpenMissionNpc& openMissionNpc)
+{
+    // retail sends no reply to the open itself (nov18c idx 182532-182545); the interaction was announced by the gossip option
+    // (SMSG_GOSSIP_OPTION_NPC_INTERACTION, GossipNpcOption 31295 on the Command Table)
+    if (!CovenantGarrison::AreMissionsEnabled())
+        return;
+
+    TC_LOG_DEBUG("network", "WorldSession::HandleOpenMissionNpc: {} opens {} (follower type {})", _player->GetGUID().ToString(), openMissionNpc.NpcGUID.ToString(), openMissionNpc.GarrFollowerTypeID);
+}
+
+void WorldSession::HandleGarrisonGetClassSpecCategoryInfo(WorldPackets::Garrison::GarrisonGetClassSpecCategoryInfo& getClassSpecCategoryInfo)
+{
+    if (!CovenantGarrison::AreMissionsEnabled() || getClassSpecCategoryInfo.GarrFollowerTypeID != CovenantGarrison::FOLLOWER_TYPE_COVENANT_SANCTUM)
+        return;
+
+    WorldPackets::Garrison::GarrisonGetClassSpecCategoryInfoResult result;
+    result.GarrFollowerTypeID = getClassSpecCategoryInfo.GarrFollowerTypeID;
+    SendPacket(result.Write());
+}
+
+void WorldSession::HandleGarrisonStartMission(WorldPackets::Garrison::GarrisonStartMission& startMission)
+{
+    CovenantGarrison* covenantGarrison = _player->GetCovenantGarrison();
+    if (!covenantGarrison || !CovenantGarrison::AreMissionsEnabled())
+        return;
+
+    if (!_player->GetNPCIfCanInteractWith(startMission.NpcGUID, UNIT_NPC_FLAG_NONE, UNIT_NPC_FLAG_2_NONE))
+        return;
+
+    covenantGarrison->StartMission(startMission);
+}
+
+void WorldSession::HandleGarrisonCompleteMission(WorldPackets::Garrison::GarrisonCompleteMission& completeMission)
+{
+    CovenantGarrison* covenantGarrison = _player->GetCovenantGarrison();
+    if (!covenantGarrison || !CovenantGarrison::AreMissionsEnabled())
+        return;
+
+    if (!_player->GetNPCIfCanInteractWith(completeMission.NpcGUID, UNIT_NPC_FLAG_NONE, UNIT_NPC_FLAG_2_NONE))
+        return;
+
+    covenantGarrison->CompleteMission(completeMission.MissionRecID);
+}
+
+void WorldSession::HandleGarrisonMissionBonusRoll(WorldPackets::Garrison::GarrisonMissionBonusRoll& missionBonusRoll)
+{
+    CovenantGarrison* covenantGarrison = _player->GetCovenantGarrison();
+    if (!covenantGarrison || !CovenantGarrison::AreMissionsEnabled())
+        return;
+
+    if (!_player->GetNPCIfCanInteractWith(missionBonusRoll.NpcGUID, UNIT_NPC_FLAG_NONE, UNIT_NPC_FLAG_2_NONE))
+        return;
+
+    covenantGarrison->MissionBonusRoll(missionBonusRoll.MissionRecID);
+}

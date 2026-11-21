@@ -707,6 +707,12 @@ void CriteriaHandler::UpdateCriteria(Criteria const* criteria, uint64 miscValue1
         case CriteriaType::LeaveTopLevelArea:
             SetCriteriaProgress(criteria, 1, referencePlayer);
             break;
+        case CriteriaType::StartGarrisonMission:
+        case CriteriaType::SucceedGarrisonMission:
+        case CriteriaType::StartAnyGarrisonMissionWithFollowerType:
+        case CriteriaType::SucceedAnyGarrisonMissionWithFollowerType:
+            SetCriteriaProgress(criteria, 1, referencePlayer, PROGRESS_ACCUMULATE);
+            break;
         case CriteriaType::BankSlotsPurchased:
             SetCriteriaProgress(criteria, referencePlayer->GetBankBagSlotCount(), referencePlayer);
             break;
@@ -847,9 +853,6 @@ void CriteriaHandler::UpdateCriteria(Criteria const* criteria, uint64 miscValue1
         case CriteriaType::WinPetBattle:
         case CriteriaType::PlayerObtainPetThroughBattle:
         case CriteriaType::ActivateGarrisonBuilding:
-        case CriteriaType::StartAnyGarrisonMissionWithFollowerType:
-        case CriteriaType::SucceedAnyGarrisonMissionWithFollowerType:
-        case CriteriaType::SucceedGarrisonMission:
         case CriteriaType::RecruitAnyGarrisonFollower:
         case CriteriaType::LearnAnyGarrisonBlueprint:
         case CriteriaType::CollectGarrisonShipment:
@@ -869,7 +872,6 @@ void CriteriaHandler::UpdateCriteria(Criteria const* criteria, uint64 miscValue1
         case CriteriaType::KickTargetInLFGDungeon:
         case CriteriaType::AbandonedLFGDungeon:
         case CriteriaType::GroupedTankLeftEarlyInLFGDungeon:
-        case CriteriaType::StartGarrisonMission:
         case CriteriaType::QualityUpgradedForGarrisonFollower:
         case CriteriaType::CompleteResearchGarrisonTalent:
         case CriteriaType::RecruitAnyGarrisonTroop:
@@ -1703,6 +1705,16 @@ bool CriteriaHandler::RequirementsSatisfied(Criteria const* criteria, uint64 mis
             break;
         case CriteriaType::RecruitGarrisonFollower:
             if (miscValue1 != uint32(criteria->Entry->Asset.GarrFollowerID))
+                return false;
+            break;
+        case CriteriaType::StartGarrisonMission:
+        case CriteriaType::SucceedGarrisonMission:
+            if (criteria->Entry->Asset.GarrMissionID && miscValue1 != uint32(criteria->Entry->Asset.GarrMissionID))
+                return false;
+            break;
+        case CriteriaType::StartAnyGarrisonMissionWithFollowerType:
+        case CriteriaType::SucceedAnyGarrisonMissionWithFollowerType:
+            if (criteria->Entry->Asset.GarrFollowerTypeID && miscValue1 != uint32(criteria->Entry->Asset.GarrFollowerTypeID))
                 return false;
             break;
         case CriteriaType::CollectTransmogSetFromGroup:

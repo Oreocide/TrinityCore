@@ -644,6 +644,163 @@ namespace WorldPackets
             bool AreCallingsUnlocked = false;
             std::vector<int32> BountyID;
         };
+
+        // 12.1.5 layouts below: nov18c raw capture (analysis/core_design/m5/PACKETS_nov18c_raw.md)
+        class OpenMissionNpc final : public ClientPacket
+        {
+        public:
+            explicit OpenMissionNpc(WorldPacket&& packet) : ClientPacket(CMSG_OPEN_MISSION_NPC, std::move(packet)) { }
+
+            void Read() override;
+
+            ObjectGuid NpcGUID;
+            uint8 GarrFollowerTypeID = 0;
+        };
+
+        class GarrisonGetClassSpecCategoryInfo final : public ClientPacket
+        {
+        public:
+            explicit GarrisonGetClassSpecCategoryInfo(WorldPacket&& packet) : ClientPacket(CMSG_GARRISON_GET_CLASS_SPEC_CATEGORY_INFO, std::move(packet)) { }
+
+            void Read() override;
+
+            uint8 GarrFollowerTypeID = 0;
+        };
+
+        class GarrisonGetClassSpecCategoryInfoResult final : public ServerPacket
+        {
+        public:
+            explicit GarrisonGetClassSpecCategoryInfoResult() : ServerPacket(SMSG_GARRISON_GET_CLASS_SPEC_CATEGORY_INFO_RESULT, 1 + 4) { }
+
+            WorldPacket const* Write() override;
+
+            uint8 GarrFollowerTypeID = 0;
+            // the capture always sent an empty list (5 bytes)
+        };
+
+        struct GarrisonMissionFollowerInfo
+        {
+            uint64 DatabaseID = 0;
+            int32 BoardIndex = 0;
+            int32 Health = 0;
+            Optional<int32> FollowerEntry;
+        };
+
+        class GarrisonStartMission final : public ClientPacket
+        {
+        public:
+            explicit GarrisonStartMission(WorldPacket&& packet) : ClientPacket(CMSG_GARRISON_START_MISSION, std::move(packet)) { }
+
+            void Read() override;
+
+            ObjectGuid NpcGUID;
+            int32 MissionRecID = 0;
+            std::vector<GarrisonMissionFollowerInfo> Followers;
+        };
+
+        class GarrisonStartMissionResult final : public ServerPacket
+        {
+        public:
+            explicit GarrisonStartMissionResult() : ServerPacket(SMSG_GARRISON_START_MISSION_RESULT, 4 + 2 + 100 + 4 + 4) { }
+
+            WorldPacket const* Write() override;
+
+            int32 Result = 0;
+            uint16 SessionMissionCount = 0;
+            GarrisonMission Mission;
+            std::vector<GarrisonMissionFollowerInfo> Followers;
+            std::vector<GarrisonFollower> Troops;   // the auto troops made for this start, as full follower records
+        };
+
+        class GarrisonCompleteMission final : public ClientPacket
+        {
+        public:
+            explicit GarrisonCompleteMission(WorldPacket&& packet) : ClientPacket(CMSG_GARRISON_COMPLETE_MISSION, std::move(packet)) { }
+
+            void Read() override;
+
+            ObjectGuid NpcGUID;
+            int32 MissionRecID = 0;
+        };
+
+        class GarrisonMissionBonusRoll final : public ClientPacket
+        {
+        public:
+            explicit GarrisonMissionBonusRoll(WorldPacket&& packet) : ClientPacket(CMSG_GARRISON_MISSION_BONUS_ROLL, std::move(packet)) { }
+
+            void Read() override;
+
+            ObjectGuid NpcGUID;
+            int32 MissionRecID = 0;
+        };
+
+        struct GarrisonMissionFollowerHealth
+        {
+            uint64 DbID = 0;
+            int32 Health = 0;
+            Timestamp<> HealingTimestamp;
+        };
+
+        class GarrisonMissionBonusRollResult final : public ServerPacket
+        {
+        public:
+            explicit GarrisonMissionBonusRollResult() : ServerPacket(SMSG_GARRISON_MISSION_BONUS_ROLL_RESULT, 100 + 4 + 4 + 4 + 5 * 24 + 1) { }
+
+            WorldPacket const* Write() override;
+
+            GarrisonMission Mission;
+            int32 MissionRecID = 0;
+            int32 Result = 0;
+            std::vector<GarrisonMissionFollowerHealth> Followers;
+        };
+
+        class GarrisonAddMissionResult final : public ServerPacket
+        {
+        public:
+            explicit GarrisonAddMissionResult() : ServerPacket(SMSG_GARRISON_ADD_MISSION_RESULT, 1 + 4 + 1 + 140) { }
+
+            WorldPacket const* Write() override;
+
+            uint8 GarrTypeID = 0;
+            int32 Result = 0;
+            uint8 State = 0;
+            GarrisonMission Mission;
+            bool CanStart = false;
+        };
+
+        class GarrisonMissionStartConditionUpdate final : public ServerPacket
+        {
+        public:
+            explicit GarrisonMissionStartConditionUpdate() : ServerPacket(SMSG_GARRISON_MISSION_START_CONDITION_UPDATE, 4 + 4 + 4 + 1) { }
+
+            WorldPacket const* Write() override;
+
+            std::vector<std::pair<int32 /*MissionRecID*/, bool /*CanStart*/>> Missions;
+        };
+
+        class GarrisonFollowerChangedXp final : public ServerPacket
+        {
+        public:
+            explicit GarrisonFollowerChangedXp() : ServerPacket(SMSG_GARRISON_FOLLOWER_CHANGED_XP, 4 + 4 + 2 * 70) { }
+
+            WorldPacket const* Write() override;
+
+            uint32 XPEarned = 0;
+            uint32 XPSource = 0;
+            GarrisonFollower FollowerBefore;
+            GarrisonFollower FollowerAfter;
+        };
+
+        class GarrisonAutoTroopMinLevelUpdateResult final : public ServerPacket
+        {
+        public:
+            explicit GarrisonAutoTroopMinLevelUpdateResult() : ServerPacket(SMSG_GARRISON_AUTO_TROOP_MIN_LEVEL_UPDATE_RESULT, 4 + 4) { }
+
+            WorldPacket const* Write() override;
+
+            int32 GarrSiteID = 0;
+            int32 MinLevel = 0;
+        };
     }
 }
 

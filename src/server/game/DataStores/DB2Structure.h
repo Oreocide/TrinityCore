@@ -1957,6 +1957,15 @@ struct GarrFollowerEntry
     int32 CovenantID;
 };
 
+struct GarrFollowerLevelXPEntry
+{
+    uint32 ID;
+    uint8 GarrFollowerTypeID;
+    uint8 FollowerLevel;
+    uint16 XpToNextLevel;
+    uint16 ShipmentXP;
+};
+
 struct GarrFollowerXAbilityEntry
 {
     uint32 ID;

@@ -634,4 +634,148 @@ WorldPacket const* CovenantCallingsAvailabilityResponse::Write()
 
     return &_worldPacket;
 }
+
+void OpenMissionNpc::Read()
+{
+    _worldPacket >> NpcGUID;
+    _worldPacket >> GarrFollowerTypeID;
+}
+
+void GarrisonGetClassSpecCategoryInfo::Read()
+{
+    _worldPacket >> GarrFollowerTypeID;
+}
+
+WorldPacket const* GarrisonGetClassSpecCategoryInfoResult::Write()
+{
+    _worldPacket << uint8(GarrFollowerTypeID);
+    _worldPacket << uint32(0);
+
+    return &_worldPacket;
+}
+
+void GarrisonStartMission::Read()
+{
+    _worldPacket >> NpcGUID;
+    uint32 count = _worldPacket.read<uint32>();
+    _worldPacket >> MissionRecID;
+    if (count > 16)
+        throw PacketArrayMaxCapacityException(count, 16);
+
+    Followers.resize(count);
+    for (GarrisonMissionFollowerInfo& follower : Followers)
+    {
+        _worldPacket >> follower.DatabaseID;
+        _worldPacket >> follower.BoardIndex;
+        _worldPacket >> follower.Health;
+        bool hasFollowerEntry = _worldPacket.ReadBit();
+        _worldPacket.ResetBitPos();
+        if (hasFollowerEntry)
+            _worldPacket >> follower.FollowerEntry.emplace();
+    }
+}
+
+static void WriteMissionFollowerInfo(ByteBuffer& data, GarrisonMissionFollowerInfo const& follower)
+{
+    data << uint64(follower.DatabaseID);
+    data << int32(follower.BoardIndex);
+    data << int32(follower.Health);
+    data << OptionalInit(follower.FollowerEntry);
+    data.FlushBits();
+    if (follower.FollowerEntry)
+        data << int32(*follower.FollowerEntry);
+}
+
+WorldPacket const* GarrisonStartMissionResult::Write()
+{
+    _worldPacket << int32(Result);
+    _worldPacket << uint16(SessionMissionCount);
+    _worldPacket << Mission;
+    _worldPacket << Size<uint32>(Followers);
+    _worldPacket << Size<uint32>(Troops);
+    for (GarrisonMissionFollowerInfo const& follower : Followers)
+        WriteMissionFollowerInfo(_worldPacket, follower);
+
+    for (GarrisonFollower const& troop : Troops)
+        _worldPacket << troop;
+
+    return &_worldPacket;
+}
+
+void GarrisonCompleteMission::Read()
+{
+    _worldPacket >> NpcGUID;
+    _worldPacket >> MissionRecID;
+}
+
+void GarrisonMissionBonusRoll::Read()
+{
+    _worldPacket >> NpcGUID;
+    _worldPacket >> MissionRecID;
+}
+
+WorldPacket const* GarrisonMissionBonusRollResult::Write()
+{
+    _worldPacket << Mission;
+    _worldPacket << int32(MissionRecID);
+    _worldPacket << int32(Result);
+    _worldPacket << Size<uint32>(Followers);
+    for (GarrisonMissionFollowerHealth const& follower : Followers)
+    {
+        _worldPacket << uint64(follower.DbID);
+        _worldPacket << int32(follower.Health);
+        _worldPacket << follower.HealingTimestamp;
+        _worldPacket << int32(0);
+    }
+
+    _worldPacket << Bits<1>(false);   // the capture ends with one all-zero bit byte
+    _worldPacket.FlushBits();
+
+    return &_worldPacket;
+}
+
+WorldPacket const* GarrisonAddMissionResult::Write()
+{
+    _worldPacket << uint8(GarrTypeID);
+    _worldPacket << int32(Result);
+    _worldPacket << uint8(State);
+    _worldPacket << Mission;
+    _worldPacket << Bits<1>(CanStart);
+    _worldPacket.FlushBits();
+
+    return &_worldPacket;
+}
+
+WorldPacket const* GarrisonMissionStartConditionUpdate::Write()
+{
+    _worldPacket << Size<uint32>(Missions);
+    _worldPacket << Size<uint32>(Missions);
+    for (auto const& [missionRecId, canStart] : Missions)
+        _worldPacket << int32(missionRecId);
+
+    for (auto const& [missionRecId, canStart] : Missions)
+        _worldPacket << Bits<1>(canStart);
+
+    _worldPacket.FlushBits();
+
+    return &_worldPacket;
+}
+
+WorldPacket const* GarrisonFollowerChangedXp::Write()
+{
+    _worldPacket << uint32(XPEarned);
+    _worldPacket << uint32(XPSource);
+    _worldPacket << FollowerBefore;
+    _worldPacket << FollowerAfter;
+
+    return &_worldPacket;
+}
+
+WorldPacket const* GarrisonAutoTroopMinLevelUpdateResult::Write()
+{
+    _worldPacket << int32(GarrSiteID);
+    _worldPacket << int32(MinLevel);
+
+    return &_worldPacket;
+}
 }

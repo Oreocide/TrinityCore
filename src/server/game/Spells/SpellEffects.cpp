@@ -5643,6 +5643,19 @@ void Spell::EffectAddGarrisonFollower()
     if (!unitTarget || unitTarget->GetTypeId() != TYPEID_PLAYER)
         return;
 
+    // a type-111 (covenant sanctum) follower goes to the covenant garrison while CovenantGarrison.Missions.Enable is set
+    if (CovenantGarrison::AreMissionsEnabled())
+    {
+        GarrFollowerEntry const* followerEntry = sGarrFollowerStore.LookupEntry(effectInfo->MiscValue);
+        if (followerEntry && followerEntry->GarrTypeID == int8(CovenantGarrison::GARR_TYPE_ID))
+        {
+            if (CovenantGarrison* covenantGarrison = unitTarget->ToPlayer()->GetCovenantGarrison())
+                covenantGarrison->AddFollower(effectInfo->MiscValue);
+
+            return;
+        }
+    }
+
     if (Garrison* garrison = unitTarget->ToPlayer()->GetGarrison())
         garrison->AddFollower(effectInfo->MiscValue);
 }

@@ -362,6 +362,11 @@ namespace WorldPackets
         class GarrisonResearchTalent;
         class GarrisonLearnTalent;
         class GarrisonSocketTalent;
+        class OpenMissionNpc;
+        class GarrisonGetClassSpecCategoryInfo;
+        class GarrisonStartMission;
+        class GarrisonCompleteMission;
+        class GarrisonMissionBonusRoll;
     }
 
     namespace Guild
@@ -1934,6 +1939,11 @@ class TC_GAME_API WorldSession
         void HandleGarrisonResearchTalent(WorldPackets::Garrison::GarrisonResearchTalent& garrisonResearchTalent);
         void HandleGarrisonLearnTalent(WorldPackets::Garrison::GarrisonLearnTalent& garrisonLearnTalent);
         void HandleGarrisonSocketTalent(WorldPackets::Garrison::GarrisonSocketTalent& garrisonSocketTalent);
+        void HandleOpenMissionNpc(WorldPackets::Garrison::OpenMissionNpc& openMissionNpc);
+        void HandleGarrisonGetClassSpecCategoryInfo(WorldPackets::Garrison::GarrisonGetClassSpecCategoryInfo& getClassSpecCategoryInfo);
+        void HandleGarrisonStartMission(WorldPackets::Garrison::GarrisonStartMission& startMission);
+        void HandleGarrisonCompleteMission(WorldPackets::Garrison::GarrisonCompleteMission& completeMission);
+        void HandleGarrisonMissionBonusRoll(WorldPackets::Garrison::GarrisonMissionBonusRoll& missionBonusRoll);
 
         // Battle Pets
         void HandleBattlePetRequestJournal(WorldPackets::BattlePet::BattlePetRequestJournal& battlePetRequestJournal);
