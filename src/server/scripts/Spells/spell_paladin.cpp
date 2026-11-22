@@ -69,6 +69,7 @@ enum PaladinSpells
     SPELL_PALADIN_DIVINE_STEED_TAUREN            = 221885,
     SPELL_PALADIN_DIVINE_STEED_ZANDALARI_TROLL   = 294133,
     SPELL_PALADIN_DIVINE_STEED_LF_DRAENEI        = 363608,
+    SPELL_PALADIN_DIVINE_STORM                   = 53385,
     SPELL_PALADIN_DIVINE_STORM_DAMAGE            = 224239,
     SPELL_PALADIN_DIVINE_TOLL                    = 375576,
     SPELL_PALADIN_EMPYREAN_HAMMER                = 431398,
@@ -766,6 +767,12 @@ class spell_pal_divine_steed_valiant_crusade : public AuraScript
     int32 _shieldDuration = 0;
 };
 
+// Passed to the Divine Storm that Empyrean Legacy casts: its damage bonus in percent
+struct EmpyreanLegacyDivineStormBonus
+{
+    int32 Pct = 0;
+};
+
 // 53385 - Divine Storm
 class spell_pal_divine_storm : public SpellScript
 {
@@ -779,9 +786,53 @@ class spell_pal_divine_storm : public SpellScript
         GetCaster()->SendPlaySpellVisualKit(PALADIN_VISUAL_KIT_DIVINE_STORM, 0, 0);
     }
 
+    void CalculateDamage(SpellEffectInfo const& /*spellEffectInfo*/, Unit const* /*victim*/, int32& /*damage*/, int32& /*flatMod*/, float& pctMod) const
+    {
+        if (EmpyreanLegacyDivineStormBonus const* bonus = std::any_cast<EmpyreanLegacyDivineStormBonus>(&GetSpell()->m_customArg))
+            AddPct(pctMod, bonus->Pct);
+    }
+
     void Register() override
     {
         OnCast += SpellCastFn(spell_pal_divine_storm::HandleOnCast);
+        CalcDamage += SpellCalcDamageFn(spell_pal_divine_storm::CalculateDamage);
+    }
+};
+
+// 387178 - Empyrean Legacy
+class spell_pal_empyrean_legacy : public AuraScript
+{
+    static constexpr Milliseconds DivineStormDelay = 300ms; // retail: 299-315 ms after the spender
+
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_PALADIN_DIVINE_STORM });
+    }
+
+    static void HandleProc(AuraScript const&, AuraEffect const* aurEff, ProcEventInfo const& eventInfo)
+    {
+        Unit* caster = eventInfo.GetActor();
+        ObjectGuid originalCastId;
+        if (Spell const* spender = eventInfo.GetProcSpell())
+            originalCastId = spender->m_castId;
+
+        // the aura is removed with its last charge right after this, so only plain values go into the delayed cast
+        caster->m_Events.AddEventAtOffset([caster, originalCastId, pct = aurEff->GetAmountAsInt()]
+        {
+            if (!caster->IsAlive())
+                return;
+
+            caster->CastSpell(caster, SPELL_PALADIN_DIVINE_STORM, CastSpellExtraArgsInit{
+                .TriggerFlags = TRIGGERED_FULL_MASK,
+                .OriginalCastId = originalCastId,
+                .CustomArg = EmpyreanLegacyDivineStormBonus{ .Pct = pct }
+            });
+        }, DivineStormDelay);
+    }
+
+    void Register() override
+    {
+        OnEffectProc += AuraEffectProcFn(spell_pal_empyrean_legacy::HandleProc, EFFECT_0, SPELL_AURA_DUMMY);
     }
 };
 
@@ -2388,6 +2439,7 @@ void AddSC_paladin_spell_scripts()
     RegisterSpellScript(spell_pal_divine_steed);
     RegisterSpellScript(spell_pal_divine_steed_valiant_crusade);
     RegisterSpellScript(spell_pal_divine_storm);
+    RegisterSpellScript(spell_pal_empyrean_legacy);
     RegisterSpellAndAuraScriptPair(spell_pal_eternal_flame, spell_pal_eternal_flame_aura);
     RegisterSpellAndAuraScriptPair(spell_pal_execution_sentence, spell_pal_execution_sentence_aura);
     RegisterSpellScript(spell_pal_expurgation);
