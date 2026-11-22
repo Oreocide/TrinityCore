@@ -35,7 +35,11 @@ void WorldSession::HandleGetGarrisonInfo(WorldPackets::Garrison::GetGarrisonInfo
 
     // the type-111 entry retail appends after the WoD one (CovenantGarrison.Enable)
     if (CovenantGarrison* covenantGarrison = _player->GetCovenantGarrison())
+    {
+        // a sanctum research whose time is up is announced before the info that shows it done (nov18c idx 11191, 11229)
+        covenantGarrison->CompleteFinishedResearch();
         covenantGarrison->AppendToInfoResult(garrisonInfo);
+    }
 
     SendPacket(garrisonInfo.Write());
 }
@@ -133,7 +137,8 @@ void WorldSession::HandleGarrisonResearchTalent(WorldPackets::Garrison::Garrison
     if (!covenantGarrison)
         return;
 
-    // the soulbind trees are researched without an npc (empty guid, Forge of Bonds); npc research is the sanctum, not handled
+    // the soulbind trees and the Command Table talents (nov18b idx 176883, opened by gossip option 54349 of Haephus) are researched with an empty guid;
+    // a request that names an npc is not handled
     if (!garrisonResearchTalent.NPCTalentGuid.IsEmpty())
         return;
 

@@ -27,6 +27,7 @@
 #include "GameTime.h"
 #include "Log.h"
 #include "Player.h"
+#include "World.h"
 #include <algorithm>
 
 CovenantGarrison::CovenantGarrison(Player* owner) : _owner(owner)
@@ -348,6 +349,9 @@ void CovenantGarrison::OnLogin()
         RemoveExpiredMissions();
         OfferInitialMissions(false);
     }
+
+    // a sanctum research that is still running, or finished while the player was away, is checked on the first update after the login
+    ScheduleResearchCheck();
 }
 
 int32 CovenantGarrison::GetActiveSoulbind() const
@@ -563,8 +567,12 @@ bool CovenantGarrison::ActivateSoulbind(int32 soulbindId)
 bool CovenantGarrison::ResearchTalent(int32 garrTalentId)
 {
     GarrTalentEntry const* entry = sGarrTalentStore.LookupEntry(garrTalentId);
-    if (!entry || !GetOwnedSoulbind(entry))
+    if (!entry)
         return false;
+
+    // not a soulbind node: the sanctum trees (priced and timed), CovenantGarrison.SanctumTalents.Enable
+    if (!GetOwnedSoulbind(entry))
+        return AreSanctumTalentsEnabled() && ResearchSanctumTalent(entry);
 
     // a node that has a rank (selected or switched away from) is picked through CMSG_GARRISON_LEARN_TALENT
     auto itr = _talents.find(garrTalentId);
@@ -608,6 +616,230 @@ bool CovenantGarrison::ResearchTalent(int32 garrTalentId)
     completed.GarrTalentRank = talent.Rank;
     completed.Flags = talent.Flags;
     _owner->SendDirectMessage(completed.Write());
+    return true;
+}
+
+bool CovenantGarrison::AreSanctumTalentsEnabled()
+{
+    return sWorld->getBoolConfig(CONFIG_COVENANT_ENABLE) && sWorld->getBoolConfig(CONFIG_COVENANT_GARRISON_ENABLE)
+        && sWorld->getBoolConfig(CONFIG_COVENANT_GARRISON_SANCTUM_TALENTS_ENABLE);
+}
+
+namespace
+{
+// GarrTalentTree.FeatureTypeIndex of the sanctum trees; FeatureSubtypeIndex is the covenant (1 Kyrian, 2 Venthyr, 3 Night Fae, 4 Necrolord)
+constexpr uint8 SANCTUM_FEATURE_COVENANT_ABILITIES = 0;     // trees 393-397
+constexpr uint8 SANCTUM_FEATURE_COMMAND_TABLE = 3;          // trees 316 (Kyrian), 317, 315, 318
+}
+
+// nov18b idx 176883-176893 (talent 1077 of tree 316): CMSG with an empty npc guid; in the same tick the cost leaves the player (SET_CURRENCY 1810 5 -> 4 and 1813 980 -> 480 =
+// the GarrTalentCost lines), criteria 50418 (type "start research", quest 62794) is updated, SMSG_GARRISON_RESEARCH_TALENT_RESULT shows the talent as Rank 0,
+// Flags 0x0C (researching + ongoing) with ResearchStartTime = now and DontAlert 0, and no SMSG_GARRISON_TALENT_COMPLETED follows. Completion: CompleteFinishedResearch.
+// Only the first Command Table talent is researchable: the effects of the next two (heal rate, adventure time) are not pinned by any capture, so nothing is taken for them.
+bool CovenantGarrison::ResearchSanctumTalent(GarrTalentEntry const* garrTalent)
+{
+    GarrTalentTreeEntry const* tree = sGarrTalentTreeStore.LookupEntry(garrTalent->GarrTalentTreeID);
+    if (!tree || tree->GarrTypeID != int8(GARR_TYPE_ID) || tree->FeatureTypeIndex != SANCTUM_FEATURE_COMMAND_TABLE
+        || tree->FeatureSubtypeIndex != _owner->GetCovenant() || garrTalent->Tier != 0)
+        return false;
+
+    if (tree->PlayerConditionID && !ConditionMgr::IsPlayerMeetingCondition(_owner, tree->PlayerConditionID))
+        return false;
+
+    if (garrTalent->PlayerConditionID && !ConditionMgr::IsPlayerMeetingCondition(_owner, garrTalent->PlayerConditionID))
+        return false;
+
+    if (garrTalent->PrerequisiteTalentID)
+    {
+        auto prerequisite = _talents.find(garrTalent->PrerequisiteTalentID);
+        if (prerequisite == _talents.end() || !(prerequisite->second.Flags & COVENANT_TALENT_FLAG_RESEARCHED))
+            return false;
+    }
+
+    // researched, or already running
+    auto itr = _talents.find(garrTalent->ID);
+    if (itr != _talents.end() && (itr->second.Rank > 0 || (itr->second.Flags & (COVENANT_TALENT_FLAG_RESEARCHED | COVENANT_TALENT_FLAG_RESEARCHING))))
+        return false;
+
+    // a gold price, a second price or no duration would be a path no capture shows
+    GarrTalentRankEntry const* rank = sDB2Manager.GetGarrTalentRank(garrTalent->ID, 0);
+    if (!rank || rank->ResearchDurationSecs <= 0 || rank->ResearchGoldCost || rank->AlternateResearchCost || rank->AlternateResearchGoldCost)
+        return false;
+
+    // the price is every currency line (CostType 0) of the rank in GarrTalentCost: 1077 has 1 x 1810 and 500 x 1813, and the capture took both (idx 176888, 176889).
+    // A rank without lines pays its own ResearchCost; a money line is not pinned by any capture
+    std::vector<std::pair<int32 /*currency*/, int32 /*amount*/>> costs;
+    if (std::vector<GarrTalentCostEntry const*> const* costLines = sDB2Manager.GetGarrTalentCosts(int32(rank->ID)))
+    {
+        for (GarrTalentCostEntry const* costLine : *costLines)
+        {
+            if (costLine->MoneyQuantity)
+                return false;
+
+            if (costLine->CostType == 0 && costLine->CurrencyQuantity > 0)
+                costs.emplace_back(costLine->CurrencyTypesID, costLine->CurrencyQuantity);
+        }
+    }
+    else if (rank->ResearchCost > 0)
+        costs.emplace_back(rank->ResearchCostCurrencyTypesID, rank->ResearchCost);
+
+    if (costs.empty())
+        return false;
+
+    // every price is checked before anything is taken: nothing is charged for a research that cannot start
+    for (auto const& [currencyId, amount] : costs)
+        if (!currencyId || !sCurrencyTypesStore.LookupEntry(currencyId) || !_owner->HasCurrency(currencyId, uint32(amount)))
+            return false;
+
+    for (auto const& [currencyId, amount] : costs)
+        _owner->ModifyCurrency(currencyId, -amount, CurrencyGainSource::Cheat, CurrencyDestroyReason::Garrison);
+
+    Talent& talent = _talents[garrTalent->ID];
+    talent.Rank = 0;
+    talent.ResearchStartTime = GameTime::GetGameTime();
+    talent.Flags = COVENANT_TALENT_FLAG_RESEARCHING | COVENANT_TALENT_FLAG_ONGOING;
+    _needsSave = true;
+
+    _owner->UpdateCriteria(CriteriaType::StartResearchGarrisonTalent, garrTalent->ID);
+
+    WorldPackets::Garrison::GarrisonResearchTalentResult result;
+    result.Result = 0;
+    result.GarrTypeID = GARR_TYPE_ID;
+    result.DontAlert = false;
+    FillTalentPacket(garrTalent->ID, talent, result.Talent);
+    _owner->SendDirectMessage(result.Write());
+
+    ScheduleResearchCheck();
+    return true;
+}
+
+// nov18c idx 11191 / 11229: at the login that finds the research done (1 h 34 min after the start, DurationSecs 3600) the server sends
+// SMSG_GARRISON_TALENT_COMPLETED (rank 1, flags 1) before the info packet, which lists the talent as Rank 1, Flags 1 with the ResearchStartTime unchanged.
+// No capture shows a completion while online; the same packet is sent when the duration of the DB2 rank has passed.
+bool CovenantGarrison::CompleteFinishedResearch()
+{
+    if (!AreSanctumTalentsEnabled())
+        return false;
+
+    time_t now = GameTime::GetGameTime();
+    bool completed = false;
+    for (auto& [garrTalentId, talent] : _talents)
+    {
+        if (talent.Rank != 0 || !(talent.Flags & COVENANT_TALENT_FLAG_RESEARCHING))
+            continue;
+
+        GarrTalentRankEntry const* rank = sDB2Manager.GetGarrTalentRank(garrTalentId, 0);
+        if (now < time_t(talent.ResearchStartTime) + (rank ? rank->ResearchDurationSecs : 0))
+            continue;
+
+        talent.Rank = 1;
+        talent.Flags = COVENANT_TALENT_FLAG_RESEARCHED;
+        _needsSave = true;
+        completed = true;
+
+        LearnTalentSpells(garrTalentId, talent);
+
+        WorldPackets::Garrison::GarrisonTalentCompleted talentCompleted;
+        talentCompleted.GarrTypeID = GARR_TYPE_ID;
+        talentCompleted.GarrTalentID = garrTalentId;
+        talentCompleted.GarrTalentRank = talent.Rank;
+        talentCompleted.Flags = talent.Flags;
+        _owner->SendDirectMessage(talentCompleted.Write());
+    }
+
+    return completed;
+}
+
+// one event on the owner's queue for the earliest unfinished research, never a scan of all players
+void CovenantGarrison::ScheduleResearchCheck()
+{
+    if (!AreSanctumTalentsEnabled())
+        return;
+
+    time_t now = GameTime::GetGameTime();
+    time_t earliest = 0;
+    for (auto const& [garrTalentId, talent] : _talents)
+    {
+        if (talent.Rank != 0 || !(talent.Flags & COVENANT_TALENT_FLAG_RESEARCHING))
+            continue;
+
+        GarrTalentRankEntry const* rank = sDB2Manager.GetGarrTalentRank(garrTalentId, 0);
+        time_t end = time_t(talent.ResearchStartTime) + (rank ? rank->ResearchDurationSecs : 0);
+        if (!earliest || end < earliest)
+            earliest = end;
+    }
+
+    if (!earliest)
+        return;
+
+    // a wait of more than an hour is checked again then
+    time_t due = std::min(std::max(earliest, now), now + time_t(3600));
+    if (_researchCheckAt > now && _researchCheckAt <= due)
+        return;
+
+    _researchCheckAt = due;
+    _owner->m_Events.AddEventAtOffset([player = _owner]()
+    {
+        if (CovenantGarrison* covenantGarrison = player->GetCovenantGarrison())
+            covenantGarrison->OnResearchTimer();
+    }, std::chrono::duration_cast<Milliseconds>(Seconds(due - now)));
+}
+
+void CovenantGarrison::OnResearchTimer()
+{
+    CompleteFinishedResearch();
+    ScheduleResearchCheck();
+}
+
+// SPELL_EFFECT_LEARN_GARR_TALENT, misc [GarrTalentID, rank 1]: nov18b idx 14630-14690, quest 60492 reward spell 344763 -> 328604 + 337187. Per granted talent, in this tick:
+// RESULT (Rank 1, Flags 1, ResearchStartTime = now, DontAlert 1), SMSG_LEARNED_SPELLS of GarrTalentRank.PerkSpellID, TALENT_COMPLETED. Of the 14 talents of the
+// spells only the ones whose GarrTalentRank.PerkPlayerConditionID (the class) the player meets were granted (Demon Hunter: 1561 and 1565).
+bool CovenantGarrison::GrantTalent(int32 garrTalentId, int32 rank)
+{
+    if (!AreSanctumTalentsEnabled() || rank != 1)
+        return false;
+
+    GarrTalentEntry const* garrTalent = sGarrTalentStore.LookupEntry(garrTalentId);
+    if (!garrTalent)
+        return false;
+
+    GarrTalentTreeEntry const* tree = sGarrTalentTreeStore.LookupEntry(garrTalent->GarrTalentTreeID);
+    if (!tree || tree->GarrTypeID != int8(GARR_TYPE_ID) || tree->FeatureTypeIndex != SANCTUM_FEATURE_COVENANT_ABILITIES
+        || tree->FeatureSubtypeIndex != _owner->GetCovenant())
+        return false;
+
+    if (garrTalent->PlayerConditionID && !ConditionMgr::IsPlayerMeetingCondition(_owner, garrTalent->PlayerConditionID))
+        return false;
+
+    GarrTalentRankEntry const* rankEntry = sDB2Manager.GetGarrTalentRank(garrTalentId, rank - 1);
+    if (!rankEntry || (rankEntry->PerkPlayerConditionID && !ConditionMgr::IsPlayerMeetingCondition(_owner, rankEntry->PerkPlayerConditionID)))
+        return false;
+
+    auto itr = _talents.find(garrTalentId);
+    if (itr != _talents.end() && itr->second.Rank >= rank && (itr->second.Flags & COVENANT_TALENT_FLAG_RESEARCHED))
+        return false;
+
+    Talent& talent = _talents[garrTalentId];
+    talent.Rank = rank;
+    talent.ResearchStartTime = GameTime::GetGameTime();
+    talent.Flags = COVENANT_TALENT_FLAG_RESEARCHED;
+    _needsSave = true;
+
+    WorldPackets::Garrison::GarrisonResearchTalentResult result;
+    result.Result = 0;
+    result.GarrTypeID = GARR_TYPE_ID;
+    result.DontAlert = true;
+    FillTalentPacket(garrTalentId, talent, result.Talent);
+    _owner->SendDirectMessage(result.Write());
+
+    LearnTalentSpells(garrTalentId, talent);
+
+    WorldPackets::Garrison::GarrisonTalentCompleted talentCompleted;
+    talentCompleted.GarrTypeID = GARR_TYPE_ID;
+    talentCompleted.GarrTalentID = garrTalentId;
+    talentCompleted.GarrTalentRank = talent.Rank;
+    talentCompleted.Flags = talent.Flags;
+    _owner->SendDirectMessage(talentCompleted.Write());
     return true;
 }
 

@@ -130,6 +130,7 @@ TC_GAME_API extern DB2Storage<GarrPlotBuildingEntry>                sGarrPlotBui
 TC_GAME_API extern DB2Storage<GarrPlotInstanceEntry>                sGarrPlotInstanceStore;
 TC_GAME_API extern DB2Storage<GarrSiteLevelEntry>                   sGarrSiteLevelStore;
 TC_GAME_API extern DB2Storage<GarrSiteLevelPlotInstEntry>           sGarrSiteLevelPlotInstStore;
+TC_GAME_API extern DB2Storage<GarrTalentCostEntry>                  sGarrTalentCostStore;
 TC_GAME_API extern DB2Storage<GarrTalentEntry>                      sGarrTalentStore;
 TC_GAME_API extern DB2Storage<GarrTalentRankEntry>                  sGarrTalentRankStore;
 TC_GAME_API extern DB2Storage<GarrTalentResearchEntry>              sGarrTalentResearchStore;
@@ -572,6 +573,7 @@ public:
     SoulbindConduitRankEntry const* GetSoulbindConduitRank(int32 soulbindConduitId, int32 rank) const;
     std::vector<GarrTalentEntry const*> const* GetGarrTalentsByTree(uint32 garrTalentTreeId) const;
     GarrTalentRankEntry const* GetGarrTalentRank(uint32 garrTalentId, int32 rank) const;
+    std::vector<GarrTalentCostEntry const*> const* GetGarrTalentCosts(int32 garrTalentRankId) const;
     SoulbindEntry const* GetSoulbindByGarrTalentTree(int32 garrTalentTreeId) const;
     SoulbindConduitItemEntry const* GetSoulbindConduitItemByItem(int32 itemId) const;
     std::vector<RenownRewardsEntry const*> const* GetRenownRewards(uint32 covenantId) const;

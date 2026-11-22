@@ -143,6 +143,13 @@ public:
 
     int32 GetActiveSoulbind() const;
 
+    // CovenantGarrison.SanctumTalents.Enable (and the two keys above)
+    static bool AreSanctumTalentsEnabled();
+    // SPELL_EFFECT_LEARN_GARR_TALENT (reward spell of quest 60492): grants a Covenant Abilities talent at the given rank, with its spell; false = not granted
+    bool GrantTalent(int32 garrTalentId, int32 rank);
+    // completes the sanctum researches whose GarrTalentRank.ResearchDurationSecs have passed (SMSG_GARRISON_TALENT_COMPLETED for each); true if any
+    bool CompleteFinishedResearch();
+
     // CovenantGarrison.Missions.Enable (and the two keys above)
     static bool AreMissionsEnabled();
 
@@ -167,6 +174,11 @@ private:
     void LearnTreeSpells(int32 garrTalentTreeId);
     void UnlearnTreeSpells(int32 garrTalentTreeId);
     void FillTalentPacket(int32 garrTalentId, Talent const& talent, WorldPackets::Garrison::GarrisonTalent& packetTalent) const;
+    // CMSG_GARRISON_RESEARCH_TALENT for a talent of a Command Table tree (CovenantGarrison.SanctumTalents.Enable): the cost is taken at once, the research completes later
+    bool ResearchSanctumTalent(GarrTalentEntry const* garrTalent);
+    // one scheduled check on the owner's event queue for the earliest unfinished research (no per tick scan)
+    void ScheduleResearchCheck();
+    void OnResearchTimer();
     // clears the node: unlearns its spells, empties its socket, clears the selected bit
     void DeactivateTalent(int32 garrTalentId, Talent& talent);
 
@@ -202,6 +214,7 @@ private:
     std::map<int32 /*GarrTalentID*/, Talent> _talents;
     std::map<std::pair<int32 /*type*/, int32 /*entry*/>, int32 /*rank*/> _collections;
     bool _needsSave = false;
+    time_t _researchCheckAt = 0;        // when the pending research check fires, 0 = none pending
 
     std::map<uint64 /*DbID*/, WorldPackets::Garrison::GarrisonFollower> _followers;
     std::map<uint64 /*DbID*/, Mission> _missions;

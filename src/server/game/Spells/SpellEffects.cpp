@@ -370,7 +370,7 @@ NonDefaultConstructible<SpellEffectHandlerFn> SpellEffectHandlers[TOTAL_SPELL_EF
     &Spell::EffectLearnTransmogIllusion,                    //276 SPELL_EFFECT_LEARN_TRANSMOG_ILLUSION
     &Spell::EffectSetChromieTime,                           //277 SPELL_EFFECT_SET_CHROMIE_TIME
     &Spell::EffectNULL,                                     //278 SPELL_EFFECT_278
-    &Spell::EffectNULL,                                     //279 SPELL_EFFECT_LEARN_GARR_TALENT
+    &Spell::EffectLearnGarrTalent,                          //279 SPELL_EFFECT_LEARN_GARR_TALENT
     &Spell::EffectUnused,                                   //280 SPELL_EFFECT_280
     &Spell::EffectLearnSoulbindConduit,                     //281 SPELL_EFFECT_LEARN_SOULBIND_CONDUIT
     &Spell::EffectNULL,                                     //282 SPELL_EFFECT_CONVERT_ITEMS_TO_CURRENCY
@@ -2500,6 +2500,26 @@ void Spell::EffectSetCovenant()
 
     // MiscValue is the Covenant id (0 clears it, spell 338503)
     player->SetCovenant(effectInfo->MiscValue);
+}
+
+void Spell::EffectLearnGarrTalent()
+{
+    if (effectHandleMode != SPELL_EFFECT_HANDLE_HIT_TARGET)
+        return;
+
+    if (!CovenantGarrison::AreSanctumTalentsEnabled())
+        return;
+
+    Player* player = unitTarget ? unitTarget->ToPlayer() : nullptr;
+    if (!player)
+        return;
+
+    CovenantGarrison* covenantGarrison = player->GetCovenantGarrison();
+    if (!covenantGarrison)
+        return;
+
+    // MiscValueB is the rank the talent is granted at (1 in all 14 effects of the sanctum grant spells 328604 / 337187)
+    covenantGarrison->GrantTalent(effectInfo->MiscValue, effectInfo->MiscValueB);
 }
 
 void Spell::EffectLearnSoulbindConduit()

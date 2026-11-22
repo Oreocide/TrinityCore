@@ -713,6 +713,9 @@ void CriteriaHandler::UpdateCriteria(Criteria const* criteria, uint64 miscValue1
         case CriteriaType::SucceedAnyGarrisonMissionWithFollowerType:
             SetCriteriaProgress(criteria, 1, referencePlayer, PROGRESS_ACCUMULATE);
             break;
+        case CriteriaType::StartResearchGarrisonTalent:
+            SetCriteriaProgress(criteria, 1, referencePlayer);
+            break;
         case CriteriaType::BankSlotsPurchased:
             SetCriteriaProgress(criteria, referencePlayer->GetBankBagSlotCount(), referencePlayer);
             break;
@@ -1710,6 +1713,10 @@ bool CriteriaHandler::RequirementsSatisfied(Criteria const* criteria, uint64 mis
         case CriteriaType::StartGarrisonMission:
         case CriteriaType::SucceedGarrisonMission:
             if (criteria->Entry->Asset.GarrMissionID && miscValue1 != uint32(criteria->Entry->Asset.GarrMissionID))
+                return false;
+            break;
+        case CriteriaType::StartResearchGarrisonTalent:
+            if (miscValue1 != uint32(criteria->Entry->Asset.GarrTalentID))
                 return false;
             break;
         case CriteriaType::StartAnyGarrisonMissionWithFollowerType:

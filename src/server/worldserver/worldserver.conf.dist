@@ -4591,6 +4591,28 @@ CovenantGarrison.Missions.AutoRoll = 0
 
 CovenantGarrison.Missions.AutoCombat.Enable = 0
 
+#    CovenantGarrison.SanctumTalents.Enable
+#        Description: Enables the sanctum talents of the covenant garrison (type 111) that the nov18b/nov18c
+#                     captures pin:
+#                     - researching the first Command Table talent (Tactical Insight, GarrTalent 1077 of tree 316 and
+#                       the same tier-0 talent of the other three covenants' Command Table trees) from the talent
+#                       window the gossip option of the sanctum npc opens (CMSG_GARRISON_RESEARCH_TALENT with an empty
+#                       npc guid): the DB2 cost (currency) is taken at the start, the talent shows as researching
+#                       (Rank 0, flags 12) and completes once GarrTalentRank.ResearchDurationSecs have passed, also
+#                       while the player is offline (SMSG_GARRISON_TALENT_COMPLETED at the login that finds it done);
+#                       starting it counts for the criteria "Garrison Talent: Start Research" (quest 62794).
+#                     - spell effect LEARN_GARR_TALENT (the quest reward spell of 60492 "A Proper Reception"):
+#                       the Covenant Abilities tree talents (393-397) that fit the player's class, with their spell.
+#                     The later Command Table talents (heal rate, adventure time) and the other sanctum trees are not
+#                     researchable: their effects are not pinned by any capture, so nothing is taken for them.
+#                     Requires Covenant.Enable = 1 and CovenantGarrison.Enable = 1.
+#                     When disabled the covenant garrison behaves exactly as without sanctum talents (priced or
+#                     timed talents are refused, the spell effect does nothing).
+#        Default:     0 - (Disabled)
+#                     1 - (Enabled)
+
+CovenantGarrison.SanctumTalents.Enable = 0
+
 #
 ###################################################################################################
 

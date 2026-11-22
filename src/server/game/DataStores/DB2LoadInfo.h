@@ -2526,6 +2526,24 @@ struct GarrSiteLevelPlotInstLoadInfo
     static constexpr DB2LoadInfo Instance{ Fields, 6, &GarrSiteLevelPlotInstMeta::Instance, HOTFIX_SEL_GARR_SITE_LEVEL_PLOT_INST };
 };
 
+struct GarrTalentCostLoadInfo
+{
+    static constexpr DB2FieldMeta Fields[9] =
+    {
+        { .IsSigned = false, .Type = FT_LONG, .Name = "MoneyQuantity" },
+        { .IsSigned = false, .Type = FT_INT, .Name = "ID" },
+        { .IsSigned = false, .Type = FT_INT, .Name = "GarrTalentTreeID" },
+        { .IsSigned = true, .Type = FT_INT, .Name = "GarrTalentID" },
+        { .IsSigned = true, .Type = FT_INT, .Name = "RankIndex" },
+        { .IsSigned = true, .Type = FT_INT, .Name = "GarrTalentRankID" },
+        { .IsSigned = true, .Type = FT_INT, .Name = "CostType" },
+        { .IsSigned = true, .Type = FT_INT, .Name = "CurrencyTypesID" },
+        { .IsSigned = true, .Type = FT_INT, .Name = "CurrencyQuantity" },
+    };
+
+    static constexpr DB2LoadInfo Instance{ Fields, 9, &GarrTalentCostMeta::Instance, HOTFIX_SEL_GARR_TALENT_COST };
+};
+
 struct GarrTalentLoadInfo
 {
     static constexpr DB2FieldMeta Fields[15] =

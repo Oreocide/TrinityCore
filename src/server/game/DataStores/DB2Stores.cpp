@@ -167,6 +167,7 @@ DB2Storage<GarrPlotBuildingEntry>               sGarrPlotBuildingStore("GarrPlot
 DB2Storage<GarrPlotInstanceEntry>               sGarrPlotInstanceStore("GarrPlotInstance.db2", &GarrPlotInstanceLoadInfo::Instance);
 DB2Storage<GarrSiteLevelEntry>                  sGarrSiteLevelStore("GarrSiteLevel.db2", &GarrSiteLevelLoadInfo::Instance);
 DB2Storage<GarrSiteLevelPlotInstEntry>          sGarrSiteLevelPlotInstStore("GarrSiteLevelPlotInst.db2", &GarrSiteLevelPlotInstLoadInfo::Instance);
+DB2Storage<GarrTalentCostEntry>                 sGarrTalentCostStore("GarrTalentCost.db2", &GarrTalentCostLoadInfo::Instance);
 DB2Storage<GarrTalentEntry>                     sGarrTalentStore("GarrTalent.db2", &GarrTalentLoadInfo::Instance);
 DB2Storage<GarrTalentRankEntry>                 sGarrTalentRankStore("GarrTalentRank.db2", &GarrTalentRankLoadInfo::Instance);
 DB2Storage<GarrTalentResearchEntry>             sGarrTalentResearchStore("GarrTalentResearch.db2", &GarrTalentResearchLoadInfo::Instance);
@@ -562,6 +563,7 @@ namespace
     std::unordered_map<std::pair<int32, int32>, SoulbindConduitRankEntry const*> _soulbindConduitRanks;
     std::unordered_map<uint32, std::vector<GarrTalentEntry const*>> _garrTalentsByTree;
     std::unordered_map<std::pair<uint32, int32>, GarrTalentRankEntry const*> _garrTalentRanks;
+    std::unordered_map<int32, std::vector<GarrTalentCostEntry const*>> _garrTalentCostsByRank;
     std::unordered_map<int32, SoulbindEntry const*> _soulbindsByGarrTalentTree;
     std::unordered_map<int32, SoulbindConduitItemEntry const*> _soulbindConduitItemsByItem;
     std::unordered_map<uint32, std::vector<RenownRewardsEntry const*>> _renownRewardsByCovenant;
@@ -832,6 +834,7 @@ uint32 DB2Manager::LoadStores(std::string const& dataPath, LocaleConstant defaul
     LOAD_DB2(sGarrPlotInstanceStore);
     LOAD_DB2(sGarrSiteLevelStore);
     LOAD_DB2(sGarrSiteLevelPlotInstStore);
+    LOAD_DB2(sGarrTalentCostStore);
     LOAD_DB2(sGarrTalentStore);
     LOAD_DB2(sGarrTalentRankStore);
     LOAD_DB2(sGarrTalentResearchStore);
@@ -1595,6 +1598,9 @@ void DB2Manager::IndexLoadedStores()
 
     for (GarrTalentRankEntry const* garrTalentRank : sGarrTalentRankStore)
         _garrTalentRanks[{ uint32(garrTalentRank->GarrTalentID), garrTalentRank->Rank }] = garrTalentRank;
+
+    for (GarrTalentCostEntry const* garrTalentCost : sGarrTalentCostStore)
+        _garrTalentCostsByRank[garrTalentCost->GarrTalentRankID].push_back(garrTalentCost);
 
     for (SoulbindEntry const* soulbind : sSoulbindStore)
         _soulbindsByGarrTalentTree[soulbind->GarrTalentTreeID] = soulbind;
@@ -3126,6 +3132,11 @@ std::vector<GarrTalentEntry const*> const* DB2Manager::GetGarrTalentsByTree(uint
 GarrTalentRankEntry const* DB2Manager::GetGarrTalentRank(uint32 garrTalentId, int32 rank) const
 {
     return Trinity::Containers::MapGetValuePtr(_garrTalentRanks, { garrTalentId, rank });
+}
+
+std::vector<GarrTalentCostEntry const*> const* DB2Manager::GetGarrTalentCosts(int32 garrTalentRankId) const
+{
+    return Trinity::Containers::MapGetValuePtr(_garrTalentCostsByRank, garrTalentRankId);
 }
 
 SoulbindEntry const* DB2Manager::GetSoulbindByGarrTalentTree(int32 garrTalentTreeId) const

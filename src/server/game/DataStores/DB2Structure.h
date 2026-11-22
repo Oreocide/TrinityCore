@@ -2120,6 +2120,19 @@ struct GarrSiteLevelPlotInstEntry
     uint8 UiMarkerSize;
 };
 
+struct GarrTalentCostEntry
+{
+    uint64 MoneyQuantity;
+    uint32 ID;
+    uint32 GarrTalentTreeID;
+    int32 GarrTalentID;
+    int32 RankIndex;
+    int32 GarrTalentRankID;
+    int32 CostType;
+    int32 CurrencyTypesID;
+    int32 CurrencyQuantity;
+};
+
 struct GarrTalentEntry
 {
     LocalizedString Name;
